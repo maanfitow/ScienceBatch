@@ -1,0 +1,45 @@
+[package]
+name = "sciencebatch"
+version = "0.1.0"
+description = "High-performance local desktop LaTeX & Typst editor"
+authors = ["ScienceBatch Contributors"]
+license = "Apache-2.0"
+edition = "2021"
+
+[lib]
+name = "sciencebatch_lib"
+# Desktop targets (Linux, macOS, Windows) only require "rlib".
+# Note: Cargo does not support target-conditional crate-type declarations.
+# If compiling for mobile platforms (Android / iOS via Tauri CLI), re-enable:
+# crate-type = ["staticlib", "cdylib", "rlib"]
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-fs = "2"
+tauri-plugin-dialog = "2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tectonic = { version = "0.17" }
+tectonic_bundles = "0.4"
+tectonic_io_base = "0.6"
+tectonic_errors = "0.3"
+tectonic_status_base = "0.2"
+tokio = { version = "1", features = ["full"] }
+typst-embed = { version = "0.1", features = ["pdf", "bundled-fonts"] }
+zip = { version = "2.2", default-features = false, features = ["deflate"] }
+open = "5"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+webkit2gtk = "2.0"
+gtk = "0.18"
+glib = "0.18"
+
+# Optimize external dependencies (Tectonic, Typst, ICU, HarfBuzz) in dev mode for fast PDF compilation
+# and strip heavy debug symbols to prevent multi-gigabyte target folder bloat
+[profile.dev.package."*"]
+opt-level = 3
+debug = false

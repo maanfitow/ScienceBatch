@@ -1,0 +1,32 @@
+/* ==========================================================================
+   Dark Theme (Default)
+   ========================================================================== */
+
+:root,
+[data-theme='dark'] {
+  --bg-primary: #121316;
+  --bg-secondary: #1a1c22;
+  --bg-tertiary: #242731;
+  --bg-hover: #2e3240;
+  
+  --border-color: #2b2e3b;
+  --border-focus: #3b82f6;
+  
+  --text-primary: #f3f4f6;
+  --text-secondary: #9ca3af;
+  --text-muted: #6b7280;
+
+  --accent-primary: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-active: #1e40af;
+  --accent-glow: rgba(37, 99, 235, 0.25);
+
+  --status-success: #10b981;
+  --status-warning: #f59e0b;
+  --status-error: #ef4444;
+
+  --card-bg: rgba(26, 28, 34, 0.85);
+  --viewer-bg: #1e2029;
+  --menu-bg: #16181e;
+  --menu-border: #2b2e3b;
+}

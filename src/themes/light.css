@@ -1,0 +1,31 @@
+/* ==========================================================================
+   Light Theme
+   ========================================================================== */
+
+[data-theme='light'] {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f1f5f9;
+  --bg-hover: #e2e8f0;
+  
+  --border-color: #cbd5e1;
+  --border-focus: #2563eb;
+  
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+
+  --accent-primary: #2563eb;
+  --accent-hover: #1d4ed8;
+  --accent-active: #1e40af;
+  --accent-glow: rgba(37, 99, 235, 0.15);
+
+  --status-success: #059669;
+  --status-warning: #d97706;
+  --status-error: #dc2626;
+
+  --card-bg: #ffffff;
+  --viewer-bg: #e2e8f0;
+  --menu-bg: #ffffff;
+  --menu-border: #cbd5e1;
+}

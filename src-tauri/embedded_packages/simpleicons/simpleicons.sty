@@ -1,0 +1,52 @@
+
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{simpleicons}[2026/09/04 16.29.0 Simple Icons 16.29.0 Logos]
+
+
+\RequirePackage{iftex}
+
+\newcommand*{\simpleicon}[1]{%
+  {\csname simpleicon@#1icon\endcsname}}
+
+
+\iftutex
+\usepackage{fontspec}
+\newfontfamily{\simpleiconsmap}{SimpleIcons.otf}
+\input{simpleiconsglyphs-xeluatex.tex}
+\else
+
+
+  \DeclareRobustCommand\simpleiconsmapone{\fontencoding{U}\fontfamily{simpleiconsone}\selectfont}
+  
+  \DeclareRobustCommand\simpleiconsmaptwo{\fontencoding{U}\fontfamily{simpleiconstwo}\selectfont}
+  
+  \DeclareRobustCommand\simpleiconsmapthree{\fontencoding{U}\fontfamily{simpleiconsthree}\selectfont}
+  
+  \DeclareRobustCommand\simpleiconsmapfour{\fontencoding{U}\fontfamily{simpleiconsfour}\selectfont}
+  
+  \DeclareRobustCommand\simpleiconsmapfive{\fontencoding{U}\fontfamily{simpleiconsfive}\selectfont}
+  
+  \DeclareRobustCommand\simpleiconsmapsix{\fontencoding{U}\fontfamily{simpleiconssix}\selectfont}
+  
+  \DeclareRobustCommand\simpleiconsmapseven{\fontencoding{U}\fontfamily{simpleiconsseven}\selectfont}
+  
+  \DeclareRobustCommand\simpleiconsmapeight{\fontencoding{U}\fontfamily{simpleiconseight}\selectfont}
+  
+  \DeclareRobustCommand\simpleiconsmapnine{\fontencoding{U}\fontfamily{simpleiconsnine}\selectfont}
+  
+  \DeclareRobustCommand\simpleiconsmaponezero{\fontencoding{U}\fontfamily{simpleiconsonezero}\selectfont}
+  
+  \DeclareRobustCommand\simpleiconsmaponeone{\fontencoding{U}\fontfamily{simpleiconsoneone}\selectfont}
+  
+  \DeclareRobustCommand\simpleiconsmaponetwo{\fontencoding{U}\fontfamily{simpleiconsonetwo}\selectfont}
+  
+  \DeclareRobustCommand\simpleiconsmaponethree{\fontencoding{U}\fontfamily{simpleiconsonethree}\selectfont}
+  
+  \DeclareRobustCommand\simpleiconsmaponefour{\fontencoding{U}\fontfamily{simpleiconsonefour}\selectfont}
+  
+\input{simpleiconsglyphs-pdftex.tex}
+
+\fi
+
+
+\endinput

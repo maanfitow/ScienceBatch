@@ -1,0 +1,31 @@
+/* ==========================================================================
+   Monokai Theme
+   ========================================================================== */
+
+[data-theme='monokai'] {
+  --bg-primary: #272822;
+  --bg-secondary: #1e1f1c;
+  --bg-tertiary: #383830;
+  --bg-hover: #49483e;
+  
+  --border-color: #49483e;
+  --border-focus: #a6e22e;
+  
+  --text-primary: #f8f8f2;
+  --text-secondary: #cfcfc2;
+  --text-muted: #75715e;
+
+  --accent-primary: #a6e22e;
+  --accent-hover: #b8f33d;
+  --accent-active: #8ac023;
+  --accent-glow: rgba(166, 226, 46, 0.2);
+
+  --status-success: #a6e22e;
+  --status-warning: #fd971f;
+  --status-error: #f92672;
+
+  --card-bg: rgba(39, 40, 34, 0.95);
+  --viewer-bg: #1e1f1c;
+  --menu-bg: #1e1f1c;
+  --menu-border: #49483e;
+}
