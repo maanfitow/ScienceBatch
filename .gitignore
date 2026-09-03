@@ -1,0 +1,63 @@
+# Node / Package Managers
+node_modules/
+dist/
+dist-ssr/
+*.local
+.pnpm-store/
+.npm
+.yarn/
+
+# Rust / Cargo
+target/
+src-tauri/target/
+Cargo.lock
+
+# Tauri build artifacts
+src-tauri/gen/
+
+# LaTeX temporary files (in case any are generated)
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+*.pdfpc
+*.nav
+*.snm
+*.vrb
+
+# Environment and Keys
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# IDEs and Editors
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db
+
+# Internal developer / Agent docs (kept purely local)
+.agents/
+skills-lock.json
+AGENTS.md
+ARCHITECTURE.md
+CONTRIBUTING.md
+BUGS.md
+IDEAS.md
+SPECS.md
+
+# Graphify Local Intelligence
+graphify-out/
