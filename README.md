@@ -35,7 +35,8 @@
   - Dynamic scanning of `\label{...}` anchors for `\ref{` suggestions.
   - Automatic scanning of BibTeX `@article{...}` keys for `\cite{` suggestions.
   - Hover documentation with syntax examples for TeX functions and environments.
-- 📄 **Flicker-Free PDF Viewer:** Multi-threaded Web Worker rendering using `pdfjs-dist` on hardware-accelerated `<canvas>`, preserving scroll position and zoom level across compilations.
+- 📄 **PDF Preview:** PDF.js parses documents in a worker and renders pages sequentially to high-DPI canvases, preserving scroll position and zoom across compilations. The Tauri viewer uses the standard image-conversion path while a WebKitGTK zoom-rendering issue is under visual validation.
+- 📖 **PDF Preview Engineering Notes:** See [PDF preview rendering](docs/PDF_PREVIEW.md) for the rendering lifecycle, current compatibility investigation, and verification steps.
 - 🩺 **Actionable Diagnostics & Smart Suggestions:** Categorized error and warning cards with direct jump-to-line navigation and auto-generated fixes (e.g., float specifier advice, asset path resolution, package clash hints).
 - 🪟 **Fluid Resizable Split View:** Responsive dual-panel workspace built with `react-resizable-panels`.
 - 🔔 **Non-Intrusive Progress Toasts:** Dynamic real-time IPC notification toasts powered by `sonner`.
@@ -49,7 +50,7 @@ flowchart TD
     subgraph Frontend ["Frontend Layer (React + TypeScript + Vite)"]
         UI["Dual-Panel Workspace (react-resizable-panels)"]
         Monaco["Monaco Editor (Custom LaTeX IntelliSense)"]
-        PdfViewer["PDF.js Canvas Viewer (Hardware Accelerated)"]
+        PdfViewer["PDF.js Worker + Sequential Canvas Viewer"]
         Hotkeys["react-hotkeys-hook (Ctrl + S)"]
     end
 
@@ -85,7 +86,7 @@ flowchart TD
 | **TeX Engine** | [Tectonic](https://tectonic-typesetting.github.io/) | Modernized XeTeX engine with pure VFS in-memory processing and on-demand CTAN packaging. |
 | **Frontend Core** | [React 18](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/) + [Vite](https://vitejs.dev/) | High-performance modular component architecture and instant HMR. |
 | **Code Editor** | [Monaco Editor](https://microsoft.github.io/monaco-editor/) | Desktop-class editor with syntax highlighting and custom LaTeX completion providers. |
-| **PDF Rendering** | [PDF.js](https://mozilla.github.io/pdf.js/) | Hardware-accelerated canvas rendering with sub-pixel text rendering. |
+| **PDF Rendering** | [PDF.js](https://mozilla.github.io/pdf.js/) | Worker-based PDF parsing and sequential high-DPI canvas rendering. |
 | **Layout & UI** | [React Resizable Panels](https://github.com/bvaughn/react-resizable-panels) & [Sonner](https://sonner.emilkowal.ski/) | Responsive split workspace and toast notifications. |
 
 ---

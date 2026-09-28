@@ -4,6 +4,7 @@ import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { FileQuestion, RefreshCw, Eye, AlertCircle } from 'lucide-react';
 import { DiagnosticsView } from './DiagnosticsView';
 import { DiagnosticItem } from '../types';
+import { renderPdfPagesSequentially } from './pdfRenderingHelpers';
 
 // Configure pdfjs worker via Vite asset URL loader
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
@@ -45,6 +46,7 @@ export const PdfView: React.FC<PdfViewProps> = ({
   const [renderError, setRenderError] = useState<string | null>(null);
 
   const pdfDocRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null);
+  const loadingTaskRef = useRef<pdfjsLib.PDFDocumentLoadingTask | null>(null);
   const renderTasksRef = useRef<pdfjsLib.RenderTask[]>([]);
   const renderSeqRef = useRef<number>(0);
   const scrollPositionRef = useRef<number>(0);
@@ -53,6 +55,8 @@ export const PdfView: React.FC<PdfViewProps> = ({
   // Zoom ergonomics, focal tracking & HUD state
   const firstPageWidthRef = useRef<number>(595.28);
   const renderedZoomRef = useRef<number>(zoom);
+  const zoomRef = useRef<number>(zoom);
+  zoomRef.current = zoom;
   const targetScrollRef = useRef<{ left: number; top: number } | null>(null);
   const [isHudVisible, setIsHudVisible] = useState<boolean>(false);
   const hudTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -126,7 +130,7 @@ export const PdfView: React.FC<PdfViewProps> = ({
     // Assign a monotonically increasing sequence token for this render request
     const currentSeq = ++renderSeqRef.current;
 
-    // Cancel all currently in-flight PDF.js render tasks
+    // Invalidate stale jobs immediately: cancel all currently in-flight PDF.js render tasks
     renderTasksRef.current.forEach((task) => {
       try {
         task.cancel();
@@ -136,83 +140,50 @@ export const PdfView: React.FC<PdfViewProps> = ({
     });
     renderTasksRef.current = [];
 
-    const pagesContainer = pagesContainerRef.current;
     const pixelRatio = window.devicePixelRatio || 1;
 
-    for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
-      // Abort immediately if a newer render request has arrived
-      if (renderSeqRef.current !== currentSeq) {
-        return;
-      }
+    const pagesContainer = pagesContainerRef.current;
+    if (!pagesContainer) return;
 
-      try {
-        const page = await pdfDoc.getPage(pageNum);
-        if (renderSeqRef.current !== currentSeq) return;
+    const outcome = await renderPdfPagesSequentially({
+      pdfDoc,
+      pagesContainer,
+      scale,
+      pixelRatio,
+      isCancelled: () => renderSeqRef.current !== currentSeq,
+      onFirstPageDimensions: (width) => {
+        firstPageWidthRef.current = width;
+      },
+      registerRenderTask: (task) => {
+        renderTasksRef.current.push(task);
+      },
+      unregisterRenderTask: (task) => {
+        renderTasksRef.current = renderTasksRef.current.filter((activeTask) => activeTask !== task);
+      },
+    });
 
-        if (pageNum === 1) {
-          const unscaledViewport = page.getViewport({ scale: 1.0 });
-          firstPageWidthRef.current = unscaledViewport.width;
-        }
-
-        const viewport = page.getViewport({ scale: scale * pixelRatio });
-
-        // 1. Create a fresh, off-DOM canvas (double-buffer)
-        const offscreenCanvas = document.createElement('canvas');
-        offscreenCanvas.width = viewport.width;
-        offscreenCanvas.height = viewport.height;
-        offscreenCanvas.style.width = `${viewport.width / pixelRatio}px`;
-        offscreenCanvas.style.height = `${viewport.height / pixelRatio}px`;
-
-        const ctx = offscreenCanvas.getContext('2d', { alpha: false });
-        if (!ctx) continue;
-
-        // Ensure clean white background before rendering
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, offscreenCanvas.width, offscreenCanvas.height);
-
-        const renderContext = {
-          canvasContext: ctx,
-          viewport: viewport,
-        };
-
-        const renderTask = page.render(renderContext);
-        renderTasksRef.current.push(renderTask);
-        await renderTask.promise;
-
-        // If a newer render sequence arrived while this page was rendering, discard this buffer
-        if (renderSeqRef.current !== currentSeq) return;
-
-        // 2. Atomically swap the completed canvas into the DOM without any white flash or artifacts
-        let canvasWrapper = pagesContainer.querySelector<HTMLDivElement>(`#pdf-page-${pageNum}`);
-        if (!canvasWrapper) {
-          canvasWrapper = document.createElement('div');
-          canvasWrapper.id = `pdf-page-${pageNum}`;
-          canvasWrapper.className = 'pdf-page-wrapper';
-          pagesContainer.appendChild(canvasWrapper);
-        }
-
-        const existingCanvas = canvasWrapper.querySelector('canvas');
-        if (existingCanvas) {
-          canvasWrapper.replaceChild(offscreenCanvas, existingCanvas);
-        } else {
-          canvasWrapper.appendChild(offscreenCanvas);
-        }
-
-        if (renderSeqRef.current !== currentSeq) return;
-      } catch (err: unknown) {
-        if (err && typeof err === 'object' && 'name' in err && (err as { name: string }).name === 'RenderingCancelledException') {
-          if (renderSeqRef.current !== currentSeq) return;
-          continue;
-        }
-        console.error(`Error rendering page ${pageNum}:`, err);
-      }
+    // Check if cancelled, superseded, document changed, or zoom drifted
+    if (
+      renderSeqRef.current !== currentSeq ||
+      outcome.cancelled ||
+      pdfDocRef.current !== pdfDoc ||
+      zoomRef.current !== scale
+    ) {
+      return;
     }
+
+    if (!outcome.success) {
+      const msg = outcome.error instanceof Error ? outcome.error.message : String(outcome.error);
+      console.error(`Failed to render PDF pages after ${outcome.renderedPages} completed pages:`, outcome.error);
+      setRenderError(msg);
+      return;
+    }
+
+    // Clear renderError after a successful full-document render
+    setRenderError(null);
 
     // Mark the scale that has now been fully drawn to the canvases
     renderedZoomRef.current = scale;
-    if (pagesContainerRef.current) {
-      pagesContainerRef.current.style.transform = 'none';
-    }
 
     // Restore preserved scroll position or apply targeted focal scroll position
     if (renderSeqRef.current === currentSeq && containerRef.current) {
@@ -230,15 +201,27 @@ export const PdfView: React.FC<PdfViewProps> = ({
 
   // Load PDF document ONLY when pdfBytes change
   useEffect(() => {
+    // Invalidate stale rendering sequences and cancel running tasks immediately
+    renderSeqRef.current++;
+    renderTasksRef.current.forEach((t) => {
+      try { t.cancel(); } catch {}
+    });
+    renderTasksRef.current = [];
+
+    // Destroy previous loading task if one was in-flight
+    if (loadingTaskRef.current) {
+      void loadingTaskRef.current.destroy().catch(() => {});
+      loadingTaskRef.current = null;
+    }
+
+    // Clear pdfDocRef immediately while replacing so pending timers cannot render destroyed prior doc
+    pdfDocRef.current = null;
+
     if (!pdfBytes || pdfBytes.length === 0) {
       setNumPages(0);
       setCurrentPage(1);
-      pdfDocRef.current = null;
-      renderSeqRef.current++;
-      renderTasksRef.current.forEach((t) => {
-        try { t.cancel(); } catch {}
-      });
-      renderTasksRef.current = [];
+      setIsLoadingPdf(false);
+      setRenderError(null);
       if (pagesContainerRef.current) {
         pagesContainerRef.current.innerHTML = '';
       }
@@ -260,25 +243,24 @@ export const PdfView: React.FC<PdfViewProps> = ({
           data: dataCopy,
           cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/cmaps/',
           cMapPacked: true,
+          // WebKit's worker-side OffscreenCanvas path can leave embedded images
+          // missing after a canvas is repainted at a new zoom level.
+          isOffscreenCanvasSupported: false,
         });
+        loadingTaskRef.current = loadingTask;
 
         const pdfDoc = await loadingTask.promise;
-        if (!isSubscribed) return;
+        if (!isSubscribed) {
+          void loadingTask.destroy().catch(() => {});
+          return;
+        }
 
         pdfDocRef.current = pdfDoc;
         setNumPages(pdfDoc.numPages);
 
-        if (pagesContainerRef.current) {
-          const wrappers = pagesContainerRef.current.querySelectorAll('.pdf-page-wrapper');
-          wrappers.forEach((w, idx) => {
-            if (idx >= pdfDoc.numPages) {
-              w.remove();
-            }
-          });
-        }
-
-        // Initial render at current zoom
-        await renderPages(pdfDoc, zoom);
+        // Render at latest zoom for loaded documents
+        const targetZoom = zoomRef.current;
+        await renderPages(pdfDoc, targetZoom);
       } catch (err: unknown) {
         if (!isSubscribed) return;
         const msg = err instanceof Error ? err.message : String(err);
@@ -295,16 +277,43 @@ export const PdfView: React.FC<PdfViewProps> = ({
 
     return () => {
       isSubscribed = false;
+      renderSeqRef.current++;
+      renderTasksRef.current.forEach((t) => {
+        try { t.cancel(); } catch {}
+      });
+      renderTasksRef.current = [];
+      if (loadingTaskRef.current) {
+        void loadingTaskRef.current.destroy().catch(() => {});
+        loadingTaskRef.current = null;
+      }
+      pdfDocRef.current = null;
     };
   }, [pdfBytes, renderPages]);
 
   // Re-render pages smoothly when zoom or tab changes WITHOUT reloading the document
   useEffect(() => {
+    // Invalidate stale jobs immediately on zoom/tab change before debounce timer
+    renderSeqRef.current++;
+    renderTasksRef.current.forEach((t) => {
+      try { t.cancel(); } catch {}
+    });
+    renderTasksRef.current = [];
+
     if (!pdfDocRef.current || !pdfBytes || activeTab !== 'preview') return;
+
+    // If switching to preview tab and pagesContainer is unpopulated, render immediately
+    const needsImmediateRender =
+      pagesContainerRef.current &&
+      pagesContainerRef.current.children.length === 0;
+
+    if (needsImmediateRender) {
+      renderPages(pdfDocRef.current, zoomRef.current);
+      return;
+    }
 
     const timer = setTimeout(() => {
       if (pdfDocRef.current) {
-        renderPages(pdfDocRef.current, zoom);
+        renderPages(pdfDocRef.current, zoomRef.current);
       }
     }, 180);
 
@@ -329,7 +338,7 @@ export const PdfView: React.FC<PdfViewProps> = ({
     triggerHud();
   }, [zoom, triggerHud]);
 
-  // Clean up HUD timer and scroll animation frame on unmount
+  // Clean up HUD timer, scroll animation frame, and resources on unmount
   useEffect(() => {
     return () => {
       if (hudTimerRef.current) {
@@ -338,6 +347,16 @@ export const PdfView: React.FC<PdfViewProps> = ({
       if (scrollRafRef.current !== null) {
         cancelAnimationFrame(scrollRafRef.current);
       }
+      renderSeqRef.current++;
+      renderTasksRef.current.forEach((t) => {
+        try { t.cancel(); } catch {}
+      });
+      renderTasksRef.current = [];
+      if (loadingTaskRef.current) {
+        void loadingTaskRef.current.destroy().catch(() => {});
+        loadingTaskRef.current = null;
+      }
+      pdfDocRef.current = null;
     };
   }, []);
 
