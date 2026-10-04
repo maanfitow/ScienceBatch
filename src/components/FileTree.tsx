@@ -27,7 +27,7 @@ interface FileTreeProps {
   files: FileItem[];
   activeFilePath: string | null;
   mainFilePath: string | null;
-  onSelectFile: (path: string) => void;
+  onSelectFile: (path: string, permanent?: boolean) => void;
   onSetMainFile: (path: string) => void;
   onCreateFile: (parentDir: string, name: string) => void;
   onCreateFolder: (parentDir: string, name: string) => void;
@@ -176,6 +176,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
             onSelectFile(item.path);
           }
         }}
+        onDoubleClick={() => onSelectFile(item.path, true)}
       >
         {getFileIcon(item.name)}
         <span className="file-tree-label truncate">{item.name}</span>

@@ -6,15 +6,15 @@ import { invoke } from '@tauri-apps/api/core';
 
 import { MenuBar } from './components/MenuBar';
 import { Toolbar } from './components/Toolbar';
-import { EditorView } from './components/EditorView';
 import { PdfView } from './components/PdfView';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { NewProjectModal } from './components/NewProjectModal';
-import { ImageViewerModal } from './components/ImageViewerModal';
+import { WorkspaceTabs } from './components/WorkspaceTabs';
 import { SidebarActivityBar, SidebarContentPanels } from './components/sidebar';
 
 import { useRecentProjects, useCompiler, useExport, useProject, useSidebar } from './hooks';
 import { ViewMode } from './types';
+import { tabIsDirty } from './types/workspace';
 import './App.css';
 
 export const App: React.FC = () => {
@@ -37,6 +37,15 @@ export const App: React.FC = () => {
   const compiler = useCompiler();
   const exportService = useExport();
 
+  useEffect(() => {
+    const preventNativeContextMenu = (event: MouseEvent) => {
+      if ((event.target as Element | null)?.closest('.monaco-editor')) return;
+      event.preventDefault();
+    };
+    window.addEventListener('contextmenu', preventNativeContextMenu, true);
+    return () => window.removeEventListener('contextmenu', preventNativeContextMenu, true);
+  }, []);
+
   const project = useProject({
     compile: compiler.compile,
     clearCompilationAndDiagnostics: compiler.clearCompilationAndDiagnostics,
@@ -51,6 +60,16 @@ export const App: React.FC = () => {
     e.preventDefault();
     if (viewMode === 'editor') project.saveFile();
   }, { enableOnFormTags: true, enableOnContentEditable: true }, [project.saveFile, viewMode]);
+
+  useHotkeys('ctrl+w, meta+w', (e) => {
+    e.preventDefault();
+    if (viewMode === 'editor') project.closeTabs(false);
+  }, { enableOnFormTags: true, enableOnContentEditable: true }, [project.closeTabs, viewMode]);
+
+  useHotkeys('ctrl+shift+w, meta+shift+w', (e) => {
+    e.preventDefault();
+    if (viewMode === 'editor') project.closeTabs(true);
+  }, { enableOnFormTags: true, enableOnContentEditable: true }, [project.closeTabs, viewMode]);
 
   useHotkeys('ctrl+b, meta+b', (e) => {
     e.preventDefault();
@@ -92,19 +111,29 @@ export const App: React.FC = () => {
     const handleOpenOutline = () => {
       if (viewMode === 'editor') sidebar.toggleTool('outline');
     };
+    const handleCloseActiveTab = () => {
+      if (viewMode === 'editor') void project.closeTabs(false);
+    };
+    const handleCloseUnpinnedTabs = () => {
+      if (viewMode === 'editor') void project.closeTabs(true);
+    };
 
     window.addEventListener('sciencebatch:toggle-sidebar', handleToggleSidebar);
     window.addEventListener('sciencebatch:open-search', handleOpenSearch);
     window.addEventListener('sciencebatch:open-files', handleOpenFiles);
     window.addEventListener('sciencebatch:open-outline', handleOpenOutline);
+    window.addEventListener('sciencebatch:close-active-tab', handleCloseActiveTab);
+    window.addEventListener('sciencebatch:close-unpinned-tabs', handleCloseUnpinnedTabs);
 
     return () => {
       window.removeEventListener('sciencebatch:toggle-sidebar', handleToggleSidebar);
       window.removeEventListener('sciencebatch:open-search', handleOpenSearch);
       window.removeEventListener('sciencebatch:open-files', handleOpenFiles);
       window.removeEventListener('sciencebatch:open-outline', handleOpenOutline);
+      window.removeEventListener('sciencebatch:close-active-tab', handleCloseActiveTab);
+      window.removeEventListener('sciencebatch:close-unpinned-tabs', handleCloseUnpinnedTabs);
     };
-  }, [viewMode, sidebar.toggleSidebar, sidebar.toggleTool]);
+  }, [viewMode, sidebar.toggleSidebar, sidebar.toggleTool, project.closeTabs]);
 
   useHotkeys('ctrl+n, meta+n', (e) => {
     e.preventDefault();
@@ -349,16 +378,14 @@ export const App: React.FC = () => {
                     activeFilePath={project.activeFilePath}
                     mainFilePath={project.mainFilePath}
                     onSelectFile={project.selectFile}
+                    onOpenDiff={(path) => /\.(png|jpe?g|svg|webp|gif|bmp)$/i.test(path) ? void project.selectFile(`${project.projectRoot}/${path}`) : project.openDiff(path)}
+                    onBranchChanged={() => project.openFolder(project.projectRoot || undefined)}
+                    hasUnsavedChanges={project.tabs.some(tabIsDirty)}
                     onSetMainFile={project.setMainFile}
                     onCreateFile={project.createFile}
                     onCreateFolder={project.createFolder}
                     onDeleteFile={project.deleteFile}
-                    onViewImage={(path, name) => {
-                      const rel = project.projectRoot && path.startsWith(project.projectRoot)
-                        ? path.slice(project.projectRoot.length).replace(/^[/\\]/, '')
-                        : name;
-                      project.setViewingImage({ path, name, relPath: rel });
-                    }}
+                    onViewImage={(path) => project.selectFile(path)}
                     onImportFiles={project.importFiles}
                     projectRoot={project.projectRoot}
                     projectName={project.projectName}
@@ -377,9 +404,16 @@ export const App: React.FC = () => {
               defaultSize={project.projectRoot && sidebar.state.isOpen && (sidebar.state.activeTopTool || sidebar.state.activeBottomTool) ? (100 - sidebar.state.panelWidth) / 2 : 50} 
               minSize={25}
             >
-              <EditorView
-                value={project.sourceCode}
+              <WorkspaceTabs
+                tabs={project.tabs}
+                activeTabId={project.activeTabId}
+                projectRoot={project.projectRoot}
+                sourceCode={project.sourceCode}
                 onChange={project.setSourceCode}
+                onActivate={project.activateTab}
+                onPromote={project.promoteTab}
+                onClose={project.closeTabs}
+                onPin={project.togglePin}
                 errors={compiler.errors}
                 warnings={compiler.warnings}
                 jumpToLine={jumpToLine}
@@ -413,15 +447,6 @@ export const App: React.FC = () => {
           </PanelGroup>
         </main>
       )}
-
-      {/* Image Preview Modal */}
-      <ImageViewerModal
-        isOpen={project.viewingImage !== null}
-        filePath={project.viewingImage?.path || null}
-        fileName={project.viewingImage?.name || null}
-        relPath={project.viewingImage?.relPath || null}
-        onClose={() => project.setViewingImage(null)}
-      />
 
       {/* New Project Assistant Modal */}
       <NewProjectModal

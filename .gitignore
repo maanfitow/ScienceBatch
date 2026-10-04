@@ -58,6 +58,10 @@ CONTRIBUTING.md
 BUGS.md
 IDEAS.md
 SPECS.md
+/.codex/
+/docs/codex/
+/docs/CODEX_SETUP.md
+/docs/AGENT_WORKFLOW.md
 
 # Graphify Local Intelligence
 graphify-out/

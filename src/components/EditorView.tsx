@@ -277,6 +277,14 @@ export const EditorView: React.FC<EditorViewProps> = ({
       window.dispatchEvent(new CustomEvent('sciencebatch:open-search'));
     });
 
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyW, () => {
+      window.dispatchEvent(new CustomEvent('sciencebatch:close-active-tab'));
+    });
+
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyW, () => {
+      window.dispatchEvent(new CustomEvent('sciencebatch:close-unpinned-tabs'));
+    });
+
     editor.addCommand(monaco.KeyMod.Alt | monaco.KeyCode.Digit1, () => {
       window.dispatchEvent(new CustomEvent('sciencebatch:open-files'));
     });

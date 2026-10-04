@@ -1,8 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { open } from '@tauri-apps/plugin-dialog';
+import { open, ask } from '@tauri-apps/plugin-dialog';
 import { toast } from 'sonner';
-import { FileItem, EngineType, ImageViewerState } from '../types';
+import { FileItem, EngineType } from '../types';
 import { 
   setProjectFiles as setGlobalProjectFiles,
   setProjectCustomCommands,
@@ -10,6 +10,7 @@ import {
 } from '../editor/projectContext';
 import { DEFAULT_LATEX_SOURCE } from '../editor/latexData';
 import { DEFAULT_TYPST_SOURCE } from '../editor/typstData';
+import { WorkspaceTab, isProjectAsset, tabIsDirty } from '../types/workspace';
 
 interface UseProjectOptions {
   compile: (source: string, engine: EngineType, projectDir?: string | null, mainFile?: string | null) => Promise<void>;
@@ -47,8 +48,100 @@ export function useProject({
   const [mainFilePath, setMainFilePath] = useState<string | null>(null);
   const [projectFiles, setProjectFiles] = useState<FileItem[]>([]);
   const [engine, setEngine] = useState<EngineType>('latex');
-  const [sourceCode, setSourceCode] = useState<string>(DEFAULT_LATEX_SOURCE);
-  const [viewingImage, setViewingImage] = useState<ImageViewerState | null>(null);
+  const [sourceCode, setSourceCodeState] = useState<string>(DEFAULT_LATEX_SOURCE);
+  const [tabs, setTabsState] = useState<WorkspaceTab[]>([]);
+  const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const tabsRef = useRef<WorkspaceTab[]>([]);
+  const activeTabRef = useRef<string | null>(null);
+  const activeSourceTabRef = useRef<string | null>(null);
+  const fileRequestRef = useRef(0);
+  const setTabs = useCallback((next: WorkspaceTab[]) => {
+    tabsRef.current = next;
+    setTabsState(next);
+  }, []);
+  const setSourceCode = useCallback((content: string) => {
+    setSourceCodeState(content);
+    const active = tabsRef.current.find(tab => tab.id === activeTabRef.current);
+    const targetId = active?.kind === 'source' ? active.id : activeSourceTabRef.current;
+    if (targetId) setTabs(tabsRef.current.map(tab => tab.id === targetId && tab.kind === 'source' ? { ...tab, content, preview: false } : tab));
+  }, [setTabs]);
+  const activateTab = useCallback((id: string) => {
+    const tab = tabsRef.current.find(item => item.id === id);
+    if (!tab) return;
+    fileRequestRef.current++;
+    activeTabRef.current = id;
+    setActiveTabId(id);
+    if (tab.kind === 'source') {
+      activeSourceTabRef.current = tab.id;
+      activeFilePathRef.current = tab.path;
+      setActiveFilePath(tab.path);
+      setSourceCodeState(tab.content);
+      if (tab.path?.endsWith('.typ')) setEngine('typst');
+      else if (tab.path?.endsWith('.tex')) setEngine('latex');
+    }
+  }, []);
+  const promoteTab = useCallback((id: string) => {
+    setTabs(tabsRef.current.map(tab => tab.id === id ? { ...tab, preview: false } : tab));
+  }, [setTabs]);
+  const resetTabs = useCallback((path: string | null, content: string, tabEngine: EngineType) => {
+    fileRequestRef.current++;
+    const id = `source:${path || 'scratchpad'}`;
+    setTabs([{ id, path, name: path?.split(/[/\\]/).pop() || `Untitled.${tabEngine === 'typst' ? 'typ' : 'tex'}`, kind: 'source', pinned: false, preview: false, content, savedContent: content }]);
+    activeTabRef.current = id;
+    activeSourceTabRef.current = id;
+    setActiveTabId(id);
+  }, [setTabs]);
+  const closeTabs = useCallback(async (all = false, id = activeTabRef.current, others = false) => {
+    const closing = tabsRef.current.filter(tab => all ? !tab.pinned : others ? tab.id !== id && !tab.pinned : tab.id === id);
+    if (closing.some(tabIsDirty)) {
+      const confirmed = await ask('Discard unsaved changes in the tabs being closed?', { title: 'Unsaved Changes', kind: 'warning', okLabel: 'Discard', cancelLabel: 'Cancel' });
+      if (!confirmed) return;
+    }
+    const ids = new Set(closing.map(tab => tab.id));
+    const remaining = tabsRef.current.filter(tab => !ids.has(tab.id));
+    setTabs(remaining);
+    if (activeSourceTabRef.current && ids.has(activeSourceTabRef.current)) {
+      const nextSource = [...remaining].reverse().find(tab => tab.kind === 'source') || null;
+      activeSourceTabRef.current = nextSource?.id || null;
+      activeFilePathRef.current = nextSource?.path || null;
+      setActiveFilePath(nextSource?.path || null);
+      setSourceCodeState(nextSource?.content || '');
+      if (nextSource?.path?.endsWith('.typ')) setEngine('typst');
+      else if (nextSource?.path?.endsWith('.tex')) setEngine('latex');
+    }
+    if (activeTabRef.current && ids.has(activeTabRef.current)) {
+      activeTabRef.current = null;
+      setActiveTabId(null);
+      const preferred = others ? remaining.find(tab => tab.id === id) : null;
+      if (preferred) activateTab(preferred.id);
+      else if (remaining.length) activateTab(remaining[remaining.length - 1].id);
+    }
+  }, [activateTab, setTabs]);
+  const togglePin = useCallback((id: string) => {
+    setTabs(tabsRef.current.map(tab => tab.id === id ? { ...tab, pinned: !tab.pinned, preview: tab.pinned ? tab.preview : false } : tab));
+  }, [setTabs]);
+  const openPreviewTab = useCallback(async (nextTab: WorkspaceTab) => {
+    const existing = tabsRef.current.find(tab => tab.id === nextTab.id);
+    if (existing) { activateTab(existing.id); return; }
+    const request = ++fileRequestRef.current;
+    const preview = tabsRef.current.find(tab => tab.preview);
+    if (preview && tabIsDirty(preview)) {
+      const confirmed = await ask('Discard unsaved changes in the preview tab?', { title: 'Unsaved Changes', kind: 'warning', okLabel: 'Discard', cancelLabel: 'Cancel' });
+      if (!confirmed || request !== fileRequestRef.current) return;
+    }
+    if (request !== fileRequestRef.current) return;
+    const latest = tabsRef.current;
+    const replace = latest.find(tab => tab.preview);
+    const index = replace ? latest.findIndex(tab => tab.id === replace.id) : latest.length;
+    const next = latest.filter(tab => tab.id !== replace?.id);
+    next.splice(index, 0, nextTab);
+    setTabs(next);
+    activateTab(nextTab.id);
+  }, [activateTab, setTabs]);
+  const openDiff = useCallback((path: string) => {
+    const id = `diff:${path}`;
+    void openPreviewTab({ id, path, name: path.split(/[/\\]/).pop() || path, kind: 'diff', pinned: false, preview: true, content: '', savedContent: '' });
+  }, [openPreviewTab]);
 
   // Synchronous refs to prevent React state lag and stale closures during async operations
   const projectRootRef = useRef<string | null>(null);
@@ -106,7 +199,8 @@ export function useProject({
   // Save current active file to disk and trigger compilation
   const saveFile = useCallback(async () => {
     const currentRoot = projectRootRef.current || projectRoot;
-    const currentActive = activeFilePathRef.current || activeFilePath;
+    const activeTab = tabsRef.current.find(tab => tab.id === activeTabRef.current);
+    const currentActive = activeTab?.kind === 'source' ? activeTab.path : null;
     const currentMain = mainFilePathRef.current || mainFilePath;
 
     if (currentActive && currentRoot) {
@@ -115,6 +209,7 @@ export function useProject({
           path: currentActive,
           content: sourceCode,
         });
+        setTabs(tabsRef.current.map(tab => tab.path === currentActive && tab.kind === 'source' ? { ...tab, savedContent: sourceCode } : tab));
         toast.success('File saved', { description: currentActive });
 
         // If a class or style file was modified, re-scan project custom macros
@@ -124,6 +219,7 @@ export function useProject({
       } catch (e) {
         toast.error('Failed to save file to disk');
         console.error(e);
+        return;
       }
     }
 
@@ -146,7 +242,7 @@ export function useProject({
     } else {
       compile(sourceCode, engine, currentRoot, currentMain);
     }
-  }, [activeFilePath, mainFilePath, projectRoot, sourceCode, engine, compile]);
+  }, [mainFilePath, projectRoot, sourceCode, engine, compile, refreshProjectFiles, setTabs]);
 
   // Import files into current project folder
   const importFiles = useCallback(async () => {
@@ -201,6 +297,11 @@ export function useProject({
         console.error('Failed to open directory dialog:', e);
         return;
       }
+    }
+
+    if (tabsRef.current.some(tabIsDirty)) {
+      const confirmed = await ask('Discard unsaved changes before opening another project?', { title: 'Unsaved Changes', kind: 'warning', okLabel: 'Discard and Open', cancelLabel: 'Cancel' });
+      if (!confirmed) return;
     }
 
     clearCompilationAndDiagnostics();
@@ -258,7 +359,8 @@ export function useProject({
         activeFilePathRef.current = null;
       }
 
-      setSourceCode(contentToLoad);
+      setSourceCodeState(contentToLoad);
+      resetTabs(activeFilePathRef.current, contentToLoad, detectedEngine);
       onEnterEditorMode?.();
       recordRecentProject(targetPath, name, detectedEngine);
 
@@ -266,7 +368,7 @@ export function useProject({
         description: `Engine: ${detectedEngine.toUpperCase()} — Main: ${detectedMain}`,
       });
 
-      compile(contentToLoad, detectedEngine, targetPath, detectedMain);
+
     } catch (err) {
       try {
         const valid: string[] = await invoke('validate_recent_paths', { paths: [targetPath] });
@@ -379,10 +481,11 @@ export function useProject({
     setProjectFiles([]);
     setEngine(chosenEngine);
     const starter = chosenEngine === 'typst' ? DEFAULT_TYPST_SOURCE : DEFAULT_LATEX_SOURCE;
-    setSourceCode(starter);
+    setSourceCodeState(starter);
+    resetTabs(null, starter, chosenEngine);
     onEnterEditorMode?.();
-    compile(starter, chosenEngine, undefined, undefined);
-  }, [clearCompilationAndDiagnostics, compile, onEnterEditorMode]);
+
+  }, [clearCompilationAndDiagnostics, onEnterEditorMode, resetTabs]);
 
   // Switch active typesetting engine
   const switchEngine = useCallback((newEngine: EngineType) => {
@@ -392,18 +495,28 @@ export function useProject({
     if (!projectRoot) {
       if (sourceCode === DEFAULT_LATEX_SOURCE || sourceCode === DEFAULT_TYPST_SOURCE) {
         const nextSource = newEngine === 'typst' ? DEFAULT_TYPST_SOURCE : DEFAULT_LATEX_SOURCE;
-        setSourceCode(nextSource);
-        compile(nextSource, newEngine, undefined, undefined);
+        setSourceCodeState(nextSource);
+        resetTabs(null, nextSource, newEngine);
+
         return;
       }
     }
 
     toast.info(`Typesetting engine set to ${newEngine.toUpperCase()}`);
-    compile(sourceCode, newEngine, projectRoot, mainFilePath);
-  }, [engine, projectRoot, sourceCode, mainFilePath, compile]);
+
+  }, [engine, projectRoot, sourceCode, resetTabs]);
 
   // Close project and return to Welcome Screen
-  const closeProject = useCallback(() => {
+  const closeProject = useCallback(async () => {
+    if (tabsRef.current.some(tabIsDirty)) {
+      const confirmed = await ask('Discard unsaved changes and close this project?', { title: 'Unsaved Changes', kind: 'warning', okLabel: 'Discard and Close', cancelLabel: 'Cancel' });
+      if (!confirmed) return;
+    }
+    setTabs([]);
+    activeTabRef.current = null;
+    activeSourceTabRef.current = null;
+    setActiveTabId(null);
+    fileRequestRef.current++;
     setProjectRoot(null);
     projectRootRef.current = null;
     setProjectName('');
@@ -416,26 +529,27 @@ export function useProject({
     setProjectCustomCommands(new Set());
     clearCompilationAndDiagnostics();
     onEnterWelcomeMode?.();
-  }, [clearCompilationAndDiagnostics, onEnterWelcomeMode]);
+  }, [clearCompilationAndDiagnostics, onEnterWelcomeMode, setTabs]);
 
   // File tree operations
-  const selectFile = useCallback(async (filePath: string) => {
-    try {
-      const content = await invoke<string>('read_file_content', { path: filePath });
-      setActiveFilePath(filePath);
-      activeFilePathRef.current = filePath;
-      setSourceCode(content);
-
-      if (filePath.endsWith('.typ')) {
-        setEngine('typst');
-      } else if (filePath.endsWith('.tex')) {
-        setEngine('latex');
-      }
-    } catch (e) {
-      toast.error('Unable to open file');
-      console.error(e);
+  const selectFile = useCallback(async (filePath: string, permanent = false) => {
+    const kind = isProjectAsset(filePath) ? 'asset' : 'source';
+    const id = `${kind}:${filePath}`;
+    if (tabsRef.current.some(tab => tab.id === id)) {
+      if (permanent) promoteTab(id);
+      activateTab(id);
+      return;
     }
-  }, []);
+    const request = ++fileRequestRef.current;
+    const root = projectRootRef.current;
+    try {
+      const content = kind === 'source' ? await invoke<string>('read_file_content', { path: filePath }) : '';
+      if (request !== fileRequestRef.current || root !== projectRootRef.current) return;
+      await openPreviewTab({ id, path: filePath, name: filePath.split(/[/\\]/).pop() || filePath, kind, pinned: false, preview: !permanent, content, savedContent: content });
+    } catch (e) {
+      toast.error('Unable to open file', { description: String(e) });
+    }
+  }, [activateTab, openPreviewTab, promoteTab]);
 
   const setMainFile = useCallback(async (filePath: string) => {
     if (!projectRoot) return;
@@ -491,6 +605,13 @@ export function useProject({
   }, []);
 
   return {
+    tabs,
+    activeTabId,
+    activateTab,
+    promoteTab,
+    closeTabs,
+    togglePin,
+    openDiff,
     projectRoot,
     projectName,
     activeFilePath,
@@ -498,10 +619,8 @@ export function useProject({
     projectFiles,
     engine,
     sourceCode,
-    viewingImage,
     setSourceCode,
     setEngine,
-    setViewingImage,
     saveFile,
     importFiles,
     openFolder,

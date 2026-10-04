@@ -69,6 +69,13 @@ pub fn run() {
             commands::export::export_project_to_zip,
             commands::export::export_document_to_markdown,
             commands::export::export_document_to_html,
+            commands::git::get_git_status,
+            commands::git::get_git_diff,
+            commands::git::initialize_git_repository,
+            commands::git::list_git_branches,
+            commands::git::switch_git_branch,
+            commands::git::stage_git_files,
+            commands::git::unstage_git_files,
         ])
         .run(tauri::generate_context!())
         .expect("error running tauri application");
