@@ -26,11 +26,12 @@ interface WorkspaceTabsProps {
   errors?: React.ComponentProps<typeof EditorView>['errors'];
   warnings?: React.ComponentProps<typeof EditorView>['warnings'];
   jumpToLine?: number | null;
+  readOnly?: boolean;
 }
 
 export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
   tabs, activeTabId, projectRoot, sourceCode, engine, activeFilePath,
-  onChange, onActivate, onPromote, onClose, onPin, errors, warnings, jumpToLine,
+  onChange, onActivate, onPromote, onClose, onPin, errors, warnings, jumpToLine, readOnly,
 }) => {
   const activeTab = tabs.find(tab => tab.id === activeTabId) ?? null;
   const tabIds = tabs.map(tab => tab.id).join('\u0000');
@@ -104,9 +105,9 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
       {contextMenu && selectedTab && <ContextMenu x={contextMenu.x} y={contextMenu.y} actions={closeActions} onClose={() => setContextMenu(null)} />}
       <div className="workspace-tab-content" key={activeTab?.id || 'empty'}>
         {!activeTab ? <div className="workspace-empty">Open a source file or project asset to get started.</div> : activeTab.kind === 'source' ? (
-          <EditorView value={sourceCode} onChange={onChange} errors={errors} warnings={warnings} jumpToLine={jumpToLine} engine={engine} activeFilePath={activeFilePath} />
+          <EditorView value={sourceCode} onChange={onChange} errors={errors} warnings={warnings} jumpToLine={jumpToLine} engine={engine} activeFilePath={activeFilePath} readOnly={readOnly} />
         ) : activeTab.kind === 'diff' ? (
-          <DiffTab path={activeTab.path || ''} projectRoot={projectRoot} />
+          <DiffTab path={activeTab.path || ''} projectRoot={projectRoot} repositoryRoot={activeTab.repositoryRoot || projectRoot} />
         ) : (
           <AssetTab path={activeTab.path || ''} />
         )}
@@ -115,7 +116,7 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
   );
 };
 
-const DiffTab: React.FC<{ path: string; projectRoot: string | null }> = ({ path, projectRoot }) => {
+const DiffTab: React.FC<{ path: string; projectRoot: string | null; repositoryRoot: string | null }> = ({ path, projectRoot, repositoryRoot }) => {
   const [result, setResult] = useState<GitDiffResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -127,11 +128,12 @@ const DiffTab: React.FC<{ path: string; projectRoot: string | null }> = ({ path,
   }, []);
   useEffect(() => {
     let cancelled = false;
-    if (!projectRoot) { setError('Open a project folder to view this diff.'); setLoading(false); return () => { cancelled = true; }; }
+    const diffRoot = repositoryRoot || projectRoot;
+    if (!diffRoot) { setError('Open a project folder to view this diff.'); setLoading(false); return () => { cancelled = true; }; }
     setLoading(true); setError(null); setResult(null);
-    invoke<GitDiffResult>('get_git_diff', { projectPath: projectRoot, filePath: path }).then(value => { if (!cancelled) setResult(value); }).catch(reason => { if (!cancelled) setError(String(reason)); }).finally(() => { if (!cancelled) setLoading(false); });
+    invoke<GitDiffResult>('get_git_diff', { projectPath: diffRoot, filePath: path }).then(value => { if (!cancelled) setResult(value); }).catch(reason => { if (!cancelled) setError(String(reason)); }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [path, projectRoot, revision]);
+  }, [path, projectRoot, repositoryRoot, revision]);
   const lines = useMemo(() => result?.diff.split('\n') ?? [], [result]);
   if (loading) return <div className="workspace-notice"><RotateCw className="spin" size={20} /> Loading diff…</div>;
   if (error) return <div className="workspace-notice">{error}</div>;
@@ -145,13 +147,20 @@ const AssetTab: React.FC<{ path: string }> = ({ path }) => {
   const [loading, setLoading] = useState(true);
   const [pdfPages, setPdfPages] = useState<number | null>(null);
   const [pageNumber, setPageNumber] = useState(1);
+  const [revision, setRevision] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isPdf = /\.pdf$/i.test(path);
 
   useEffect(() => {
+    const refresh = () => setRevision(value => value + 1);
+    window.addEventListener('sciencebatch:git-worktree-updated', refresh);
+    return () => window.removeEventListener('sciencebatch:git-worktree-updated', refresh);
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     let objectUrl: string | null = null;
-    setLoading(true); setError(null); setUrl(null); setPdfPages(null); setPageNumber(1);
+    setLoading(true); setError(null); setUrl(null); setPdfPages(null);
     invoke<number[]>('read_binary_file', { path }).then(bytes => {
       if (cancelled) return;
       const blob = new Blob([new Uint8Array(bytes)], { type: isPdf ? 'application/pdf' : `image/${path.split('.').pop()?.toLowerCase() === 'svg' ? 'svg+xml' : path.split('.').pop()?.toLowerCase()}` });
@@ -159,7 +168,7 @@ const AssetTab: React.FC<{ path: string }> = ({ path }) => {
       if (!isPdf) setLoading(false);
     }).catch(reason => { if (!cancelled) { setError(/\.(png|jpe?g|svg|webp|gif|bmp)$/i.test(path) ? 'This image is deleted or unavailable in the current project.' : String(reason)); setLoading(false); } });
     return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [path, isPdf]);
+  }, [path, isPdf, revision]);
 
   useEffect(() => {
     if (!isPdf || !url || !canvasRef.current) return;
@@ -175,6 +184,7 @@ const AssetTab: React.FC<{ path: string }> = ({ path }) => {
         pdfDocument = document;
         if (cancelled) { await document.destroy(); return; }
         setPdfPages(document.numPages);
+        if (pageNumber > document.numPages) setPageNumber(document.numPages);
         const page = await document.getPage(pageNumber);
         if (cancelled) return;
         const base = page.getViewport({ scale: 1 });

@@ -2,6 +2,7 @@ import React from 'react';
 import { 
   FolderPlus, 
   FolderOpen, 
+  GitBranch,
   RotateCcw, 
   FileCode, 
   FileText, 
@@ -16,6 +17,7 @@ export type { RecentProject };
 interface WelcomeScreenProps {
   onNewProject: () => void;
   onOpenFolder: () => void;
+  onCloneRepository: () => void;
   onImportZip: () => void;
   onQuickScratchpad: (engine: 'latex' | 'typst') => void;
   recentProjects: RecentProject[];
@@ -26,6 +28,7 @@ interface WelcomeScreenProps {
 export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   onNewProject,
   onOpenFolder,
+  onCloneRepository,
   onQuickScratchpad,
   recentProjects,
   onOpenRecentProject,
@@ -68,6 +71,17 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
               <div className="action-text-group">
                 <span className="action-title">Open Project Folder</span>
                 <span className="action-desc">Open any folder containing .tex or .typ files</span>
+              </div>
+              <ChevronRight size={16} className="action-arrow" />
+            </button>
+
+            <button className="btn-welcome-action" onClick={onCloneRepository}>
+              <div className="action-icon-circle bg-emerald-600/20 text-emerald-400">
+                <GitBranch size={20} />
+              </div>
+              <div className="action-text-group">
+                <span className="action-title">Clone Repository</span>
+                <span className="action-desc">Clone a GitHub or GitLab project to your computer</span>
               </div>
               <ChevronRight size={16} className="action-arrow" />
             </button>

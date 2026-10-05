@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback, useState } from 'react';
+import React, { useRef, useEffect, useLayoutEffect, useCallback, useState } from 'react';
 import Editor, { OnMount, BeforeMount } from '@monaco-editor/react';
 import type * as monacoType from 'monaco-editor';
 import type { Monaco } from '@monaco-editor/react';
@@ -21,6 +21,7 @@ interface EditorViewProps {
   jumpToLine?: number | null;
   engine?: 'latex' | 'typst';
   activeFilePath?: string | null;
+  readOnly?: boolean;
 }
 
 export const EditorView: React.FC<EditorViewProps> = ({
@@ -31,12 +32,26 @@ export const EditorView: React.FC<EditorViewProps> = ({
   jumpToLine,
   engine = 'latex',
   activeFilePath,
+  readOnly = false,
 }) => {
   const { monacoTheme } = useTheme();
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monacoType.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
   const lintTimerRef = useRef<number | null>(null);
+  const previousValueRef = useRef(value);
+  const latestValueRef = useRef(value);
+  const preReloadValueRef = useRef(value);
+  const editorViewStateRef = useRef<monacoType.editor.ICodeEditorViewState | null>(null);
+  const frozenViewStateRef = useRef<monacoType.editor.ICodeEditorViewState | null>(null);
+  const awaitingExternalContentRef = useRef(false);
+  const readOnlyRef = useRef(readOnly);
+  const restoreFrameRef = useRef<number | null>(null);
+  const clearViewStateFrameRef = useRef<number | null>(null);
+  const viewStateListenersRef = useRef<monacoType.IDisposable[]>([]);
+  readOnlyRef.current = readOnly;
+  latestValueRef.current = value;
+  const cloneViewState = (state: monacoType.editor.ICodeEditorViewState | null) => state ? structuredClone(state) : null;
 
   // Active section tracking (requires explicit click-to-activate)
   const [isEditorActive, setIsEditorActive] = useState<boolean>(false);
@@ -224,6 +239,33 @@ export const EditorView: React.FC<EditorViewProps> = ({
   const handleEditorDidMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
+    const saveViewState = () => {
+      if (readOnlyRef.current || frozenViewStateRef.current) return;
+      editorViewStateRef.current = cloneViewState(editor.saveViewState());
+    };
+    const restoreAfterExternalContent = () => {
+      const model = editor.getModel();
+      if (!awaitingExternalContentRef.current || !model || !frozenViewStateRef.current) return;
+      if (model.getValue() === preReloadValueRef.current || model.getValue() !== latestValueRef.current) return;
+      const viewState = frozenViewStateRef.current;
+      if (restoreFrameRef.current !== null) cancelAnimationFrame(restoreFrameRef.current);
+      restoreFrameRef.current = requestAnimationFrame(() => {
+        restoreFrameRef.current = null;
+        if (editorRef.current !== editor || editor.getModel()?.getValue() !== latestValueRef.current) return;
+        editor.restoreViewState(viewState);
+        editorViewStateRef.current = viewState;
+        awaitingExternalContentRef.current = false;
+        frozenViewStateRef.current = null;
+        if (clearViewStateFrameRef.current !== null) cancelAnimationFrame(clearViewStateFrameRef.current);
+        clearViewStateFrameRef.current = null;
+      });
+    };
+    viewStateListenersRef.current = [
+      editor.onDidChangeCursorSelection(saveViewState),
+      editor.onDidScrollChange(saveViewState),
+      editor.onDidChangeModelContent(restoreAfterExternalContent),
+    ].filter((listener): listener is monacoType.IDisposable => Boolean(listener));
+    saveViewState();
 
     // Register custom themes
     registerMonacoCustomThemes(monaco);
@@ -324,7 +366,40 @@ export const EditorView: React.FC<EditorViewProps> = ({
     }
   }, [editorLanguage]);
 
+  useLayoutEffect(() => {
+    if (readOnly && !frozenViewStateRef.current) {
+      frozenViewStateRef.current = cloneViewState(editorRef.current?.saveViewState() ?? editorViewStateRef.current);
+      preReloadValueRef.current = value;
+      awaitingExternalContentRef.current = true;
+    } else if (!readOnly && frozenViewStateRef.current) {
+      if (clearViewStateFrameRef.current !== null) cancelAnimationFrame(clearViewStateFrameRef.current);
+      clearViewStateFrameRef.current = requestAnimationFrame(() => {
+        clearViewStateFrameRef.current = null;
+        if (!readOnlyRef.current && latestValueRef.current === preReloadValueRef.current) {
+          awaitingExternalContentRef.current = false;
+          frozenViewStateRef.current = null;
+        }
+      });
+    }
+  }, [readOnly, value]);
+
+  useEffect(() => {
+    const changed = previousValueRef.current !== value;
+    previousValueRef.current = value;
+    if (changed && awaitingExternalContentRef.current && value !== preReloadValueRef.current && clearViewStateFrameRef.current !== null) {
+      cancelAnimationFrame(clearViewStateFrameRef.current);
+      clearViewStateFrameRef.current = null;
+    }
+  }, [value]);
+
+  useEffect(() => () => {
+    viewStateListenersRef.current.forEach(listener => listener.dispose());
+    if (restoreFrameRef.current !== null) cancelAnimationFrame(restoreFrameRef.current);
+    if (clearViewStateFrameRef.current !== null) cancelAnimationFrame(clearViewStateFrameRef.current);
+  }, []);
+
   const handleEditorChange = (val: string | undefined) => {
+    if (readOnlyRef.current) return;
     const text = val || '';
     onChange(text);
 
@@ -344,6 +419,11 @@ export const EditorView: React.FC<EditorViewProps> = ({
       }, 400);
     }
   };
+
+  useEffect(() => {
+    if (!editorRef.current) return;
+    editorRef.current.updateOptions({ readOnly });
+  }, [readOnly]);
 
   // Throttled Ctrl+Wheel listener for bounded code font zoom (10px to 28px)
   useEffect(() => {
@@ -402,6 +482,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
         beforeMount={handleEditorBeforeMount}
         onMount={handleEditorDidMount}
         options={{
+          readOnly,
           fontSize: fontSize,
           mouseWheelZoom: false,
           fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace",

@@ -1,0 +1,121 @@
+.clone-repository-modal {
+  max-width: 580px;
+}
+
+.clone-repository-body {
+  gap: 14px;
+}
+
+.clone-repository-help,
+.clone-repository-hint {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.clone-repository-folder-row {
+  display: flex;
+  gap: 8px;
+}
+
+.clone-repository-folder-row .modal-input {
+  min-width: 0;
+  flex: 1;
+}
+
+.clone-repository-browse,
+.clone-repository-footer .btn-secondary,
+.clone-repository-footer .btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 13px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.clone-repository-browse:hover,
+.clone-repository-footer .btn-secondary:hover {
+  border-color: var(--border-focus);
+}
+
+.clone-repository-browse:disabled,
+.clone-repository-footer button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.clone-repository-footer .btn-primary {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary);
+  color: white;
+}
+
+.clone-repository-progress,
+.clone-repository-error,
+.clone-repository-recovery {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.clone-repository-progress {
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+}
+
+.clone-repository-progress .spin {
+  flex: 0 0 auto;
+}
+
+.clone-repository-error {
+  color: var(--danger-color, #f87171);
+  background: color-mix(in srgb, var(--danger-color, #ef4444) 12%, transparent);
+}
+
+.clone-repository-recovery {
+  flex-direction: column;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  overflow-wrap: anywhere;
+}
+
+.clone-repository-recovery code {
+  color: var(--text-primary);
+  font-family: var(--font-mono, monospace);
+}
+
+.clone-repository-open-existing {
+  align-self: flex-start;
+  min-height: 32px;
+  padding: 0 11px;
+  border: 1px solid var(--border-focus);
+  border-radius: 6px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.clone-repository-open-existing:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.clone-repository-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
