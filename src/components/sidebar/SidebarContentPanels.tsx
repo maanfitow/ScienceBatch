@@ -33,8 +33,9 @@ interface SidebarContentPanelsProps {
   sourceCode: string;
   onUpdateSourceCode: (code: string) => void;
   onSelectLine: (line: number, file?: string | null) => void;
-  onOpenDiff?: (path: string) => void;
-  onBranchChanged?: () => Promise<void> | void;
+  onOpenDiff?: (path: string, repositoryRoot: string) => void;
+  onBranchChanged?: () => Promise<void | boolean> | void | boolean;
+  onWorktreeUpdateBusyChange?: (busy: boolean) => void;
   hasUnsavedChanges?: boolean;
 }
 
@@ -62,6 +63,7 @@ export const SidebarContentPanels: React.FC<SidebarContentPanelsProps> = ({
   onSelectLine,
   onOpenDiff,
   onBranchChanged,
+  onWorktreeUpdateBusyChange,
   hasUnsavedChanges,
 }) => {
   const isSplit = Boolean(activeTopTool && activeBottomTool);
@@ -131,6 +133,7 @@ export const SidebarContentPanels: React.FC<SidebarContentPanelsProps> = ({
               onSelectFile={onSelectFile}
               onOpenDiff={onOpenDiff}
               onBranchChanged={onBranchChanged}
+              onWorktreeUpdateBusyChange={onWorktreeUpdateBusyChange}
               hasUnsavedChanges={hasUnsavedChanges}
               onClose={() => onCloseTool(slot)}
             />

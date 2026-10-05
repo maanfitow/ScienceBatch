@@ -9,10 +9,12 @@ import { Toolbar } from './components/Toolbar';
 import { PdfView } from './components/PdfView';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { NewProjectModal } from './components/NewProjectModal';
+import { CloneRepositoryModal } from './components/CloneRepositoryModal';
 import { WorkspaceTabs } from './components/WorkspaceTabs';
 import { SidebarActivityBar, SidebarContentPanels } from './components/sidebar';
 
 import { useRecentProjects, useCompiler, useExport, useProject, useSidebar } from './hooks';
+import { useGitOperation } from './hooks/useGitOperation';
 import { ViewMode } from './types';
 import { tabIsDirty } from './types/workspace';
 import './App.css';
@@ -23,6 +25,8 @@ export const App: React.FC = () => {
   const sidebar = useSidebar();
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState<boolean>(false);
   const [newProjectModalInitialTab, setNewProjectModalInitialTab] = useState<'create' | 'import'>('create');
+  const [isCloneRepositoryModalOpen, setIsCloneRepositoryModalOpen] = useState(false);
+  const cloneInProgressRef = React.useRef(false);
 
   // Diagnostics Line Navigation
   const [jumpToLine, setJumpToLine] = useState<number | null>(null);
@@ -54,6 +58,32 @@ export const App: React.FC = () => {
     onEnterEditorMode: () => setViewMode('editor'),
     onEnterWelcomeMode: () => setViewMode('welcome'),
   });
+  const cloneOperation = useGitOperation(null);
+
+  const openProjectFolder = (path?: string) => {
+    if (cloneInProgressRef.current) return Promise.resolve(false);
+    return project.openFolder(path);
+  };
+
+  const cloneRepository = async (url: string, parentDir: string, directoryName: string) => {
+    cloneInProgressRef.current = true;
+    try {
+      const result = await cloneOperation.run<{ projectPath: string }>('clone', 'clone_git_repository', {
+        url,
+        parentDir,
+        directoryName,
+      });
+      const opened = await project.openFolder(result.projectPath);
+      if (!opened) {
+        throw Object.assign(
+          new Error('The repository was cloned, but ScienceBatch could not open the project.'),
+          { projectPath: result.projectPath },
+        );
+      }
+    } finally {
+      cloneInProgressRef.current = false;
+    }
+  };
 
   // Hotkeys
   useHotkeys('ctrl+s, meta+s', (e) => {
@@ -137,18 +167,20 @@ export const App: React.FC = () => {
 
   useHotkeys('ctrl+n, meta+n', (e) => {
     e.preventDefault();
+    if (cloneInProgressRef.current) return;
     setNewProjectModalInitialTab('create');
     setIsNewProjectModalOpen(true);
   });
 
   useHotkeys('ctrl+i, meta+i', (e) => {
     e.preventDefault();
+    if (cloneInProgressRef.current) return;
     project.importZip();
   });
 
   useHotkeys('ctrl+o, meta+o', (e) => {
     e.preventDefault();
-    project.openFolder();
+    void openProjectFolder();
   });
 
   useHotkeys('ctrl+shift+e, meta+shift+e', (e) => {
@@ -274,11 +306,12 @@ export const App: React.FC = () => {
       {/* Top Desktop Menu Bar */}
       <MenuBar
         onNewProject={() => {
+          if (cloneInProgressRef.current) return;
           setNewProjectModalInitialTab('create');
           setIsNewProjectModalOpen(true);
         }}
-        onOpenFolder={() => project.openFolder()}
-        onImportZip={() => project.importZip()}
+        onOpenFolder={() => { void openProjectFolder(); }}
+        onImportZip={() => { if (!cloneInProgressRef.current) void project.importZip(); }}
         onSaveFile={project.saveFile}
         onExportPdf={() => exportService.downloadPdf(compiler.pdfBytes, project.projectName, project.projectRoot)}
         onExportZip={() => exportService.exportZip(project.projectRoot, project.projectName, project.sourceCode, project.engine)}
@@ -298,7 +331,7 @@ export const App: React.FC = () => {
         onZoomOut={compiler.handleZoomOut}
         onZoomReset={compiler.handleZoomReset}
         recentProjects={recentProjects}
-        onOpenRecentProject={(path) => project.openFolder(path)}
+        onOpenRecentProject={(path) => openProjectFolder(path)}
         hasOpenProject={viewMode === 'editor'}
       />
 
@@ -331,15 +364,17 @@ export const App: React.FC = () => {
       {/* Body: Welcome Screen or Split Panels Workspace */}
       {viewMode === 'welcome' ? (
         <WelcomeScreen
-          onNewProject={() => {
+        onNewProject={() => {
+          if (cloneInProgressRef.current) return;
             setNewProjectModalInitialTab('create');
             setIsNewProjectModalOpen(true);
           }}
-          onOpenFolder={() => project.openFolder()}
-          onImportZip={() => project.importZip()}
-          onQuickScratchpad={project.quickScratchpad}
+        onOpenFolder={() => { void openProjectFolder(); }}
+        onCloneRepository={() => setIsCloneRepositoryModalOpen(true)}
+        onImportZip={() => { if (!cloneInProgressRef.current) void project.importZip(); }}
+        onQuickScratchpad={(engine) => { if (!cloneInProgressRef.current) project.quickScratchpad(engine); }}
           recentProjects={recentProjects}
-          onOpenRecentProject={(path) => project.openFolder(path)}
+          onOpenRecentProject={(path) => openProjectFolder(path)}
           onRemoveRecentProject={removeRecentProject}
         />
       ) : (
@@ -378,8 +413,9 @@ export const App: React.FC = () => {
                     activeFilePath={project.activeFilePath}
                     mainFilePath={project.mainFilePath}
                     onSelectFile={project.selectFile}
-                    onOpenDiff={(path) => /\.(png|jpe?g|svg|webp|gif|bmp)$/i.test(path) ? void project.selectFile(`${project.projectRoot}/${path}`) : project.openDiff(path)}
-                    onBranchChanged={() => project.openFolder(project.projectRoot || undefined)}
+                    onOpenDiff={(path, repositoryRoot) => /\.(png|jpe?g|svg|webp|gif|bmp|pdf)$/i.test(path) ? void project.selectFile(`${repositoryRoot}/${path}`) : project.openDiff(path, repositoryRoot)}
+                    onBranchChanged={() => project.refreshAfterGitUpdate()}
+                    onWorktreeUpdateBusyChange={project.setWorktreeUpdateBusy}
                     hasUnsavedChanges={project.tabs.some(tabIsDirty)}
                     onSetMainFile={project.setMainFile}
                     onCreateFile={project.createFile}
@@ -419,6 +455,7 @@ export const App: React.FC = () => {
                 jumpToLine={jumpToLine}
                 engine={project.engine}
                 activeFilePath={project.activeFilePath}
+                readOnly={project.worktreeUpdateBusy}
               />
             </Panel>
 
@@ -455,6 +492,16 @@ export const App: React.FC = () => {
         onCreateProject={project.createProject}
         onImportZipProject={project.importZip}
         initialTab={newProjectModalInitialTab}
+      />
+
+      <CloneRepositoryModal
+        isOpen={isCloneRepositoryModalOpen}
+        running={cloneOperation.running}
+        progress={cloneOperation.progress}
+        error={cloneOperation.error}
+        onClose={() => { if (!cloneOperation.running) setIsCloneRepositoryModalOpen(false); }}
+        onOpenExisting={path => project.openFolder(path)}
+        onClone={cloneRepository}
       />
 
       <Toaster position="bottom-right" richColors closeButton />

@@ -28,6 +28,10 @@ interface JetBrainsSidebarProps {
   sourceCode: string;
   onUpdateSourceCode: (code: string) => void;
   onSelectLine: (line: number, file?: string | null) => void;
+  onOpenDiff?: (path: string, repositoryRoot: string) => void;
+  onBranchChanged?: () => Promise<void | boolean> | void | boolean;
+  onWorktreeUpdateBusyChange?: (busy: boolean) => void;
+  hasUnsavedChanges?: boolean;
 
   // Sidebar State & Actions
   topTools: SidebarToolId[];
@@ -60,6 +64,10 @@ export const JetBrainsSidebar: React.FC<JetBrainsSidebarProps> = ({
   sourceCode,
   onUpdateSourceCode,
   onSelectLine,
+  onOpenDiff,
+  onBranchChanged,
+  onWorktreeUpdateBusyChange,
+  hasUnsavedChanges,
   topTools,
   bottomTools,
   activeTopTool,
@@ -138,6 +146,10 @@ export const JetBrainsSidebar: React.FC<JetBrainsSidebarProps> = ({
               projectRoot={projectRoot}
               projectName={projectName}
               onSelectFile={onSelectFile}
+              onOpenDiff={onOpenDiff}
+              onBranchChanged={onBranchChanged}
+              onWorktreeUpdateBusyChange={onWorktreeUpdateBusyChange}
+              hasUnsavedChanges={hasUnsavedChanges}
               onClose={() => onCloseTool(slot)}
             />
           </div>

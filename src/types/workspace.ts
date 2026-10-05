@@ -3,6 +3,7 @@ export type WorkspaceTabKind = 'source' | 'asset' | 'diff';
 export interface WorkspaceTab {
   id: string;
   path: string | null;
+  repositoryRoot?: string;
   name: string;
   kind: WorkspaceTabKind;
   pinned: boolean;

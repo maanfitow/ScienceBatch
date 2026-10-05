@@ -58,6 +58,7 @@ pub fn run() {
             commands::compile::save_pdf_to_file,
             commands::files::list_project_files,
             commands::files::read_file_content,
+            commands::files::existing_file_paths,
             commands::files::read_binary_file,
             commands::files::write_file_content,
             commands::files::create_project_folder,
@@ -76,6 +77,14 @@ pub fn run() {
             commands::git::switch_git_branch,
             commands::git::stage_git_files,
             commands::git::unstage_git_files,
+            commands::git::get_git_repository_info,
+            commands::git::set_git_identity,
+            commands::git::commit_git_changes,
+            commands::git::set_git_remote,
+            commands::git::clone_git_repository,
+            commands::git::fetch_git_remote,
+            commands::git::pull_git_remote,
+            commands::git::push_git_remote,
         ])
         .run(tauri::generate_context!())
         .expect("error running tauri application");
