@@ -12,6 +12,46 @@ import { registerTypstCompletion } from '../editor/typstCompletion';
 import { registerBibtexLanguage } from '../editor/bibtexLanguage';
 import { useTheme, registerMonacoCustomThemes } from '../themes/ThemeContext';
 import { DiagnosticItem } from '../types';
+import type { WritingEditorBridge, WritingEditorState, WritingLanguage } from '../types/writing';
+import { createWritingEditorBridge } from '../editor/writingBridge';
+import { getWritingSymbolAdapter } from '../editor/writing/adapters';
+import { registerEditorClipboardCopy } from '../editor/editorClipboard';
+
+function eligibleWritingLanguage(engine: WritingLanguage, activeFilePath: string | null | undefined, isScratchpad: boolean): WritingLanguage | null {
+  if (activeFilePath) {
+    if (engine === 'latex' && /\.tex$/i.test(activeFilePath)) return 'latex';
+    if (engine === 'typst' && /\.typ$/i.test(activeFilePath)) return 'typst';
+    return null;
+  }
+  return isScratchpad ? engine : null;
+}
+
+function buildWritingEditorState({
+  language, eligibleLanguage, source, cursorOffset, canAddPackages, readOnly, hasMultipleSelections,
+}: {
+  language: WritingLanguage;
+  eligibleLanguage: WritingLanguage | null;
+  source: string;
+  cursorOffset: number;
+  canAddPackages: boolean;
+  readOnly: boolean;
+  hasMultipleSelections: boolean;
+}): WritingEditorState {
+  const context = eligibleLanguage
+    ? getWritingSymbolAdapter(eligibleLanguage).classifyContext(source, cursorOffset)
+    : { context: 'blocked' as const, reason: 'Writing tools are available only in editable LaTeX or Typst source files.' };
+  const editable = eligibleLanguage !== null && !readOnly && !hasMultipleSelections;
+  const available = editable && context.context !== 'blocked';
+  return {
+    language,
+    editable,
+    available,
+    reason: available ? '' : readOnly ? 'The editor is temporarily read-only.' : hasMultipleSelections ? 'Writing tools support one selection at a time.' : context.reason || 'Writing tools are available only in a supported source context.',
+    source,
+    cursorOffset,
+    canAddPackages: canAddPackages && eligibleLanguage === 'latex' && !readOnly,
+  };
+}
 
 interface EditorViewProps {
   value: string;
@@ -22,6 +62,10 @@ interface EditorViewProps {
   engine?: 'latex' | 'typst';
   activeFilePath?: string | null;
   readOnly?: boolean;
+  documentId?: string;
+  isScratchpad?: boolean;
+  canAddPackages?: boolean;
+  onWritingBridgeChange?: (bridge: WritingEditorBridge | null, state: WritingEditorState, releasedBridge?: WritingEditorBridge) => void;
 }
 
 export const EditorView: React.FC<EditorViewProps> = ({
@@ -33,6 +77,10 @@ export const EditorView: React.FC<EditorViewProps> = ({
   engine = 'latex',
   activeFilePath,
   readOnly = false,
+  documentId = activeFilePath || 'scratchpad',
+  isScratchpad = false,
+  canAddPackages = false,
+  onWritingBridgeChange,
 }) => {
   const { monacoTheme } = useTheme();
   const editorContainerRef = useRef<HTMLDivElement>(null);
@@ -49,6 +97,19 @@ export const EditorView: React.FC<EditorViewProps> = ({
   const restoreFrameRef = useRef<number | null>(null);
   const clearViewStateFrameRef = useRef<number | null>(null);
   const viewStateListenersRef = useRef<monacoType.IDisposable[]>([]);
+  const writingBridgeRef = useRef<WritingEditorBridge | null>(null);
+  const clipboardCommandRef = useRef<monacoType.IDisposable | null>(null);
+  const writingListenersRef = useRef<monacoType.IDisposable[]>([]);
+  const writingStateRef = useRef<WritingEditorState>({ language: engine, editable: false, available: false, reason: 'Writing tools are unavailable.', source: value, cursorOffset: 0, canAddPackages: false });
+  const writingPropsRef = useRef({ engine, activeFilePath, canAddPackages, onWritingBridgeChange, documentId, isScratchpad });
+  const writingContextKey = `${engine}\u0000${documentId}\u0000${activeFilePath ?? ''}\u0000${isScratchpad}\u0000${readOnly}`;
+  const writingContextKeyRef = useRef(writingContextKey);
+  const writingContextRevisionRef = useRef(0);
+  if (writingContextKeyRef.current !== writingContextKey) {
+    writingContextKeyRef.current = writingContextKey;
+    writingContextRevisionRef.current += 1;
+  }
+  writingPropsRef.current = { engine, activeFilePath, canAddPackages, onWritingBridgeChange, documentId, isScratchpad };
   readOnlyRef.current = readOnly;
   latestValueRef.current = value;
   const cloneViewState = (state: monacoType.editor.ICodeEditorViewState | null) => state ? structuredClone(state) : null;
@@ -237,8 +298,51 @@ export const EditorView: React.FC<EditorViewProps> = ({
   };
 
   const handleEditorDidMount: OnMount = (editor, monaco) => {
+    clipboardCommandRef.current?.dispose();
     editorRef.current = editor;
     monacoRef.current = monaco;
+    clipboardCommandRef.current = registerEditorClipboardCopy(monaco, editor);
+    const writingBridge = createWritingEditorBridge(editor, monaco, {
+      documentId: writingPropsRef.current.documentId,
+      getDocumentId: () => writingPropsRef.current.documentId,
+      getLanguage: () => writingPropsRef.current.engine,
+      getContextRevision: () => writingContextRevisionRef.current,
+      isEditable: () => {
+        const currentProps = writingPropsRef.current;
+        const model = editor.getModel();
+        const eligibleLanguage = eligibleWritingLanguage(currentProps.engine, currentProps.activeFilePath, currentProps.isScratchpad);
+        return !readOnlyRef.current
+          && editorRef.current === editor
+          && eligibleLanguage !== null
+          && model !== null
+          && !model.isDisposed();
+      },
+    });
+    writingBridgeRef.current = writingBridge;
+    const publishWritingState = () => {
+      const model = editor.getModel();
+      const position = editor.getPosition();
+      const source = model?.getValue() ?? latestValueRef.current;
+      const cursorOffset = model && position ? model.getOffsetAt(position) : 0;
+      const currentProps = writingPropsRef.current;
+      const eligibleLanguage = eligibleWritingLanguage(currentProps.engine, currentProps.activeFilePath, currentProps.isScratchpad);
+      const hasMultipleSelections = (editor.getSelections()?.length ?? 0) > 1;
+      const state = buildWritingEditorState({
+        language: currentProps.engine,
+        eligibleLanguage,
+        source,
+        cursorOffset,
+        canAddPackages: currentProps.canAddPackages,
+        readOnly: readOnlyRef.current,
+        hasMultipleSelections,
+      });
+      writingStateRef.current = state;
+      currentProps.onWritingBridgeChange?.(writingBridge, state);
+    };
+    writingListenersRef.current = [
+      editor.onDidChangeCursorSelection(publishWritingState),
+      editor.onDidChangeModelContent(publishWritingState),
+    ];
     const saveViewState = () => {
       if (readOnlyRef.current || frozenViewStateRef.current) return;
       editorViewStateRef.current = cloneViewState(editor.saveViewState());
@@ -288,6 +392,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
       }
       syncCompilerMarkers();
     }
+    publishWritingState();
 
     // Register external link opener for Monaco's link detector (handles Ctrl + Click and "Follow link")
     const linkDetector = (editor as any).getContribution('editor.linkDetector');
@@ -394,9 +499,41 @@ export const EditorView: React.FC<EditorViewProps> = ({
 
   useEffect(() => () => {
     viewStateListenersRef.current.forEach(listener => listener.dispose());
+    writingListenersRef.current.forEach(listener => listener.dispose());
+    const bridge = writingBridgeRef.current;
+    if (bridge) writingPropsRef.current.onWritingBridgeChange?.(null, writingStateRef.current, bridge);
+    writingBridgeRef.current = null;
     if (restoreFrameRef.current !== null) cancelAnimationFrame(restoreFrameRef.current);
     if (clearViewStateFrameRef.current !== null) cancelAnimationFrame(clearViewStateFrameRef.current);
   }, []);
+
+  useEffect(() => () => {
+    clipboardCommandRef.current?.dispose();
+    clipboardCommandRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    const model = editor?.getModel();
+    if (!editor || !model) return;
+    const position = editor.getPosition();
+    const source = model.getValue();
+    const cursorOffset = position ? model.getOffsetAt(position) : 0;
+    const eligibleLanguage = eligibleWritingLanguage(engine, activeFilePath, isScratchpad);
+    const hasMultipleSelections = (editor.getSelections()?.length ?? 0) > 1;
+    const state = buildWritingEditorState({
+      language: engine,
+      eligibleLanguage,
+      source,
+      cursorOffset,
+      canAddPackages,
+      readOnly,
+      hasMultipleSelections,
+    });
+    writingStateRef.current = state;
+    const bridge = writingBridgeRef.current;
+    if (bridge) onWritingBridgeChange?.(bridge, state);
+  }, [activeFilePath, canAddPackages, engine, isScratchpad, onWritingBridgeChange, readOnly]);
 
   const handleEditorChange = (val: string | undefined) => {
     if (readOnlyRef.current) return;

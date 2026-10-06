@@ -33,6 +33,7 @@ typst-embed = { version = "0.1", features = ["pdf", "bundled-fonts"] }
 zip = { version = "2.2", default-features = false, features = ["deflate"] }
 open = "5"
 libc = "0.2"
+tauri-plugin-clipboard-manager = "2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 webkit2gtk = "2.0"

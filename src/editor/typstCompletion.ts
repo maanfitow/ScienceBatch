@@ -4,6 +4,8 @@ import {
   getProjectBibFiles, 
   getProjectSubfiles 
 } from './projectContext';
+import { classifyTypstContext } from './writing/typstContext';
+import { TYPST_WRITING_SYMBOLS } from './writing/typstSymbols';
 
 let typstCompletionDisposable: { dispose: () => void } | null = null;
 
@@ -98,6 +100,18 @@ const TYPST_COMPLETIONS: TypstCompletionItemDef[] = [
     documentation: 'Creates publication-ready tables with customizable column widths, fills, and strokes.',
   },
   {
+    name: 'table.header',
+    insertText: 'table.header([${1:Header}])',
+    detail: 'Semantic table header row',
+    documentation: 'Marks table cells as a semantic header row, including Typst header behavior for repeated table headings.',
+  },
+  {
+    name: 'table.hline',
+    insertText: 'table.hline(y: ${1:0}, stroke: ${2:0.5pt})',
+    detail: 'Horizontal table rule',
+    documentation: 'Adds a horizontal table rule at the selected row boundary.',
+  },
+  {
     name: 'grid',
     insertText: 'grid(\n  columns: (${1:1fr, 1fr}),\n  gutter: ${2:1em},\n  [${3:Left}], [${4:Right}],\n)\n',
     detail: 'Multi-column grid container',
@@ -120,6 +134,12 @@ const TYPST_COMPLETIONS: TypstCompletionItemDef[] = [
     insertText: 'text(size: ${1:12pt}, fill: ${2:rgb("#3b82f6")})[${3:Content}]',
     detail: 'Styled inline text',
     documentation: 'Applies inline font formatting, weight, color (fill), tracking, or styling to text.',
+  },
+  {
+    name: 'strong',
+    insertText: 'strong[${1:Content}]',
+    detail: 'Strong text emphasis',
+    documentation: 'Applies strong emphasis to a Typst content block.',
   },
   {
     name: 'rect',
@@ -288,11 +308,73 @@ export function registerTypstCompletion(monaco: Monaco) {
   }
 
   typstCompletionDisposable = monaco.languages.registerCompletionItemProvider('typst', {
-    triggerCharacters: ['#', '=', '$', '<', '@', '"', '/'],
+    triggerCharacters: ['#', '=', '$', '<', '@', '"', '/', '.'],
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     provideCompletionItems: (model: any, position: any) => {
       const lineContent = model.getLineContent(position.lineNumber);
       const textUntilPosition = lineContent.substring(0, position.column - 1);
+      const fullSource = model.getValue();
+      const cursorOffset = model.getOffsetAt(position);
+
+      // Native Typst symbols are completed only in math. In markup, require an
+      // explicit #sym. qualifier so a bare word is never turned into code.
+      const symbolContext = classifyTypstContext(fullSource, cursorOffset).context;
+      const mathSymbolPrefix = symbolContext === 'math-inline' || symbolContext === 'math-display'
+        ? textUntilPosition.match(/([a-zA-Z][a-zA-Z0-9.]*)$/)?.[1]
+        : undefined;
+      const markupSymbolPrefix = textUntilPosition.match(/#sym\.([a-zA-Z][a-zA-Z0-9.]*)?$/);
+      const markupHashOffset = markupSymbolPrefix
+        ? cursorOffset - (markupSymbolPrefix[1]?.length ?? 0) - '#sym.'.length
+        : -1;
+      const markupContext = markupSymbolPrefix
+        ? classifyTypstContext(
+          `${fullSource.slice(0, markupHashOffset)}${' '.repeat(cursorOffset - markupHashOffset)}${fullSource.slice(cursorOffset)}`,
+          markupHashOffset,
+        ).context
+        : 'blocked';
+      if (mathSymbolPrefix || (markupSymbolPrefix && markupContext === 'text')) {
+        const prefix = mathSymbolPrefix ?? markupSymbolPrefix?.[1] ?? '';
+        const startColumn = mathSymbolPrefix
+          ? position.column - mathSymbolPrefix.length
+          : position.column - (markupSymbolPrefix?.[1]?.length ?? 0);
+        const symbolRange = {
+          startLineNumber: position.lineNumber,
+          endLineNumber: position.lineNumber,
+          startColumn,
+          endColumn: position.column,
+        };
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const symbolSuggestions: any[] = TYPST_WRITING_SYMBOLS
+            .filter((symbol) => !prefix || [symbol.nativeIdentifier, symbol.name, ...symbol.aliases].some((value) => value.toLowerCase().includes(prefix.toLowerCase())))
+            .map((symbol, index) => {
+              const markup = Boolean(markupSymbolPrefix);
+              const label = markup ? `#sym.${symbol.nativeIdentifier}` : symbol.nativeIdentifier;
+              return {
+                label,
+                kind: monaco.languages.CompletionItemKind.Value,
+                insertText: symbol.nativeIdentifier,
+                detail: `${symbol.name} (${symbol.glyph})`,
+                documentation: `Built-in Typst symbol: ${symbol.nativeIdentifier}`,
+                range: symbolRange,
+                sortText: `${symbol.nativeIdentifier.startsWith(prefix) ? '00' : '10'}_${String(index).padStart(3, '0')}_${symbol.nativeIdentifier}`,
+                filterText: `${symbol.nativeIdentifier} ${symbol.name} ${symbol.aliases.join(' ')}`,
+              };
+            });
+        if (mathSymbolPrefix && 'mat'.startsWith(prefix.toLowerCase())) {
+          symbolSuggestions.push({
+            label: 'mat',
+            kind: monaco.languages.CompletionItemKind.Function,
+            insertText: 'mat(delim: "(", ${1:1, 2; 3, 4})',
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            detail: 'Matrix expression',
+            documentation: 'Creates a matrix in Typst math using commas for columns and semicolons for rows.',
+            range: symbolRange,
+            sortText: '00_mat_matrix',
+            filterText: 'mat matrix',
+          });
+        }
+        return { suggestions: symbolSuggestions };
+      }
 
       // Case 1: Typing image path in #image("..."
       const imgMatch = textUntilPosition.match(/(?:#?image\s*\(\s*)"([^"]*)$/);
@@ -407,7 +489,7 @@ export function registerTypstCompletion(monaco: Monaco) {
       }
 
       // Check if user is typing a command with '#' prefix (e.g. '#' or '#a' or '#align')
-      const hashMatch = textUntilPosition.match(/#([a-zA-Z_0-9]*)$/);
+      const hashMatch = textUntilPosition.match(/#([a-zA-Z_0-9.]*)$/);
       const isHashPrefixed = hashMatch !== null;
       const hashPrefixLen = isHashPrefixed ? hashMatch[0].length : 0;
       const hashPrefix = isHashPrefixed ? hashMatch[1].toLowerCase() : '';

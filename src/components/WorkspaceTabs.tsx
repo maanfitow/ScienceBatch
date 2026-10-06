@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { X, RotateCw, FileCode2, Image as ImageIcon, FileText, Pin } from 'lucide-react';
 import * as pdfjs from 'pdfjs-dist';
@@ -8,6 +8,7 @@ import { EditorView } from './EditorView';
 import { WorkspaceTab } from '../types/workspace';
 import { GitDiffResult } from '../types/git';
 import { ContextMenu, ContextMenuAction } from './ContextMenu';
+import type { WritingEditorBridge, WritingEditorState } from '../types/writing';
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -27,11 +28,15 @@ interface WorkspaceTabsProps {
   warnings?: React.ComponentProps<typeof EditorView>['warnings'];
   jumpToLine?: number | null;
   readOnly?: boolean;
+  isScratchpad?: boolean;
+  canAddPackages?: boolean;
+  onWritingBridgeChange?: (bridge: WritingEditorBridge | null, state: WritingEditorState) => void;
 }
 
 export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
   tabs, activeTabId, projectRoot, sourceCode, engine, activeFilePath,
   onChange, onActivate, onPromote, onClose, onPin, errors, warnings, jumpToLine, readOnly,
+  isScratchpad, canAddPackages, onWritingBridgeChange,
 }) => {
   const activeTab = tabs.find(tab => tab.id === activeTabId) ?? null;
   const tabIds = tabs.map(tab => tab.id).join('\u0000');
@@ -39,6 +44,26 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
   const [hasHorizontalOverflow, setHasHorizontalOverflow] = useState(false);
   const selectedTab = contextMenu ? tabs.find(tab => tab.id === contextMenu.tabId) : null;
   const stripRef = useRef<HTMLDivElement>(null);
+  const writingBridgeRef = useRef<WritingEditorBridge | null>(null);
+  const handleWritingBridgeChange = useCallback((bridge: WritingEditorBridge | null, state: WritingEditorState, releasedBridge?: WritingEditorBridge) => {
+    if (!bridge) {
+      if (writingBridgeRef.current !== releasedBridge) return;
+      writingBridgeRef.current = null;
+      onWritingBridgeChange?.(null, {
+        language: engine,
+        editable: false,
+        available: false,
+        reason: engine === 'typst' ? 'Select an editable Typst source file.' : 'Select an editable LaTeX source file.',
+        source: '',
+        cursorOffset: 0,
+        canAddPackages: false,
+      });
+      return;
+    } else {
+      writingBridgeRef.current = bridge;
+    }
+    onWritingBridgeChange?.(writingBridgeRef.current, state);
+  }, [engine, onWritingBridgeChange]);
   useLayoutEffect(() => {
     const strip = stripRef.current;
     if (!strip) return;
@@ -105,7 +130,7 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
       {contextMenu && selectedTab && <ContextMenu x={contextMenu.x} y={contextMenu.y} actions={closeActions} onClose={() => setContextMenu(null)} />}
       <div className="workspace-tab-content" key={activeTab?.id || 'empty'}>
         {!activeTab ? <div className="workspace-empty">Open a source file or project asset to get started.</div> : activeTab.kind === 'source' ? (
-          <EditorView value={sourceCode} onChange={onChange} errors={errors} warnings={warnings} jumpToLine={jumpToLine} engine={engine} activeFilePath={activeFilePath} readOnly={readOnly} />
+          <EditorView value={sourceCode} onChange={onChange} errors={errors} warnings={warnings} jumpToLine={jumpToLine} engine={engine} activeFilePath={activeFilePath} readOnly={readOnly} documentId={activeTab.id} isScratchpad={isScratchpad} canAddPackages={canAddPackages} onWritingBridgeChange={handleWritingBridgeChange} />
         ) : activeTab.kind === 'diff' ? (
           <DiffTab path={activeTab.path || ''} projectRoot={projectRoot} repositoryRoot={activeTab.repositoryRoot || projectRoot} />
         ) : (

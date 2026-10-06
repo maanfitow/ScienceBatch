@@ -10,6 +10,7 @@ const ALIGNMENT_ENVIRONMENTS = new Set([
   'tabular*',
   'pmatrix',
   'bmatrix',
+  'Bmatrix',
   'matrix',
   'vmatrix',
   'Vmatrix',
