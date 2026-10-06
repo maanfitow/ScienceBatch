@@ -8,6 +8,7 @@
     "core:event:default",
     "dialog:default",
     "dialog:allow-ask",
+    "clipboard-manager:allow-write-text",
     "fs:default"
   ]
 }

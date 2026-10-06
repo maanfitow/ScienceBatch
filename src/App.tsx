@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { Toaster } from 'sonner';
@@ -12,12 +12,35 @@ import { NewProjectModal } from './components/NewProjectModal';
 import { CloneRepositoryModal } from './components/CloneRepositoryModal';
 import { WorkspaceTabs } from './components/WorkspaceTabs';
 import { SidebarActivityBar, SidebarContentPanels } from './components/sidebar';
+import { WritingRibbon } from './components/writing/WritingRibbon';
 
 import { useRecentProjects, useCompiler, useExport, useProject, useSidebar } from './hooks';
 import { useGitOperation } from './hooks/useGitOperation';
 import { ViewMode } from './types';
 import { tabIsDirty } from './types/workspace';
+import type { WritingEditorBridge, WritingEditorState } from './types/writing';
+import { inspectPackageEligibility } from './editor/writing';
 import './App.css';
+
+const normalizeWorkspacePath = (path: string): string => {
+  const value = path.replace(/\\/g, '/');
+  const drive = value.match(/^[A-Za-z]:/)?.[0] ?? '';
+  const isAbsolute = value.startsWith('/') || Boolean(drive);
+  const parts = value.slice(drive.length).split('/');
+  const normalized: string[] = [];
+  for (const part of parts) {
+    if (!part || part === '.') continue;
+    if (part === '..' && normalized.length && normalized[normalized.length - 1] !== '..') normalized.pop();
+    else if (part !== '..' || !isAbsolute) normalized.push(part);
+  }
+  const prefix = drive ? `${drive}/` : value.startsWith('/') ? '/' : '';
+  return `${prefix}${normalized.join('/')}` || prefix || '.';
+};
+
+const resolveMainFilePath = (projectRoot: string, mainFilePath: string): string => {
+  const path = mainFilePath.replace(/\\/g, '/');
+  return path.startsWith('/') || /^[A-Za-z]:\//.test(path) ? path : `${projectRoot}/${path}`;
+};
 
 export const App: React.FC = () => {
   // Navigation & Workspace UI State
@@ -30,6 +53,16 @@ export const App: React.FC = () => {
 
   // Diagnostics Line Navigation
   const [jumpToLine, setJumpToLine] = useState<number | null>(null);
+  const [writingBridge, setWritingBridge] = useState<WritingEditorBridge | null>(null);
+  const [writingEditorState, setWritingEditorState] = useState<WritingEditorState>({
+    language: 'latex',
+    editable: false,
+    available: false,
+    reason: 'Select an editable LaTeX source file.',
+    source: '',
+    cursorOffset: 0,
+    canAddPackages: false,
+  });
 
   // Modular Domain Hooks
   const {
@@ -59,6 +92,28 @@ export const App: React.FC = () => {
     onEnterWelcomeMode: () => setViewMode('welcome'),
   });
   const cloneOperation = useGitOperation(null);
+  const handleWritingBridgeChange = useCallback((bridge: WritingEditorBridge | null, state: WritingEditorState) => {
+    setWritingBridge(bridge);
+    setWritingEditorState(state);
+  }, []);
+  const activeWorkspaceTab = project.tabs.find(tab => tab.id === project.activeTabId) ?? null;
+  const isScratchpad = !project.projectRoot && activeWorkspaceTab?.kind === 'source' && activeWorkspaceTab.path === null;
+  const isConfiguredMainFile = Boolean(
+    project.projectRoot
+    && project.mainFilePath
+    && project.activeFilePath
+    && normalizeWorkspacePath(project.activeFilePath) === normalizeWorkspacePath(resolveMainFilePath(project.projectRoot, project.mainFilePath)),
+  );
+  const packageEligibility = project.engine === 'latex'
+    ? inspectPackageEligibility(project.sourceCode)
+    : { eligible: false, reason: undefined };
+  const canAddWritingPackages = project.engine === 'latex' && !project.worktreeUpdateBusy
+    && (isScratchpad || isConfiguredMainFile)
+    && packageEligibility.eligible;
+  const openConfiguredMainFile = useCallback(() => {
+    if (!project.projectRoot || !project.mainFilePath || project.worktreeUpdateBusy) return;
+    void project.selectFile(resolveMainFilePath(project.projectRoot, project.mainFilePath), true);
+  }, [project.mainFilePath, project.projectRoot, project.selectFile, project.worktreeUpdateBusy]);
 
   const openProjectFolder = (path?: string) => {
     if (cloneInProgressRef.current) return Promise.resolve(false);
@@ -361,6 +416,14 @@ export const App: React.FC = () => {
         />
       )}
 
+      {viewMode === 'editor' && (
+        <WritingRibbon
+          bridge={writingBridge}
+          editorState={{ ...writingEditorState, canAddPackages: canAddWritingPackages }}
+          onOpenMainFile={project.projectRoot && project.mainFilePath ? openConfiguredMainFile : undefined}
+        />
+      )}
+
       {/* Body: Welcome Screen or Split Panels Workspace */}
       {viewMode === 'welcome' ? (
         <WelcomeScreen
@@ -456,6 +519,9 @@ export const App: React.FC = () => {
                 engine={project.engine}
                 activeFilePath={project.activeFilePath}
                 readOnly={project.worktreeUpdateBusy}
+                isScratchpad={isScratchpad}
+                canAddPackages={canAddWritingPackages}
+                onWritingBridgeChange={handleWritingBridgeChange}
               />
             </Panel>
 
