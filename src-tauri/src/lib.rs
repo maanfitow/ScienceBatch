@@ -51,6 +51,7 @@ pub fn run() {
         .manage(CompilerManager::new())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .invoke_handler(tauri::generate_handler![
             commands::compile::compile_document,
             commands::compile::compile_latex,
