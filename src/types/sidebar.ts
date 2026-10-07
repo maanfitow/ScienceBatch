@@ -1,4 +1,4 @@
-export type SidebarToolId = 'files' | 'search' | 'outline';
+export type SidebarToolId = 'files' | 'search' | 'outline' | 'git';
 
 export interface SidebarState {
   topTools: SidebarToolId[];

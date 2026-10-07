@@ -4,7 +4,7 @@ import { SidebarToolId, SidebarState } from '../types/sidebar';
 const STORAGE_KEY = 'sciencebatch_sidebar_state_v1';
 
 const DEFAULT_STATE: SidebarState = {
-  topTools: ['files', 'search'],
+  topTools: ['files', 'search', 'git'],
   bottomTools: ['outline'],
   activeTopTool: 'files',
   activeBottomTool: null,
@@ -20,7 +20,7 @@ function loadStoredState(): SidebarState {
     const parsed = JSON.parse(saved);
 
     // Validate that required tools are preserved
-    const allTools: SidebarToolId[] = ['files', 'search', 'outline'];
+    const allTools: SidebarToolId[] = ['files', 'search', 'outline', 'git'];
     const loadedTop: SidebarToolId[] = Array.isArray(parsed.topTools) 
       ? parsed.topTools.filter((id: any) => allTools.includes(id)) 
       : DEFAULT_STATE.topTools;
@@ -28,7 +28,7 @@ function loadStoredState(): SidebarState {
       ? parsed.bottomTools.filter((id: any) => allTools.includes(id)) 
       : DEFAULT_STATE.bottomTools;
 
-    // Ensure all 3 tools exist somewhere
+    // Ensure all tools exist somewhere
     for (const tool of allTools) {
       if (!loadedTop.includes(tool) && !loadedBottom.includes(tool)) {
         loadedTop.push(tool);
