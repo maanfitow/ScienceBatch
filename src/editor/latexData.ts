@@ -94,6 +94,11 @@ export const LATEX_COMMANDS: LatexSymbol[] = [
   // Figures, Tables & Graphics
   { name: '\\includegraphics', insertText: '\\includegraphics[width=${1:0.8\\textwidth}]{${2:filename}}', detail: 'Include external graphic', documentation: 'Embeds an image file into the document (graphicx package).' },
   { name: '\\caption', insertText: '\\caption{${1:Caption description}}', detail: 'Figure/Table caption', documentation: 'Sets the descriptive caption for a floating figure or table.' },
+  { name: '\\toprule', insertText: '\\toprule', detail: 'Booktabs top rule', documentation: 'Adds a professional top rule inside a tabular environment (booktabs).' },
+  { name: '\\midrule', insertText: '\\midrule', detail: 'Booktabs middle rule', documentation: 'Adds a professional rule between table header and body (booktabs).' },
+  { name: '\\bottomrule', insertText: '\\bottomrule', detail: 'Booktabs bottom rule', documentation: 'Adds a professional bottom rule inside a tabular environment (booktabs).' },
+  { name: '\\textasciicircum', insertText: '\\textasciicircum{}', detail: 'Literal caret', documentation: 'Prints a literal caret character in text mode.' },
+  { name: '\\textasciitilde', insertText: '\\textasciitilde{}', detail: 'Literal tilde', documentation: 'Prints a literal tilde character in text mode.' },
   { name: '\\vspace', insertText: '\\vspace{${1:1em}}', detail: 'Vertical space', documentation: 'Inserts vertical whitespace of the specified dimension.' },
   { name: '\\hspace', insertText: '\\hspace{${1:1em}}', detail: 'Horizontal space', documentation: 'Inserts horizontal whitespace of the specified dimension.' },
   { name: '\\hfill', insertText: '\\hfill ', detail: 'Horizontal spring / fill', documentation: 'Expands horizontally to push content to the margins.' },
@@ -296,6 +301,22 @@ export const LATEX_ENVIRONMENTS: LatexEnvironment[] = [
     detail: 'Matrix with brackets []',
     documentation: 'amsmath matrix enclosed in square brackets.',
     snippet: '\\begin{bmatrix}\n\t${1:1} & ${2:0} \\\\\n\t${3:0} & ${4:1}\n\\end{bmatrix}',
+  },
+  {
+    name: 'matrix', detail: 'Matrix without delimiters', documentation: 'amsmath matrix with no surrounding delimiters.',
+    snippet: '\\begin{matrix}\n\t${1:1} & ${2:0} \\\\\n\t${3:0} & ${4:1}\n\\end{matrix}',
+  },
+  {
+    name: 'Bmatrix', detail: 'Matrix with braces {}', documentation: 'amsmath matrix enclosed in curly braces.',
+    snippet: '\\begin{Bmatrix}\n\t${1:1} & ${2:0} \\\\\n\t${3:0} & ${4:1}\n\\end{Bmatrix}',
+  },
+  {
+    name: 'vmatrix', detail: 'Matrix with vertical bars', documentation: 'amsmath matrix enclosed in single vertical bars.',
+    snippet: '\\begin{vmatrix}\n\t${1:1} & ${2:0} \\\\\n\t${3:0} & ${4:1}\n\\end{vmatrix}',
+  },
+  {
+    name: 'Vmatrix', detail: 'Matrix with double vertical bars', documentation: 'amsmath matrix enclosed in double vertical bars.',
+    snippet: '\\begin{Vmatrix}\n\t${1:1} & ${2:0} \\\\\n\t${3:0} & ${4:1}\n\\end{Vmatrix}',
   },
   {
     name: 'theorem',
@@ -520,4 +541,3 @@ Cross-referencing ties the paper together: Section~\\ref{sec:math} formulates Eq
 
 \\end{document}
 `;
-
