@@ -2,10 +2,12 @@
 
 Prepared on 2026-10-05. This is a continuation plan and a ready-to-use context packet. It does not certify a release or authorize implementation of every proposed delivery. The user has selected Antigravity as the intended recipient; this document has not been sent through an external agent service.
 
+This packet preserves its original 2026-10-05 context. The uncommitted-work and HEAD notes below describe that earlier handoff, not the present branch: the writing ribbon is now at `9d165da` (`feat: add LaTeX and Typst writing ribbon`). For current mitigation, verification, native evidence, and integration status, use [Writing Ribbon Final Review](WRITING_RIBBON_FINAL_REVIEW.md). In particular, the model-switch cause has since been identified and the regression/verification status is tracked there.
+
 ## Repository and working state
 
 - Repository: `/home/mauri/Desktop/Portfolio/ScienceBatch`.
-- Active branch: `codex/writing-ribbon`.
+- Active branch: `feat/writing-ribbon`.
 - Current HEAD at preparation: `d5d21ae` (`Add commits, cloning, and remote sync`).
 - The original requested base was `feat/git-status-panel` at `b3ca9e8`. That is historical context, not an instruction to reset the current checkout.
 - The ribbon, clipboard fix, and Typst deliveries include extensive modified and untracked files. They are not committed. Inspect `git status --short`, the actual files, and untracked files before starting. A diff against HEAD alone omits new files.
@@ -82,7 +84,7 @@ Test both Quick LaTeX and Quick Typst, plus a disposable multi-file project:
 
 Use `docs/WRITING_RIBBON_NATIVE_QA.md` for procedure and evidence. Record Passed, Failed, or Unverified individually, with application state, OS/WebKit version, fixture, actions, screenshots where possible, and precise outcomes. Browser mocks and headless compiler fixtures are not native UI passes. If native input/foreground access is still unavailable, record the limitation and supply a manual checklist; do not repeat the same failed automation or mark it passed.
 
-**Known model-switch report:** the extended T1 browser run logged a nonfatal unhandled `Canceled` rejection after a long-document/PDF/theme sequence and then switching Typst to LaTeX. The stack passed through CDN Monaco 0.55.1 cancellation/disposal, setModel, and the model-path effect in @monaco-editor/react. Source, Undo, and stale-session assertions passed. Minimal engine-only and archived-baseline probes did not reproduce it. Its root cause and regression origin are unknown; do not call it a confirmed pre-existing issue.
+**Historical model-switch report (updated diagnosis in the final review):** the extended T1 browser run logged a nonfatal unhandled `Canceled` rejection after a long-document/PDF/theme sequence and then switching Typst to LaTeX. Source, Undo, and stale-session assertions passed. The root cause is now traced to Monaco's `WordHighlighter` 50 ms `Delayer` cancellation when a model changes; when the behavior was introduced remains unknown. Browser corroboration compared CDN Monaco 0.55.1 with occurrence highlighting enabled and disabled. The authorized mitigation disables semantic occurrence highlighting under the cursor. Do not globally suppress rejections, patch Monaco internals, add product delays, or upgrade dependencies. See [Writing Ribbon QA](WRITING_RIBBON_QA.md#confirmed-monaco-cancellation-diagnosis-and-mitigation--2026-10-06) for evidence and tradeoff.
 
 Reproduce the exact sequence in `docs/TYPST_SYMBOLS_QA.md`, reduce it to a minimal case, and inspect lifecycle/disposal order. Do not globally suppress Canceled, add arbitrary delays, or upgrade Monaco as a substitute for diagnosis. Any proposed fix needs a scoped assignment and a regression proving both source/session correctness and the intended runtime-error outcome.
 
@@ -126,7 +128,7 @@ Start with an investigation and specification. Determine which font choices the 
 
 ## Prior verification and required checks
 
-At T2 completion, TypeScript, Rust, production build, focused frontend tests, real Monaco browser probes with mocked IPC, and explicit embedded Typst fixtures passed. All 56 symbols were checked in T1; T2 compiled 15 fixtures with zero warnings. See the QA documents for exact evidence. The large build-chunk warning and PDF.js Node legacy-build warning remain recorded.
+At T2 completion, TypeScript, Rust, production build, focused frontend tests, real Monaco browser probes with mocked IPC, and explicit embedded Typst fixtures passed. This is historical verification evidence; use the [final review](WRITING_RIBBON_FINAL_REVIEW.md) for the latest branch checks and any still-pending results. All 56 symbols were checked in T1; T2 compiled 15 fixtures with zero warnings. The large build-chunk warning and PDF.js Node legacy-build warning remain recorded.
 
 Native Copy, retained/embedded PDF zoom, and actual Git-lock UI are Unverified. The Linux GUI provider previously lacked focus/hotkey support, captured a covering window, and failed Monaco accessibility editing with an is_editable_text error. Do not treat that failed attempt as a product failure.
 

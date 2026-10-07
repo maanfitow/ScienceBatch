@@ -647,6 +647,8 @@ export const EditorView: React.FC<EditorViewProps> = ({
             enabled: true,
           },
           wordBasedSuggestions: 'off',
+          // Monaco's WordHighlighter can reject pending work when its model is replaced.
+          occurrencesHighlight: 'off',
           snippetSuggestions: 'inline',
           suggestOnTriggerCharacters: true,
           acceptSuggestionOnEnter: 'on',
