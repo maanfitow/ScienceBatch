@@ -6,6 +6,7 @@ import { SidebarActivityBar } from './SidebarActivityBar';
 import { FileTree } from '../FileTree';
 import { GlobalSearchView } from './GlobalSearchView';
 import { DocumentOutlineView } from './DocumentOutlineView';
+import { GitStatusView } from './GitStatusView';
 
 interface JetBrainsSidebarProps {
   // FileTree Props
@@ -27,6 +28,10 @@ interface JetBrainsSidebarProps {
   sourceCode: string;
   onUpdateSourceCode: (code: string) => void;
   onSelectLine: (line: number, file?: string | null) => void;
+  onOpenDiff?: (path: string, repositoryRoot: string) => void;
+  onBranchChanged?: () => Promise<void | boolean> | void | boolean;
+  onWorktreeUpdateBusyChange?: (busy: boolean) => void;
+  hasUnsavedChanges?: boolean;
 
   // Sidebar State & Actions
   topTools: SidebarToolId[];
@@ -59,6 +64,10 @@ export const JetBrainsSidebar: React.FC<JetBrainsSidebarProps> = ({
   sourceCode,
   onUpdateSourceCode,
   onSelectLine,
+  onOpenDiff,
+  onBranchChanged,
+  onWorktreeUpdateBusyChange,
+  hasUnsavedChanges,
   topTools,
   bottomTools,
   activeTopTool,
@@ -125,6 +134,22 @@ export const JetBrainsSidebar: React.FC<JetBrainsSidebarProps> = ({
               projectRoot={projectRoot}
               onSelectFile={onSelectFile}
               onSelectLine={onSelectLine}
+              onClose={() => onCloseTool(slot)}
+            />
+          </div>
+        );
+
+      case 'git':
+        return (
+          <div className="sidebar-tool-panel-content">
+            <GitStatusView
+              projectRoot={projectRoot}
+              projectName={projectName}
+              onSelectFile={onSelectFile}
+              onOpenDiff={onOpenDiff}
+              onBranchChanged={onBranchChanged}
+              onWorktreeUpdateBusyChange={onWorktreeUpdateBusyChange}
+              hasUnsavedChanges={hasUnsavedChanges}
               onClose={() => onCloseTool(slot)}
             />
           </div>

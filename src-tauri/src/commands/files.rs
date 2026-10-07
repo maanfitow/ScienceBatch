@@ -25,6 +25,28 @@ pub async fn read_file_content(path: String) -> Result<String, String> {
 }
 
 #[command]
+pub async fn existing_file_paths(paths: Vec<String>) -> Result<Vec<String>, String> {
+    let mut existing = Vec::new();
+    for path in paths {
+        if path.is_empty() || path.contains('\0') {
+            return Err("File paths must be non-empty and cannot contain NUL bytes.".to_string());
+        }
+        match tokio::fs::metadata(&path).await {
+            Ok(metadata) if metadata.is_file() => {
+                tokio::fs::File::open(&path).await.map_err(|error| {
+                    format!("Could not check whether file '{path}' is readable: {error}")
+                })?;
+                existing.push(path);
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(format!("Could not check whether file '{path}' exists: {error}")),
+        }
+    }
+    Ok(existing)
+}
+
+#[command]
 pub async fn write_file_content(path: String, content: String) -> Result<(), String> {
     tokio::fs::write(&path, &content)
         .await
@@ -154,4 +176,3 @@ pub fn reset_webview_zoom(window: tauri::WebviewWindow) -> Result<(), String> {
     }
     Ok(())
 }
-

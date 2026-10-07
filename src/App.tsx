@@ -6,15 +6,17 @@ import { invoke } from '@tauri-apps/api/core';
 
 import { MenuBar } from './components/MenuBar';
 import { Toolbar } from './components/Toolbar';
-import { EditorView } from './components/EditorView';
 import { PdfView } from './components/PdfView';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { NewProjectModal } from './components/NewProjectModal';
-import { ImageViewerModal } from './components/ImageViewerModal';
+import { CloneRepositoryModal } from './components/CloneRepositoryModal';
+import { WorkspaceTabs } from './components/WorkspaceTabs';
 import { SidebarActivityBar, SidebarContentPanels } from './components/sidebar';
 
 import { useRecentProjects, useCompiler, useExport, useProject, useSidebar } from './hooks';
+import { useGitOperation } from './hooks/useGitOperation';
 import { ViewMode } from './types';
+import { tabIsDirty } from './types/workspace';
 import './App.css';
 
 export const App: React.FC = () => {
@@ -23,6 +25,8 @@ export const App: React.FC = () => {
   const sidebar = useSidebar();
   const [isNewProjectModalOpen, setIsNewProjectModalOpen] = useState<boolean>(false);
   const [newProjectModalInitialTab, setNewProjectModalInitialTab] = useState<'create' | 'import'>('create');
+  const [isCloneRepositoryModalOpen, setIsCloneRepositoryModalOpen] = useState(false);
+  const cloneInProgressRef = React.useRef(false);
 
   // Diagnostics Line Navigation
   const [jumpToLine, setJumpToLine] = useState<number | null>(null);
@@ -37,6 +41,15 @@ export const App: React.FC = () => {
   const compiler = useCompiler();
   const exportService = useExport();
 
+  useEffect(() => {
+    const preventNativeContextMenu = (event: MouseEvent) => {
+      if ((event.target as Element | null)?.closest('.monaco-editor')) return;
+      event.preventDefault();
+    };
+    window.addEventListener('contextmenu', preventNativeContextMenu, true);
+    return () => window.removeEventListener('contextmenu', preventNativeContextMenu, true);
+  }, []);
+
   const project = useProject({
     compile: compiler.compile,
     clearCompilationAndDiagnostics: compiler.clearCompilationAndDiagnostics,
@@ -45,12 +58,48 @@ export const App: React.FC = () => {
     onEnterEditorMode: () => setViewMode('editor'),
     onEnterWelcomeMode: () => setViewMode('welcome'),
   });
+  const cloneOperation = useGitOperation(null);
+
+  const openProjectFolder = (path?: string) => {
+    if (cloneInProgressRef.current) return Promise.resolve(false);
+    return project.openFolder(path);
+  };
+
+  const cloneRepository = async (url: string, parentDir: string, directoryName: string) => {
+    cloneInProgressRef.current = true;
+    try {
+      const result = await cloneOperation.run<{ projectPath: string }>('clone', 'clone_git_repository', {
+        url,
+        parentDir,
+        directoryName,
+      });
+      const opened = await project.openFolder(result.projectPath);
+      if (!opened) {
+        throw Object.assign(
+          new Error('The repository was cloned, but ScienceBatch could not open the project.'),
+          { projectPath: result.projectPath },
+        );
+      }
+    } finally {
+      cloneInProgressRef.current = false;
+    }
+  };
 
   // Hotkeys
   useHotkeys('ctrl+s, meta+s', (e) => {
     e.preventDefault();
     if (viewMode === 'editor') project.saveFile();
   }, { enableOnFormTags: true, enableOnContentEditable: true }, [project.saveFile, viewMode]);
+
+  useHotkeys('ctrl+w, meta+w', (e) => {
+    e.preventDefault();
+    if (viewMode === 'editor') project.closeTabs(false);
+  }, { enableOnFormTags: true, enableOnContentEditable: true }, [project.closeTabs, viewMode]);
+
+  useHotkeys('ctrl+shift+w, meta+shift+w', (e) => {
+    e.preventDefault();
+    if (viewMode === 'editor') project.closeTabs(true);
+  }, { enableOnFormTags: true, enableOnContentEditable: true }, [project.closeTabs, viewMode]);
 
   useHotkeys('ctrl+b, meta+b', (e) => {
     e.preventDefault();
@@ -92,34 +141,46 @@ export const App: React.FC = () => {
     const handleOpenOutline = () => {
       if (viewMode === 'editor') sidebar.toggleTool('outline');
     };
+    const handleCloseActiveTab = () => {
+      if (viewMode === 'editor') void project.closeTabs(false);
+    };
+    const handleCloseUnpinnedTabs = () => {
+      if (viewMode === 'editor') void project.closeTabs(true);
+    };
 
     window.addEventListener('sciencebatch:toggle-sidebar', handleToggleSidebar);
     window.addEventListener('sciencebatch:open-search', handleOpenSearch);
     window.addEventListener('sciencebatch:open-files', handleOpenFiles);
     window.addEventListener('sciencebatch:open-outline', handleOpenOutline);
+    window.addEventListener('sciencebatch:close-active-tab', handleCloseActiveTab);
+    window.addEventListener('sciencebatch:close-unpinned-tabs', handleCloseUnpinnedTabs);
 
     return () => {
       window.removeEventListener('sciencebatch:toggle-sidebar', handleToggleSidebar);
       window.removeEventListener('sciencebatch:open-search', handleOpenSearch);
       window.removeEventListener('sciencebatch:open-files', handleOpenFiles);
       window.removeEventListener('sciencebatch:open-outline', handleOpenOutline);
+      window.removeEventListener('sciencebatch:close-active-tab', handleCloseActiveTab);
+      window.removeEventListener('sciencebatch:close-unpinned-tabs', handleCloseUnpinnedTabs);
     };
-  }, [viewMode, sidebar.toggleSidebar, sidebar.toggleTool]);
+  }, [viewMode, sidebar.toggleSidebar, sidebar.toggleTool, project.closeTabs]);
 
   useHotkeys('ctrl+n, meta+n', (e) => {
     e.preventDefault();
+    if (cloneInProgressRef.current) return;
     setNewProjectModalInitialTab('create');
     setIsNewProjectModalOpen(true);
   });
 
   useHotkeys('ctrl+i, meta+i', (e) => {
     e.preventDefault();
+    if (cloneInProgressRef.current) return;
     project.importZip();
   });
 
   useHotkeys('ctrl+o, meta+o', (e) => {
     e.preventDefault();
-    project.openFolder();
+    void openProjectFolder();
   });
 
   useHotkeys('ctrl+shift+e, meta+shift+e', (e) => {
@@ -245,11 +306,12 @@ export const App: React.FC = () => {
       {/* Top Desktop Menu Bar */}
       <MenuBar
         onNewProject={() => {
+          if (cloneInProgressRef.current) return;
           setNewProjectModalInitialTab('create');
           setIsNewProjectModalOpen(true);
         }}
-        onOpenFolder={() => project.openFolder()}
-        onImportZip={() => project.importZip()}
+        onOpenFolder={() => { void openProjectFolder(); }}
+        onImportZip={() => { if (!cloneInProgressRef.current) void project.importZip(); }}
         onSaveFile={project.saveFile}
         onExportPdf={() => exportService.downloadPdf(compiler.pdfBytes, project.projectName, project.projectRoot)}
         onExportZip={() => exportService.exportZip(project.projectRoot, project.projectName, project.sourceCode, project.engine)}
@@ -269,7 +331,7 @@ export const App: React.FC = () => {
         onZoomOut={compiler.handleZoomOut}
         onZoomReset={compiler.handleZoomReset}
         recentProjects={recentProjects}
-        onOpenRecentProject={(path) => project.openFolder(path)}
+        onOpenRecentProject={(path) => openProjectFolder(path)}
         hasOpenProject={viewMode === 'editor'}
       />
 
@@ -302,15 +364,17 @@ export const App: React.FC = () => {
       {/* Body: Welcome Screen or Split Panels Workspace */}
       {viewMode === 'welcome' ? (
         <WelcomeScreen
-          onNewProject={() => {
+        onNewProject={() => {
+          if (cloneInProgressRef.current) return;
             setNewProjectModalInitialTab('create');
             setIsNewProjectModalOpen(true);
           }}
-          onOpenFolder={() => project.openFolder()}
-          onImportZip={() => project.importZip()}
-          onQuickScratchpad={project.quickScratchpad}
+        onOpenFolder={() => { void openProjectFolder(); }}
+        onCloneRepository={() => setIsCloneRepositoryModalOpen(true)}
+        onImportZip={() => { if (!cloneInProgressRef.current) void project.importZip(); }}
+        onQuickScratchpad={(engine) => { if (!cloneInProgressRef.current) project.quickScratchpad(engine); }}
           recentProjects={recentProjects}
-          onOpenRecentProject={(path) => project.openFolder(path)}
+          onOpenRecentProject={(path) => openProjectFolder(path)}
           onRemoveRecentProject={removeRecentProject}
         />
       ) : (
@@ -349,16 +413,15 @@ export const App: React.FC = () => {
                     activeFilePath={project.activeFilePath}
                     mainFilePath={project.mainFilePath}
                     onSelectFile={project.selectFile}
+                    onOpenDiff={(path, repositoryRoot) => /\.(png|jpe?g|svg|webp|gif|bmp|pdf)$/i.test(path) ? void project.selectFile(`${repositoryRoot}/${path}`) : project.openDiff(path, repositoryRoot)}
+                    onBranchChanged={() => project.refreshAfterGitUpdate()}
+                    onWorktreeUpdateBusyChange={project.setWorktreeUpdateBusy}
+                    hasUnsavedChanges={project.tabs.some(tabIsDirty)}
                     onSetMainFile={project.setMainFile}
                     onCreateFile={project.createFile}
                     onCreateFolder={project.createFolder}
                     onDeleteFile={project.deleteFile}
-                    onViewImage={(path, name) => {
-                      const rel = project.projectRoot && path.startsWith(project.projectRoot)
-                        ? path.slice(project.projectRoot.length).replace(/^[/\\]/, '')
-                        : name;
-                      project.setViewingImage({ path, name, relPath: rel });
-                    }}
+                    onViewImage={(path) => project.selectFile(path)}
                     onImportFiles={project.importFiles}
                     projectRoot={project.projectRoot}
                     projectName={project.projectName}
@@ -377,14 +440,22 @@ export const App: React.FC = () => {
               defaultSize={project.projectRoot && sidebar.state.isOpen && (sidebar.state.activeTopTool || sidebar.state.activeBottomTool) ? (100 - sidebar.state.panelWidth) / 2 : 50} 
               minSize={25}
             >
-              <EditorView
-                value={project.sourceCode}
+              <WorkspaceTabs
+                tabs={project.tabs}
+                activeTabId={project.activeTabId}
+                projectRoot={project.projectRoot}
+                sourceCode={project.sourceCode}
                 onChange={project.setSourceCode}
+                onActivate={project.activateTab}
+                onPromote={project.promoteTab}
+                onClose={project.closeTabs}
+                onPin={project.togglePin}
                 errors={compiler.errors}
                 warnings={compiler.warnings}
                 jumpToLine={jumpToLine}
                 engine={project.engine}
                 activeFilePath={project.activeFilePath}
+                readOnly={project.worktreeUpdateBusy}
               />
             </Panel>
 
@@ -414,15 +485,6 @@ export const App: React.FC = () => {
         </main>
       )}
 
-      {/* Image Preview Modal */}
-      <ImageViewerModal
-        isOpen={project.viewingImage !== null}
-        filePath={project.viewingImage?.path || null}
-        fileName={project.viewingImage?.name || null}
-        relPath={project.viewingImage?.relPath || null}
-        onClose={() => project.setViewingImage(null)}
-      />
-
       {/* New Project Assistant Modal */}
       <NewProjectModal
         isOpen={isNewProjectModalOpen}
@@ -430,6 +492,16 @@ export const App: React.FC = () => {
         onCreateProject={project.createProject}
         onImportZipProject={project.importZip}
         initialTab={newProjectModalInitialTab}
+      />
+
+      <CloneRepositoryModal
+        isOpen={isCloneRepositoryModalOpen}
+        running={cloneOperation.running}
+        progress={cloneOperation.progress}
+        error={cloneOperation.error}
+        onClose={() => { if (!cloneOperation.running) setIsCloneRepositoryModalOpen(false); }}
+        onOpenExisting={path => project.openFolder(path)}
+        onClone={cloneRepository}
       />
 
       <Toaster position="bottom-right" richColors closeButton />
