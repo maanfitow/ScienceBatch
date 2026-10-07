@@ -1,10 +1,10 @@
 # Typst Writing Tools — SPEC-WRITE-004
 
-**Status:** Deliveries T1 (Symbols) and T2 (tables, matrices, and compatible editing) are implemented on `codex/writing-ribbon`. See the [T1 verification record](TYPST_SYMBOLS_QA.md) and [T2 verification record](TYPST_STRUCTURES_QA.md); native release checks remain open.
+**Status:** Deliveries T1 (Symbols) and T2 (tables, matrices, and compatible editing) are implemented on `feat/writing-ribbon`. See the [T1 verification record](TYPST_SYMBOLS_QA.md) and [T2 verification record](TYPST_STRUCTURES_QA.md); native release checks remain open.
 
 ## Purpose and delivery order
 
-Extend the existing compact writing ribbon to editable Typst sources. Reuse its interaction patterns and Monaco editing session, while keeping language syntax, context recognition, source generation, and structure recognition separate from LaTeX. Ship Symbols first, then Table/Matrix creation and compatible structure editing. Font selection and basic text formatting follow this work in separate specifications.
+Extend the existing compact writing ribbon to editable Typst sources. Reuse its interaction patterns and Monaco editing session, while keeping language syntax, context recognition, source generation, and structure recognition separate from LaTeX. Ship Symbols first, then Table/Matrix creation and compatible structure editing. Bold/Italic text formatting is now specified separately in [Basic Text Formatting](TEXT_FORMATTING.md) and has been authorized as a scoped follow-up. Its planner/compiler and real-Monaco browser checks passed; native interaction remains unverified. Font selection remains future work in separate specifications.
 
 The LaTeX implementation passes automated and browser checks. Native Copy, PDF retention, embedded-PDF zoom, and Git-lock interaction remain release checks; an unavailable automation provider must be recorded as unverified, not passed. Those checks do not require inventing a PDF fix or changing document typography.
 
@@ -80,11 +80,13 @@ Use a schematic matrix preview showing cell source and selected delimiters, plus
 
 ### Editing and round trips
 
-Offer **Edit table** or **Edit matrix** only for a supported recognized structure. Parse bounded tokens, groups, strings, escapes, and outer separators; do not use one global regular expression. Recognize the canonical generated grammar and equivalent manual source with harmless whitespace/trailing-comma differences. Manual tables require explicit supported column count, alignment, 5 pt inset, and stroke; matrices require an explicit supported delimiter. The parser refuses inherited defaults it cannot verify. Direct built-in calls only are supported; aliases, spreads, loops, dynamic dimensions, merged cells, custom tracks, custom cell positioning, augmentation, and unknown structural arguments fall back to **Edit source**.
+Offer **Edit table** or **Edit matrix** only for a supported recognized structure. Parse bounded tokens, groups, strings, escapes, and outer separators; do not use one global regular expression. Recognize the canonical generated grammar and equivalent manual source with harmless whitespace/trailing-comma differences. Manual tables require explicit supported column count, alignment, 5 pt inset, and stroke; matrices require an explicit supported delimiter. The parser refuses inherited defaults it cannot verify. Direct built-in calls only are supported; aliases, spreads, loops, dynamic dimensions, merged cells, custom tracks, custom cell positioning, augmentation, and unknown structural arguments require manual source editing with a contextual explanation in the live ribbon hint.
+
+At the cursor, filter parsed candidates to source ranges that contain the cursor, including range endpoints, before choosing the smallest structure. For an unclosed call, retain its conservative source range through end of file. An unrelated nested/nearby figure table outside the actual candidate range must not become an edit target. If an outer wrapper or its metadata is unsupported but the inner table or matrix is compatible, preserve the existing **Edit table**/**Edit matrix** action and leave the outer metadata unavailable; never discard that wrapper. If the structure itself is incompatible, show a non-clickable contextual reason in the existing live ribbon hint, with the full message available as its title, in both layouts. Do not show an **Edit source** button; the user edits that source manually.
 
 Preserve raw supported cell content as opaque source without evaluating functions. Preserve unmodified cells byte-for-byte, excluding formatting belonging to the regenerated outer structure. Do not infer effective values from `set`/`show` rules or claim a schematic preview matches them. Refuse uncertain structural syntax and internal comments rather than rewriting them.
 
-Replacing a nested table/matrix changes only that recognized call. Replacing a recognized generated wrapper may include its caption and label; replacing a matrix with a recognized generated display wrapper may include its delimiters. Never consume adjacent prose or another structure. If a manual wrapper is unsupported, offer editing the inner structure with outer metadata unavailable, or **Edit source**; never discard the wrapper.
+Replacing a nested table/matrix changes only that recognized call. Replacing a recognized generated wrapper may include its caption and label; replacing a matrix with a recognized generated display wrapper may include its delimiters. Never consume adjacent prose or another structure. If an outer wrapper is unsupported but its inner table or matrix is compatible, offer editing the inner structure with outer metadata unavailable and preserve the wrapper. If the inner structure itself is incompatible, show the contextual reason and require manual source editing. Do not offer a clickable source-edit action, and never discard the wrapper.
 
 Growing dimensions retains existing cells. Shrinking across populated cells requires an in-dialog confirmation identifying the affected rows/columns. Canceling that confirmation keeps dimensions and content.
 
@@ -115,7 +117,7 @@ Required checks per delivery:
 
 ## Deferred work
 
-Document/editor font selectors, bold/italic ribbon tools, live or compiled assistant previews, custom package catalogs, evaluation of user macros, multiline table cells, arbitrary table layouts, merged cells, matrix augmentation, cross-engine conversion, Visual/Review modes, and compiler/font bundle changes require separate scope.
+Document/editor font selectors, live or compiled assistant previews, custom package catalogs, evaluation of user macros, multiline table cells, arbitrary table layouts, merged cells, matrix augmentation, cross-engine conversion, Visual/Review modes, and compiler/font bundle changes require separate scope. Bold/Italic controls are now authorized separately under [Basic Text Formatting](TEXT_FORMATTING.md); their browser verification passed and native interaction verification remains pending.
 
 ## Primary syntax references
 

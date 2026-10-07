@@ -686,7 +686,7 @@ function parseFigureWrapper(source: string, figure: Call, cursor: number): Parse
   const tableInFigure = parseCallAt(source, firstOffset, 'table');
   if (!tableInFigure || tableInFigure.end !== firstEnd) return null;
   const tableValue = parseTable(tableInFigure);
-  if (!tableValue) return { kind: 'table', start: tableInFigure.start, end: tableInFigure.end, compatible: false, reason: 'This table uses dynamic dimensions, custom tracks, merged cells, or unsupported cell options. Use Edit source to change it safely.' };
+  if (!tableValue) return { kind: 'table', start: tableInFigure.start, end: tableInFigure.end, compatible: false, reason: 'This table uses dynamic dimensions, custom tracks, merged cells, or unsupported cell options. Edit this structure directly in the source.' };
   let caption: string | undefined;
   let kind: string | undefined;
   let wrapperCompatible = true;
@@ -737,17 +737,17 @@ function parseCandidate(source: string, start: number, name: string, cursor: num
   if (!call) {
     const opening = source.indexOf('(', start + name.length);
     if (opening < 0 || cursor < start || cursor > source.length) return null;
-    const reason = 'This structure has an unclosed call. Use Edit source to change it safely.';
+    const reason = 'This structure has an unclosed call. Edit this structure directly in the source.';
     return { kind, start, end: source.length, compatible: false, reason };
   }
   if (kind === 'table' && (cursor < call.start || cursor > call.end)) return null;
   const containsComment = hasComment(source.slice(call.start, call.end), groupMode);
   if (containsComment) return cursor >= call.start && cursor <= call.end
-    ? { kind, start: call.start, end: call.end, compatible: false, reason: 'This structure contains comments or unsupported syntax. Use Edit source to change it safely.' }
+    ? { kind, start: call.start, end: call.end, compatible: false, reason: 'This structure contains comments or unsupported syntax. Edit this structure directly in the source.' }
     : null;
   if (kind === 'table') {
     const value = parseTable(call);
-    if (!value) return { kind, start: call.start, end: call.end, compatible: false, reason: 'This table uses dynamic dimensions, custom tracks, merged cells, or unsupported cell options. Use Edit source to change it safely.' };
+    if (!value) return { kind, start: call.start, end: call.end, compatible: false, reason: 'This table uses dynamic dimensions, custom tracks, merged cells, or unsupported cell options. Edit this structure directly in the source.' };
     const figureStart = source.lastIndexOf('#figure', call.start);
     if (figureStart >= 0) {
       const figure = parseCallAt(source, figureStart + 1, 'figure');
@@ -769,7 +769,7 @@ function parseCandidate(source: string, start: number, name: string, cursor: num
   }
   const value = parseMatrix(call);
   if (!value) return cursor >= call.start && cursor <= call.end
-    ? { kind, start: call.start, end: call.end, compatible: false, reason: 'This matrix uses unsupported arguments or unbalanced cell content. Use Edit source to change it safely.' }
+    ? { kind, start: call.start, end: call.end, compatible: false, reason: 'This matrix uses unsupported arguments or unbalanced cell content. Edit this structure directly in the source.' }
     : null;
   let startOffset = call.start;
   let endOffset = call.end;
@@ -831,7 +831,8 @@ export function parseTypstStructureAt(source: string, cursorOffset: number): Par
       } else offset++;
     }
   }
-  if (!candidates.length) return null;
-  candidates.sort((a, b) => (a.end - a.start) - (b.end - b.start));
-  return candidates[0];
+  const containingCandidates = candidates.filter((candidate) => candidate.start <= cursorOffset && cursorOffset <= candidate.end);
+  if (!containingCandidates.length) return null;
+  containingCandidates.sort((a, b) => (a.end - a.start) - (b.end - b.start));
+  return containingCandidates[0];
 }

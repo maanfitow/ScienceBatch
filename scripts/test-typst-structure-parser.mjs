@@ -168,8 +168,52 @@ for (const source of unsupported) {
   const result = parseTypstStructureAt(source, Math.max(0, source.indexOf('columns')));
   assert.equal(result?.kind, 'table');
   assert.equal(result?.compatible, false);
-  assert.match(result?.reason ?? '', /Edit source/);
+  assert.match(result?.reason ?? '', /Edit this structure directly in the source/);
 }
+
+const assertContainsCursor = (source, offset, description) => {
+  const result = parseTypstStructureAt(source, offset);
+  if (result) {
+    assert.ok(result.start <= offset && offset <= result.end, `${description} result contains its cursor`);
+  }
+  return result;
+};
+const unsupportedFigure = 'Before text\n#figure(table(columns: count, align: (left), inset: 5pt, stroke: none, [x]), kind: table)\nAfter text';
+const unsupportedFigureStart = unsupportedFigure.indexOf('#figure');
+const unsupportedFigureEnd = unsupportedFigure.indexOf(')\nAfter') + 1;
+assert.equal(assertContainsCursor(unsupportedFigure, 0, 'before unsupported figure'), null);
+const unsupportedFigureInside = assertContainsCursor(unsupportedFigure, unsupportedFigure.indexOf('[x]') + 1, 'inside unsupported figure');
+assert.equal(unsupportedFigureInside?.compatible, false);
+assert.equal(unsupportedFigureInside?.start, unsupportedFigure.indexOf('table('));
+assert.equal(unsupportedFigureInside?.end, unsupportedFigure.indexOf('), kind: table)') + 1);
+assert.ok(unsupportedFigureStart < unsupportedFigureInside.start);
+assert.ok(unsupportedFigureEnd < unsupportedFigure.indexOf('After text'));
+assert.equal(assertContainsCursor(unsupportedFigure, unsupportedFigure.indexOf('After text'), 'after unsupported figure'), null);
+
+const validInnerTable = '#table(columns: 1, align: (left), inset: 5pt, stroke: none, [x])';
+const figureTableArgument = validInnerTable.slice(1);
+const invalidLabelFigure = `Before text\n#figure(${figureTableArgument}, kind: table)<invalid label>\nAfter text`;
+const unclosedLabelFigure = `Before text\n#figure(${figureTableArgument}, kind: table)<unclosed\nAfter text`;
+for (const [description, source] of [
+  ['invalid label', invalidLabelFigure],
+  ['unclosed label', unclosedLabelFigure],
+]) {
+  assert.equal(assertContainsCursor(source, 0, `before ${description} figure`), null);
+  const inside = assertContainsCursor(source, source.indexOf('[x]') + 1, `inside ${description} figure`);
+  assert.equal(inside?.compatible, true);
+  assert.equal(inside?.start, source.indexOf('table('));
+  assert.equal(inside?.end, source.indexOf('), kind: table)') + 1);
+  assert.equal(assertContainsCursor(source, source.indexOf('After text'), `after ${description} figure`), null);
+}
+
+const proseWithStructures = `Before text\n${validInnerTable}\n${unsupported[0]}\nAfter text`;
+for (const [marker, compatible] of [['[x]', true], ['columns: count', false]]) {
+  const offset = proseWithStructures.indexOf(marker);
+  const result = assertContainsCursor(proseWithStructures, offset, `closed ${compatible ? 'supported' : 'unsupported'} structure`);
+  assert.equal(result?.compatible, compatible);
+}
+assert.equal(assertContainsCursor(proseWithStructures, 0, 'prose before structures'), null);
+assert.equal(assertContainsCursor(proseWithStructures, proseWithStructures.indexOf('After text'), 'prose after structures'), null);
 
 for (const [delimiter, sourceValue] of [
   ['none', '#none'], ['parentheses', '"("'], ['brackets', '"["'], ['braces', '"{"'],
@@ -234,7 +278,7 @@ const invalidMatrix = '$mat(delim: "(", a, b; c, #bad)$';
 const invalidMatrixParsed = parse(invalidMatrix, 'bad');
 assert.equal(invalidMatrixParsed?.kind, 'matrix');
 assert.equal(invalidMatrixParsed?.compatible, false);
-assert.match(invalidMatrixParsed?.reason ?? '', /Edit source/);
+assert.match(invalidMatrixParsed?.reason ?? '', /Edit this structure directly in the source/);
 
 const malformed = '#table(columns: 2, align: (left, right), inset: 5pt, stroke: none, [unfinished';
 const malformedParsed = parse(malformed, 'unfinished');

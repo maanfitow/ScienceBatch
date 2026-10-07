@@ -27,4 +27,29 @@ The coordinator started the current Tauri development build and confirmed, throu
 
 The Linux provider reported no focus/hotkey support. `get-app-state --restore-window` still captured the covering Orca window rather than ScienceBatch, so visual output could not be inspected. Setting Monaco's accessible editor value failed with `accessibility_error: 'Accessible' object has no attribute 'is_editable_text'`. The unchanged editor content was read back. No user document was changed, and no compilation was triggered in this attempt.
 
-Native Copy, PDF retention, embedded-PDF zoom, and Git-lock checks remain **Unverified**. Repeat this procedure with working foreground/input access or manually in the native app. The feature is not certified for release by this attempt.
+This attempt independently established no ribbon acceptance result: native Copy, PDF retention, embedded-PDF zoom, and Git-lock checks were **Unverified** because the provider could not control the foreground application.
+
+## Antigravity report summary — 2026-10-06
+
+The user reports that Antigravity successfully checked native Copy, retention of the current PDF during writing, explicit compilation, zoom/navigation, responsive themes, and readOnly/session guards. The detailed Antigravity report path and run metadata were not available while this record was updated. These are therefore recorded as **reported passed by Antigravity (summary only)**, not as independently repeated or fully evidenced Codex native passes. The report summary does not establish the individual selection variants, exact fixture, OS/WebKit version, zoom values, viewport, or screenshots.
+
+| Check | Current evidence/status |
+| --- | --- |
+| Native Copy | **Reported passed by Antigravity (summary only).** Detailed selection variants and native app/OS evidence are unavailable. |
+| Clipboard failure feedback | **Unverified.** No detailed evidence establishes a controlled native clipboard failure. |
+| Retain existing PDF during writing | **Reported passed by Antigravity (summary only).** Codex did not independently repeat this in native Tauri. |
+| Explicit compilation | **Reported passed by Antigravity (summary only).** Codex did not independently repeat this in native Tauri. |
+| Zoom/navigation | **Reported passed by Antigravity (summary only).** Embedded PDF figure content and the specified zoom values are not established. |
+| Embedded PDF figure with text, vector, and raster content | **Unverified.** No evidence establishes this fixture was tested. |
+| Responsive themes | **Reported passed by Antigravity (summary only).** Exact viewport/theme coverage is unavailable. |
+| readOnly/session guards | **Reported passed by Antigravity (summary only).** This does not establish behavior during a real Git workspace lock. |
+| Cancel, Undo, and Redo native interaction | **Unverified.** The report summary does not establish these subcases. |
+| Actual Git-operation workspace lock | **Unverified.** A mocked lock bridge and session guards are not evidence of a real Git operation locking the workspace. |
+
+Keep these specific gaps open until the detailed report or new native evidence covers them. Do not treat this summary as blanket native QA certification. Browser probes and compiler fixtures remain separate evidence and cannot close these native cases.
+
+## Bold/Italic native acceptance — pending
+
+The authorized Bold/Italic controls have no native GTK/WebKit acceptance results yet. Frontend/browser verification is complete; verify both LaTeX and Typst in a fresh Tauri app using disposable scratch documents. Exercise mouse and keyboard activation for Bold and Italic with forward, reverse, and empty selections; combine and remove recognized nested wrappers; confirm unsupported partial/protected selections stay disabled; and check exact source, directional selection, focus, Undo/Redo, read-only behavior, and unchanged PDF until explicit Compile. Confirm no save or compile is triggered by formatting. Record app revision, OS/WebKit, engine/source fixture, and individual outcomes. Mark these cases **Unverified** until that native run occurs.
+
+Browser fixtures that seed editor read-only references or mock Tauri IPC do not substitute for an actual native read-only transition. This formatting procedure also does not close the separately pending embedded-PDF figure or real Git-operation workspace-lock cases above.

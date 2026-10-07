@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowDownToLine, Braces, Check, ChevronDown, CircleHelp, Grid2X2, ListFilter, Search, Sigma, Table2, X } from 'lucide-react';
+import { ArrowDownToLine, Bold, Braces, Check, ChevronDown, CircleHelp, Grid2X2, Italic, ListFilter, Search, Sigma, Table2, X } from 'lucide-react';
 import { WritingSelect } from './WritingSelect';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
@@ -15,6 +15,7 @@ import {
 } from '../../editor/writing';
 import { getWritingSymbolAdapter } from '../../editor/writing/adapters';
 import { parseTypstStructureAt } from '../../editor/writing/typstStructureParser';
+import { planTextFormatting } from '../../editor/writing/textFormatting';
 import { TypstStructureDialog } from './TypstStructureDialog';
 import './writing.css';
 
@@ -111,6 +112,26 @@ export const WritingRibbon: React.FC<WritingRibbonProps> = ({ bridge, editorStat
   const requiredPackageState = adapter.language === 'latex' ? inspectPackageLoadState(editorState.source, requiredPackages) : { missing: [], uncertain: false };
   const packageEligibility = adapter.language === 'latex' ? inspectPackageEligibility(editorState.source) : { eligible: false, reason: undefined };
   const packagePlanEligible = editorState.canAddPackages && packageEligibility.eligible && !requiredPackageState.uncertain;
+  const formattingSession = bridge?.capture() ?? null;
+  const boldPlan = formattingSession ? planTextFormatting(formattingSession.language, formattingSession.source, formattingSession, 'bold') : null;
+  const italicPlan = formattingSession ? planTextFormatting(formattingSession.language, formattingSession.source, formattingSession, 'italic') : null;
+  const formattingDisabled = !editorState.editable || !bridge || !formattingSession || dialog !== null || Boolean(formattingSession && bridge && !bridge.isCurrent(formattingSession));
+  const formattingDisabledReason = dialog !== null
+    ? 'Close the writing panel before formatting text.'
+    : !editorState.editable
+      ? editorState.reason || 'Select an editable source before formatting text.'
+      : !bridge
+        ? 'Formatting is unavailable because the editor session is not ready.'
+        : !formattingSession
+          ? 'Select an active source editor before formatting text.'
+          : formattingSession && !bridge.isCurrent(formattingSession)
+            ? 'The editor session changed. Retry after it refreshes.'
+            : undefined;
+  const manualEditHint = editorState.editable && parsedStructureAtCursor && !parsedStructureAtCursor.compatible
+    ? parsedStructureAtCursor.reason ?? 'This structure requires manual editing in the source.'
+    : '';
+  const formattingHint = status || formattingDisabledReason || (!boldPlan?.enabled ? boldPlan?.reason : undefined) || (!italicPlan?.enabled ? italicPlan?.reason : undefined) || (!available ? editorState.reason : '');
+  const ribbonHint = manualEditHint || formattingHint;
 
   useEffect(() => {
     setSymbolIndex(0);
@@ -215,6 +236,20 @@ export const WritingRibbon: React.FC<WritingRibbonProps> = ({ bridge, editorStat
     if (openMain) window.requestAnimationFrame(() => onOpenMainFile?.());
   };
 
+  const applyTextFormatting = (kind: 'bold' | 'italic') => {
+    if (dialog !== null) { setStatus('Close the writing panel before formatting text.'); return; }
+    if (!editorState.editable) { setStatus(editorState.reason || 'Select an editable source before formatting text.'); return; }
+    if (!bridge) { setStatus('Formatting is unavailable because the editor session is not ready.'); return; }
+    const captured = bridge.capture();
+    if (!captured) { setStatus(editorState.reason || 'Select an editable source before formatting text.'); return; }
+    const plan = planTextFormatting(captured.language, captured.source, captured, kind);
+    if (!plan.enabled || !plan.change) { setStatus(plan.reason ?? 'This selection cannot be formatted here.'); return; }
+    if (!bridge.isCurrent(captured)) { setStatus('The editor changed. Retry the formatting action.'); return; }
+    if (!bridge.apply(captured, plan.change)) { setStatus('The editor changed before formatting could be applied. Retry the action.'); return; }
+    const label = kind === 'bold' ? 'Bold' : 'Italic';
+    setStatus(`${label} formatting ${plan.active ? 'removed' : 'applied'}.`);
+  };
+
   const open = (kind: DialogKind) => {
     if (!available || !bridge || (kind !== 'symbols' && !adapter.supportsStructures)) return;
     returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -254,13 +289,6 @@ export const WritingRibbon: React.FC<WritingRibbonProps> = ({ bridge, editorStat
     if (kind === 'table') setTable(seedOptions(parsed as ParsedStructure<TableOptions>, { rows: 3, columns: 3, cells: [], format: 'plain', header: false, wrapInTable: false, alignment: ['l', 'l', 'l'] }));
     else setMatrix(seedOptions(parsed as ParsedStructure<MatrixOptions>, { rows: 2, columns: 2, cells: [], environment: 'pmatrix' }));
     setDialog(kind);
-  };
-
-  const focusSourceForEditing = () => {
-    if (!bridge) return;
-    const captured = bridge.capture();
-    if (captured) bridge.restore(captured);
-    setCompactOpen(false);
   };
 
   const apply = (text: string, selectedSession = session, replacement?: { start: number; end: number }) => {
@@ -398,18 +426,22 @@ export const WritingRibbon: React.FC<WritingRibbonProps> = ({ bridge, editorStat
         <button type="button" className="writing-ribbon-button" onClick={() => open('matrix')} disabled={!available || !adapter.supportsStructures} title={!adapter.supportsStructures ? 'Matrix creation is unavailable for this language.' : available ? 'Create a matrix' : editorState.reason}>
           <Grid2X2 size={15} aria-hidden="true" /><span>Matrix</span>
         </button>
-        {editorState.editable && parsedStructureAtCursor && (parsedStructureAtCursor.compatible
-          ? <button type="button" className="writing-ribbon-edit" onClick={() => openExisting(parsedStructureAtCursor.kind)} title={`Edit compatible ${parsedStructureAtCursor.kind} at the cursor`}>Edit {parsedStructureAtCursor.kind}</button>
-          : <button type="button" className="writing-ribbon-edit" onClick={focusSourceForEditing} title={parsedStructureAtCursor.reason ?? 'Edit this source directly'}>Edit source</button>)}
+        {editorState.editable && parsedStructureAtCursor?.compatible && <button type="button" className="writing-ribbon-edit" onClick={() => openExisting(parsedStructureAtCursor.kind)} title={`Edit compatible ${parsedStructureAtCursor.kind} at the cursor`}>Edit {parsedStructureAtCursor.kind}</button>}
       </div>
-      <span className="writing-ribbon-hint" aria-live="polite">{status || (!available ? editorState.reason : '')}</span>
+      <div className="writing-ribbon-formatting" role="group" aria-label="Text formatting">
+        <button type="button" className={`writing-ribbon-format-button${boldPlan?.active ? ' is-active' : ''}`} aria-label="Bold" title={formattingDisabledReason ?? boldPlan?.reason ?? (!boldPlan?.enabled ? 'This selection cannot be formatted here.' : 'Bold')} aria-pressed={Boolean(boldPlan?.active)} disabled={formattingDisabled || !boldPlan?.enabled} onPointerDown={(event) => { if (event.button === 0) event.preventDefault(); }} onClick={() => applyTextFormatting('bold')}>
+          <Bold size={15} aria-hidden="true" />
+        </button>
+        <button type="button" className={`writing-ribbon-format-button${italicPlan?.active ? ' is-active' : ''}`} aria-label="Italic" title={formattingDisabledReason ?? italicPlan?.reason ?? (!italicPlan?.enabled ? 'This selection cannot be formatted here.' : 'Italic')} aria-pressed={Boolean(italicPlan?.active)} disabled={formattingDisabled || !italicPlan?.enabled} onPointerDown={(event) => { if (event.button === 0) event.preventDefault(); }} onClick={() => applyTextFormatting('italic')}>
+          <Italic size={15} aria-hidden="true" />
+        </button>
+      </div>
+      <span className="writing-ribbon-hint" aria-live="polite" title={manualEditHint || undefined}>{ribbonHint}</span>
       <div className="writing-ribbon-compact">
-        <button ref={compactTrigger} type="button" className="writing-ribbon-button" onClick={() => setCompactOpen((open) => !open)} disabled={!available && !(adapter.supportsStructures && editorState.editable && parsedStructureAtCursor)} aria-expanded={compactOpen} aria-haspopup="menu"><Sigma size={15} aria-hidden="true" />Insert<ChevronDown size={13} aria-hidden="true" /></button>
+        <button ref={compactTrigger} type="button" className="writing-ribbon-button" onClick={() => setCompactOpen((open) => !open)} disabled={!available && !(adapter.supportsStructures && editorState.editable && parsedStructureAtCursor?.compatible)} aria-expanded={compactOpen} aria-haspopup="menu"><Sigma size={15} aria-hidden="true" />Insert<ChevronDown size={13} aria-hidden="true" /></button>
         {compactOpen && <div className="writing-compact-menu" role="menu" onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); setCompactOpen(false); compactTrigger.current?.focus(); } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')); const index = items.indexOf(document.activeElement as HTMLButtonElement); items[(index + (event.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length]?.focus(); } }}>
           <button role="menuitem" type="button" disabled={!available} onClick={() => open('symbols')}>Symbols</button><button role="menuitem" type="button" disabled={!available || !adapter.supportsStructures} title={!adapter.supportsStructures ? 'Table creation is unavailable for this language.' : undefined} onClick={() => open('table')}>Table</button><button role="menuitem" type="button" disabled={!available || !adapter.supportsStructures} title={!adapter.supportsStructures ? 'Matrix creation is unavailable for this language.' : undefined} onClick={() => open('matrix')}>Matrix</button>
-          {editorState.editable && parsedStructureAtCursor && (parsedStructureAtCursor.compatible
-            ? <button role="menuitem" type="button" onClick={() => openExisting(parsedStructureAtCursor.kind)}>Edit {parsedStructureAtCursor.kind}</button>
-            : <button role="menuitem" type="button" onClick={focusSourceForEditing}>Edit source</button>)}
+          {editorState.editable && parsedStructureAtCursor?.compatible && <button role="menuitem" type="button" onClick={() => openExisting(parsedStructureAtCursor.kind)}>Edit {parsedStructureAtCursor.kind}</button>}
         </div>}
       </div>
       {dialog === 'symbols' && <section className="writing-dialog writing-dialog-symbols writing-symbol-popover" style={{ maxHeight: symbolPopoverMaxHeight }} role="dialog" aria-modal="false" aria-labelledby="writing-title" ref={dialogRef} onKeyDown={keyDown}>
