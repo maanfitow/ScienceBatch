@@ -11,7 +11,7 @@ use crate::{Bundle, CachableBundle, FileIndex, FileInfo};
 use chrono::{DateTime, Duration, Utc};
 use std::{
     collections::HashSet,
-    fs::{self, File},
+    fs::{self, File, OpenOptions},
     io::{self, BufReader, Read, Write},
     path::{Path, PathBuf},
     process,
@@ -24,6 +24,11 @@ use tectonic_io_base::{
     InputHandle, InputOrigin, IoProvider, OpenResult,
 };
 use tectonic_status_base::StatusBackend;
+
+static NEXT_PREPARE_TEMP_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+#[cfg(test)]
+pub(crate) static PREPARE_BUDGET_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 static DOWNLOAD_LIMIT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(u64::MAX);
 static DOWNLOADED_BYTES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -110,6 +115,7 @@ mod network_budget_tests {
 
     #[test]
     fn preparation_budget_counts_digest_index_and_resource_bytes_but_not_cached_reads() {
+        let _guard = super::PREPARE_BUDGET_TEST_LOCK.lock().unwrap();
         set_network_download_limit(8);
         let result = (|| {
             // Digest and index payloads use the same accounting hook as resource payloads.
@@ -370,6 +376,46 @@ impl<'this, T: FileIndex<'this>> BundleCache<'this, T> {
         Ok(bundle)
     }
 
+    fn prepare_all_cached(&mut self, status: &mut dyn StatusBackend) -> Result<usize> {
+        self.ensure_index()?;
+        let infos = self.bundle.all_infos();
+        if infos.is_empty() {
+            bail!("bundle index does not contain any resources");
+        }
+        let data_root = self.cache_root.join(format!("data/{}", self.bundle_hash));
+        let mut missing = Vec::new();
+        let mut completed = 0usize;
+        for info in infos {
+            let length = info.length().ok_or_else(|| {
+                anyhow!("bundle resource '{}' has no declared length", info.name())
+            })?;
+            let relative = safe_resource_path(info.path())?;
+            if cached_resource_matches(&data_root, &relative, length)? {
+                completed += 1;
+            } else {
+                missing.push(info);
+            }
+        }
+        if self.only_cached && !missing.is_empty() {
+            bail!("a required resource is not available in the offline cache");
+        }
+
+        let mut write_resource = |info: &T::InfoType, bytes: &[u8]| {
+            let expected = info.length().ok_or_else(|| {
+                anyhow!("bundle resource '{}' has no declared length", info.name())
+            })?;
+            if bytes.len() as u64 != expected {
+                bail!("bundle resource '{}' has an unexpected length", info.name());
+            }
+            let relative = safe_resource_path(info.path())?;
+            write_resource_atomic(&data_root, &relative, expected, bytes)
+        };
+        completed += self
+            .bundle
+            .prepare_resources(&missing, status, &mut write_resource)?;
+        Ok(completed)
+    }
+
     /// Build a cache path for the given bundle file
     fn get_file_path(&self, info: &T::InfoType) -> PathBuf {
         let mut out = self.cache_root.clone();
@@ -516,6 +562,172 @@ impl<'this, T: FileIndex<'this>> BundleCache<'this, T> {
     }
 }
 
+fn safe_resource_path(name: &str) -> Result<PathBuf> {
+    if name.is_empty()
+        || name.starts_with('/')
+        || name.ends_with('/')
+        || name.contains('\\')
+        || name.contains(':')
+        || name
+            .split('/')
+            .any(|component| component.is_empty() || matches!(component, "." | ".."))
+    {
+        bail!("bundle index contains an unsafe resource path");
+    }
+    let path = PathBuf::from(name);
+    if path
+        .components()
+        .any(|component| !matches!(component, std::path::Component::Normal(_)))
+    {
+        bail!("bundle index contains an unsafe resource path");
+    }
+    Ok(path)
+}
+
+fn cached_resource_matches(root: &Path, relative: &Path, expected_len: u64) -> Result<bool> {
+    let root_meta = match fs::symlink_metadata(root) {
+        Ok(meta) => meta,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error.into()),
+    };
+    if root_meta.file_type().is_symlink() || !root_meta.is_dir() {
+        bail!("resource cache root is not a regular directory");
+    }
+    let root_canonical = fs::canonicalize(root)?;
+    let components: Vec<_> = relative.components().collect();
+    let mut current = root.to_path_buf();
+    for (index, component) in components.iter().enumerate() {
+        current.push(component.as_os_str());
+        let metadata = match fs::symlink_metadata(&current) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+            Err(error) => return Err(error.into()),
+        };
+        if metadata.file_type().is_symlink() {
+            bail!("resource cache contains a symbolic link");
+        }
+        let is_last = index + 1 == components.len();
+        if is_last {
+            if !metadata.is_file() {
+                bail!("cached compiler resources must be regular files");
+            }
+            if metadata.len() != expected_len {
+                return Ok(false);
+            }
+        } else if !metadata.is_dir() {
+            bail!("resource cache path contains a non-directory parent");
+        }
+    }
+    let canonical = fs::canonicalize(&current)?;
+    if !canonical.starts_with(root_canonical) {
+        bail!("resource cache entry escapes its bundle directory");
+    }
+    Ok(true)
+}
+
+fn ensure_resource_parent(root: &Path, relative: &Path) -> Result<PathBuf> {
+    let root_meta = fs::symlink_metadata(root)?;
+    if root_meta.file_type().is_symlink() || !root_meta.is_dir() {
+        bail!("resource cache root is not a regular directory");
+    }
+    let root_canonical = fs::canonicalize(root)?;
+    let components: Vec<_> = relative.components().collect();
+    let mut parent = root.to_path_buf();
+    for component in components.iter().take(components.len().saturating_sub(1)) {
+        parent.push(component.as_os_str());
+        match fs::symlink_metadata(&parent) {
+            Ok(metadata) => {
+                if metadata.file_type().is_symlink() || !metadata.is_dir() {
+                    bail!("resource cache path contains an unsafe parent");
+                }
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => fs::create_dir(&parent)?,
+            Err(error) => return Err(error.into()),
+        }
+        if !fs::canonicalize(&parent)?.starts_with(&root_canonical) {
+            bail!("resource cache path escapes its bundle directory");
+        }
+    }
+    Ok(parent)
+}
+
+fn write_resource_atomic(
+    root: &Path,
+    relative: &Path,
+    expected_len: u64,
+    bytes: &[u8],
+) -> Result<()> {
+    if bytes.len() as u64 != expected_len {
+        bail!("resource bytes do not match the indexed length");
+    }
+    let parent = ensure_resource_parent(root, relative)?;
+    let file_name = relative
+        .file_name()
+        .ok_or_else(|| anyhow!("bundle resource path has no file name"))?;
+    let target = root.join(relative);
+    match fs::symlink_metadata(&target) {
+        Ok(metadata) => {
+            if metadata.file_type().is_symlink() || !metadata.is_file() {
+                bail!("cached compiler resources must be regular files");
+            }
+            if metadata.len() == expected_len {
+                return Ok(());
+            }
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
+    }
+
+    let (temporary, mut file) = loop {
+        let id = NEXT_PREPARE_TEMP_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let temporary = parent.join(format!(
+            "{}-tmp-pid{}-{id}",
+            file_name.to_string_lossy(),
+            process::id()
+        ));
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)
+        {
+            Ok(file) => break (temporary, file),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error.into()),
+        }
+    };
+    if let Err(error) = file.write_all(bytes) {
+        drop(file);
+        let _ = fs::remove_file(&temporary);
+        return Err(error.into());
+    }
+    drop(file);
+    #[cfg(not(windows))]
+    if let Err(error) = fs::rename(&temporary, &target) {
+        let _ = fs::remove_file(&temporary);
+        return Err(error.into());
+    }
+    #[cfg(windows)]
+    if target.exists() {
+        let backup = parent.join(format!(
+            "{}-previous-pid{}-{}",
+            file_name.to_string_lossy(),
+            process::id(),
+            NEXT_PREPARE_TEMP_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        fs::rename(&target, &backup)?;
+        if let Err(error) = fs::rename(&temporary, &target) {
+            let _ = fs::rename(&backup, &target);
+            let _ = fs::remove_file(&temporary);
+            return Err(error.into());
+        }
+        fs::remove_file(backup)?;
+    } else if let Err(error) = fs::rename(&temporary, &target) {
+        let _ = fs::remove_file(&temporary);
+        return Err(error.into());
+    }
+    Ok(())
+}
+
 impl<'this, T: FileIndex<'this>> IoProvider for BundleCache<'this, T> {
     fn input_open_name(
         &mut self,
@@ -572,5 +784,9 @@ impl<'this, T: FileIndex<'this>> Bundle for BundleCache<'this, T> {
 
     fn all_files(&self) -> Vec<String> {
         self.bundle.all_files()
+    }
+
+    fn prepare_all(&mut self, status: &mut dyn StatusBackend) -> Result<usize> {
+        self.prepare_all_cached(status)
     }
 }

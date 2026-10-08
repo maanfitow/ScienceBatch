@@ -49,8 +49,22 @@ pub trait FileInfo: Clone + Debug {
     /// Return a path to this file, relative to the bundle.
     fn path(&self) -> &str;
 
+    /// Return the uncompressed size of this resource when it is known.
+    fn length(&self) -> Option<u64> {
+        None
+    }
+
     /// Return the name of this file
     fn name(&self) -> &str;
+}
+
+/// A bounded byte range requested from an indexed bundle.
+#[derive(Clone, Copy, Debug)]
+pub struct ByteRange {
+    /// Starting byte offset in the bundle.
+    pub offset: u64,
+    /// Number of bytes requested from the bundle.
+    pub length: usize,
 }
 
 /// Keeps track of
@@ -107,6 +121,23 @@ pub trait Bundle: IoProvider {
     /// Iterate over all file paths in this bundle.
     /// This is used for the `bundle search` command
     fn all_files(&self) -> Vec<String>;
+
+    /// Prepare every resource in this bundle. Cached bundles can override this
+    /// to use bounded bulk downloads; other bundles retain on-demand reads.
+    fn prepare_all(&mut self, status: &mut dyn StatusBackend) -> Result<usize> {
+        let mut completed = 0;
+        for name in self.all_files() {
+            match self.input_open_name(&name, status) {
+                OpenResult::Ok(mut handle) => {
+                    std::io::copy(&mut handle, &mut std::io::sink())?;
+                    completed += 1;
+                }
+                OpenResult::Err(error) => return Err(error),
+                OpenResult::NotAvailable => bail!("bundle resource `{name}` is unavailable"),
+            }
+        }
+        Ok(completed)
+    }
 }
 
 impl<B: Bundle + ?Sized> Bundle for Box<B> {
@@ -116,6 +147,10 @@ impl<B: Bundle + ?Sized> Bundle for Box<B> {
 
     fn all_files(&self) -> Vec<String> {
         (**self).all_files()
+    }
+
+    fn prepare_all(&mut self, status: &mut dyn StatusBackend) -> Result<usize> {
+        (**self).prepare_all(status)
     }
 }
 
@@ -151,6 +186,9 @@ where
     /// Return a reference to this bundle's FileIndex.
     fn index(&mut self) -> &mut T;
 
+    /// Clone all indexed resource descriptors into owned values.
+    fn all_infos(&mut self) -> Vec<T::InfoType>;
+
     /// Open the file that `info` points to.
     fn open_fileinfo(
         &mut self,
@@ -172,6 +210,58 @@ where
         _status: &mut dyn StatusBackend,
     ) -> Vec<OpenResult<Vec<u8>>> {
         infos.iter().map(|_| OpenResult::NotAvailable).collect()
+    }
+
+    /// Prepare uncached resources and write complete slices through the
+    /// callback. Implementations must bound the bytes retained in memory.
+    fn prepare_resources(
+        &mut self,
+        infos: &[T::InfoType],
+        status: &mut dyn StatusBackend,
+        write_resource: &mut dyn FnMut(&T::InfoType, &[u8]) -> Result<()>,
+    ) -> Result<usize> {
+        const MAX_RESOURCE_BYTES: usize = 32 * 1024 * 1024;
+        let mut completed = 0;
+        for info in infos {
+            if info
+                .length()
+                .is_some_and(|length| length > MAX_RESOURCE_BYTES as u64)
+            {
+                bail!("bundle resource '{}' exceeds the 32 MiB limit", info.name())
+            }
+            let mut handle = match self.open_fileinfo(info, status) {
+                OpenResult::Ok(handle) => handle,
+                OpenResult::Err(error) => return Err(error),
+                OpenResult::NotAvailable => {
+                    bail!("bundle resource `{}` is unavailable", info.name())
+                }
+            };
+            let mut bytes = Vec::with_capacity(
+                info.length().unwrap_or(0).min(MAX_RESOURCE_BYTES as u64) as usize,
+            );
+            let mut chunk = [0u8; 8192];
+            loop {
+                let remaining = MAX_RESOURCE_BYTES.saturating_sub(bytes.len());
+                let read_limit = chunk.len().min(remaining.saturating_add(1));
+                let count = std::io::Read::read(&mut handle, &mut chunk[..read_limit])?;
+                if count == 0 {
+                    break;
+                }
+                if count > remaining {
+                    bail!("bundle resource '{}' exceeds the 32 MiB limit", info.name())
+                }
+                bytes.extend_from_slice(&chunk[..count]);
+            }
+            if info
+                .length()
+                .is_some_and(|length| length != bytes.len() as u64)
+            {
+                bail!("bundle resource `{}` has an unexpected length", info.name())
+            }
+            write_resource(info, &bytes)?;
+            completed += 1;
+        }
+        Ok(completed)
     }
 
     /// Search for a file in this bundle.
@@ -206,6 +296,10 @@ impl<'this, T: FileIndex<'this>, B: CachableBundle<'this, T> + ?Sized> CachableB
         (**self).index()
     }
 
+    fn all_infos(&mut self) -> Vec<T::InfoType> {
+        (**self).all_infos()
+    }
+
     fn open_fileinfo(
         &mut self,
         info: &T::InfoType,
@@ -220,6 +314,15 @@ impl<'this, T: FileIndex<'this>, B: CachableBundle<'this, T> + ?Sized> CachableB
         status: &mut dyn StatusBackend,
     ) -> Vec<OpenResult<Vec<u8>>> {
         (**self).batch_open(infos, status)
+    }
+
+    fn prepare_resources(
+        &mut self,
+        infos: &[T::InfoType],
+        status: &mut dyn StatusBackend,
+        write_resource: &mut dyn FnMut(&T::InfoType, &[u8]) -> Result<()>,
+    ) -> Result<usize> {
+        (**self).prepare_resources(infos, status, write_resource)
     }
 
     fn search(&mut self, name: &str) -> Option<T::InfoType> {

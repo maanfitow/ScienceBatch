@@ -301,16 +301,14 @@ impl AutomationService {
             }
             "resources.status" => resources::status(),
             "resources.prepare" => {
-                let permit = self.worker_limit.try_acquire().map_err(|_| {
+                let permit = self.worker_limit.clone().try_acquire_owned().map_err(|_| {
                     AutomationError::new(
                         "worker.busy",
                         "Another compiler or resource worker is already active in this instance.",
                         3,
                     )
                 })?;
-                let result = resources::prepare(&args, &context).await;
-                drop(permit);
-                result
+                resources::prepare(&args, &context, permit).await
             }
             _ => Err(AutomationError::new(
                 "usage.invalid_argument",
@@ -333,16 +331,14 @@ impl AutomationService {
                 130,
             ));
         }
-        let permit = self.worker_limit.try_acquire().map_err(|_| {
+        let permit = self.worker_limit.clone().try_acquire_owned().map_err(|_| {
             AutomationError::new(
                 "worker.busy",
                 "Another compiler worker is already active in this instance.",
                 3,
             )
         })?;
-        let result = worker::run_worker(snapshot, timeout, cancellation).await;
-        drop(permit);
-        result
+        worker::run_worker(snapshot, timeout, cancellation, permit).await
     }
 }
 
