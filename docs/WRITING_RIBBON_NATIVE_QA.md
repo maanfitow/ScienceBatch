@@ -1,5 +1,7 @@
 # Native Writing Ribbon Acceptance
 
+**Integration provenance:** PR #1 (Git) merged into `develop` first as `84d9584`; PR #2 (writing ribbon) merged second as `e052afc826b3f9d7c92f272e612b248e8512c46e`. These merges do not change any case status below. Summary-only Antigravity reports remain labeled as such; the embedded-PDF fixture, actual Git-lock interaction, native formatting, Cancel/Undo/Redo, and clipboard-failure cases remain unverified where recorded.
+
 Use this procedure to close the remaining desktop checks before release. Browser IPC mocks and helper tests do not replace these checks. Run a fresh `pnpm tauri dev` so Rust plugins and capabilities match the working tree. Do not start a second Vite server on port 1420.
 
 ## Test documents

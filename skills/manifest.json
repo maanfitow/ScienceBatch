@@ -1,0 +1,14 @@
+{
+  "package": "sciencebatch-skills",
+  "version": "0.1.0",
+  "skills": [
+    "sciencebatch-project",
+    "sciencebatch-write",
+    "sciencebatch-format",
+    "sciencebatch-bibliography",
+    "sciencebatch-diagnose",
+    "sciencebatch-export-pdf",
+    "sciencebatch-review",
+    "sciencebatch-workspace"
+  ]
+}

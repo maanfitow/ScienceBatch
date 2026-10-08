@@ -311,6 +311,11 @@ export function registerTypstCompletion(monaco: Monaco) {
     triggerCharacters: ['#', '=', '$', '<', '@', '"', '/', '.'],
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     provideCompletionItems: (model: any, position: any) => {
+      // Several Typst completion cases inspect the full document to classify
+      // context or collect labels. Keep interactive completion bounded for
+      // large sources while leaving those documents fully editable/compilable.
+      const sourceLength = typeof model.getValueLength === 'function' ? model.getValueLength() : model.getValue().length;
+      if (sourceLength > 1024 * 1024) return { suggestions: [] };
       const lineContent = model.getLineContent(position.lineNumber);
       const textUntilPosition = lineContent.substring(0, position.column - 1);
       const fullSource = model.getValue();

@@ -1,0 +1,4 @@
+interface:
+  display_name: "ScienceBatch Review"
+  short_description: "Review documents without changing them"
+  default_prompt: "Use $sciencebatch-review to review a ScienceBatch document read-only."

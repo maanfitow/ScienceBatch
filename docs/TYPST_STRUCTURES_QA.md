@@ -2,7 +2,9 @@
 
 ## Implementation status
 
-Delivery T2 from [SPEC-WRITE-004](TYPST_WRITING_TOOLS.md) adds native Typst Table/Matrix creation and compatible editing to `feat/writing-ribbon`. The original uncommitted status is historical: the ribbon was committed externally at `9d165da` before this continuation. Native release checks remain open. Font and basic formatting controls require separate specifications.
+Delivery T2 is integrated into `develop` through PR #2 (`e052afc826b3f9d7c92f272e612b248e8512c46e`), after PR #1 (Git, `84d9584`). This records integration only; native checks below remain open.
+
+Delivery T2 from [SPEC-WRITE-004](TYPST_WRITING_TOOLS.md) added native Typst Table/Matrix creation and compatible editing on `feat/writing-ribbon` and is now integrated into `develop` through PR #2. The original branch and uncommitted status are historical. Native release checks remain open. Font controls require separate specifications.
 
 Tables support 1–20 rows, 1–10 columns, per-column alignment, Plain/Grid/Booktabs, semantic bold headers, literal Text or explicit Typst markup per cell, and optional figures with literal captions and labels. Figures may omit a caption when they have no label. Matrices support 1–12 rows and columns and all six delimiters. Empty matrix cells retain their positions as `""`.
 

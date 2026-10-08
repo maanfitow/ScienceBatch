@@ -1,6 +1,8 @@
 # Writing Ribbon Implementation and QA
 
-The LaTeX writing ribbon implements the symbol picker and table/matrix builders described by [SPEC-WRITE-001](../SPECS.md#spec-write-001-table-and-matrix-builders) and [SPEC-WRITE-002](../SPECS.md#spec-write-002-symbol-picker). The three LaTeX deliveries are implemented on the current feature branch. Typst Symbols are now implemented separately under [SPEC-WRITE-004](TYPST_WRITING_TOOLS.md); see [T1 verification](TYPST_SYMBOLS_QA.md). Typst tables, matrices, and compatible editing are now implemented in T2; see [T2 verification](TYPST_STRUCTURES_QA.md). The ribbon applies in-memory Monaco edits only; it does not save or compile automatically.
+The LaTeX/Typst ribbon and Bold/Italic changes are integrated into `develop`: PR #1 (Git) merged first as `84d9584`, followed by PR #2 (writing ribbon) as `e052afc826b3f9d7c92f272e612b248e8512c46e`. Merge provenance does not change browser/native evidence classifications or close pending native cases.
+
+The LaTeX writing ribbon implements the symbol picker and table/matrix builders described by [SPEC-WRITE-001](../SPECS.md#spec-write-001-table-and-matrix-builders) and [SPEC-WRITE-002](../SPECS.md#spec-write-002-symbol-picker). The three LaTeX deliveries are integrated in `develop`. Typst Symbols are implemented separately under [SPEC-WRITE-004](TYPST_WRITING_TOOLS.md); see [T1 verification](TYPST_SYMBOLS_QA.md). Typst tables, matrices, and compatible editing are implemented in T2; see [T2 verification](TYPST_STRUCTURES_QA.md). The ribbon applies in-memory Monaco edits only; it does not save or compile automatically.
 
 ## Automated verification
 
