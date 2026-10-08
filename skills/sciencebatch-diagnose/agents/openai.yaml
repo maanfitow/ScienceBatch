@@ -1,0 +1,4 @@
+interface:
+  display_name: "ScienceBatch Diagnose"
+  short_description: "Explain and fix document diagnostics"
+  default_prompt: "Use $sciencebatch-diagnose to explain and fix a document diagnostic."

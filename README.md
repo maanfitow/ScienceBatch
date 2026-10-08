@@ -4,7 +4,7 @@
 ### High-Performance, Offline Desktop LaTeX & Typst Editor
 
 [![Tauri v2](https://img.shields.io/badge/Tauri-v2-blue?style=flat-square&logo=tauri)](https://tauri.app/)
-[![Rust](https://img.shields.io/badge/Rust-1.75+-orange?style=flat-square&logo=rust)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/Rust-1.88+-orange?style=flat-square&logo=rust)](https://www.rust-lang.org/)
 [![React](https://img.shields.io/badge/React-18+-61DAFB?style=flat-square&logo=react)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue?style=flat-square)](LICENSE)
@@ -29,7 +29,7 @@
   - Dynamic workspace scanner that automatically parses custom `.cls` and `.sty` files on the fly, registering custom macros in memory without configuration.
 - 🖼️ **Asset Viewer Modal (PDF & Images):** Direct preview of `.png`, `.jpg`, `.svg`, `.webp`, and `.pdf` graphics files straight from the file tree sidebar.
 - 🛡️ **Zero-Crash Isolated Worker Architecture:** Compilations are executed in an isolated child subprocess (`sciencebatch --compile-worker`). TeX syntax errors or C-level panics never crash or freeze the desktop GUI.
-- ⚡ **Asynchronous On-Demand Execution:** Compiles exclusively when requested via global `Ctrl + S` (or `Cmd + S`) or the toolbar button. No wasteful CPU-draining debounces.
+- ⚡ **Asynchronous On-Demand Execution:** Desktop compilation starts from the toolbar or `Ctrl + S`/`Cmd + S`. Headless compilation starts only from an explicit CLI command or MCP tool request. Saving, inspection, diagnostics, and resource preparation do not compile.
 - 🧠 **Contextual IntelliSense (Monaco Editor):**
   - Instant auto-completion for 120+ LaTeX commands, math symbols, and environments.
   - Dynamic scanning of `\label{...}` anchors for `\ref{` suggestions.
@@ -122,6 +122,36 @@ pnpm install
 # 3. Launch desktop app in development mode
 pnpm tauri dev
 ```
+
+The development and production Tauri hooks build the `sciencebatch-cli` companion binary before starting the app or packaging it. The desktop app still starts through its normal Tauri entry point.
+
+### Automation CLI, MCP, and Skills
+
+The companion CLI compiles LaTeX or Typst projects without opening the desktop app. It uses saved project files, keeps compiler intermediates in memory, runs an isolated worker, and writes a PDF only when the command names an output file:
+
+```sh
+sciencebatch-cli compile --project ./paper --main paper.tex --output ./paper.pdf --json
+sciencebatch-cli project inspect --project ./paper --json
+sciencebatch-cli resources status --json
+```
+
+`sciencebatch-cli mcp serve` exposes the same project operations over MCP stdio. Roots default to the launch directory; repeat `--root` to grant more locations. MCP source and workspace mutations require `--allow-write`, and resource downloads require `--allow-resource-download`. The server does not edit an MCP client's global configuration or start the desktop app:
+
+```sh
+sciencebatch-cli mcp serve --root ./paper
+sciencebatch-cli mcp serve --root ./paper --allow-write --allow-resource-download
+```
+
+The app's live workspace is available only through an explicitly selected instance. List instances with `sciencebatch-cli workspace instances --json`; then call `sciencebatch-cli workspace inspect --instance INSTANCE_ID --json`. Additional workspace arguments are passed as a JSON object with `--args`. Dirty buffers and stale document revisions return conflicts.
+
+Eight versioned Skills are provided under [`skills/`](skills/). Package them with `pnpm package:skills` to create `dist/sciencebatch-skills.tar.gz`, which includes the Skills, installer, and automation documentation. Extract that archive and install to a chosen Skills directory:
+
+```sh
+tar -xzf dist/sciencebatch-skills.tar.gz -C /tmp
+node /tmp/scripts/install-sciencebatch-skills.mjs --destination "$CODEX_HOME/skills"
+```
+
+The installer requires an explicit destination and does not change global MCP settings. Full operation, permissions, JSON results, limits, and connection examples are documented in [Automation Interfaces](docs/AUTOMATION.md) and [SPEC-CLI-001](docs/CLI_SPEC.md).
 
 ### Production Build
 

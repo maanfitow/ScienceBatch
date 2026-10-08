@@ -7,6 +7,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:cli": "node scripts/build-cli-sidecar.mjs",
+    "package:skills": "node scripts/package-sciencebatch-skills.mjs",
     "preview": "vite preview",
     "tauri": "tauri"
   },

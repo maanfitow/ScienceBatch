@@ -146,6 +146,22 @@ async fn try_repository_lock(
     Ok((root, guard))
 }
 
+pub(crate) async fn workspace_repository_guard(
+    project: &Path,
+) -> Result<Option<OwnedMutexGuard<()>>, GitOperationError> {
+    match repository_lock_key(project).await {
+        Ok((_, key)) => try_lock_key(&key).map(Some),
+        Err(message) if message == "Project is not a Git repository." => Ok(None),
+        Err(message) => Err(operation_error(
+            "RepositoryUnavailable",
+            message,
+            None,
+            None,
+            false,
+        )),
+    }
+}
+
 fn try_lock_key(key: &Path) -> Result<OwnedMutexGuard<()>, GitOperationError> {
     let locks = REPOSITORY_LOCKS.get_or_init(|| StdMutex::new(HashMap::new()));
     let lock = {

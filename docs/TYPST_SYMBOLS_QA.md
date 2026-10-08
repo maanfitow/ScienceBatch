@@ -2,7 +2,9 @@
 
 ## Implementation status
 
-Delivery T1 from [SPEC-WRITE-004](TYPST_WRITING_TOOLS.md) is implemented on `feat/writing-ribbon`. The original uncommitted status is historical: the ribbon was committed externally at `9d165da` before this continuation. This is not a release certification. At T1 completion, Typst table/matrix creation and compatible editing remained disabled. They are now implemented separately; see [T2 verification](TYPST_STRUCTURES_QA.md). Font and formatting controls remain separate future work.
+Delivery T1 is integrated into `develop` through PR #2 (`e052afc826b3f9d7c92f272e612b248e8512c46e`), after PR #1 (Git, `84d9584`). This records integration only; native checks below remain at their recorded statuses.
+
+Delivery T1 from [SPEC-WRITE-004](TYPST_WRITING_TOOLS.md) was implemented on `feat/writing-ribbon` and is now integrated into `develop` through PR #2. The original uncommitted status and branch reference are historical; the ribbon was committed externally at `9d165da` before the earlier continuation. This is not a release certification. At T1 completion, Typst table/matrix creation and compatible editing remained disabled; they were implemented separately in T2. See [T2 verification](TYPST_STRUCTURES_QA.md). Font controls remain separate future work.
 
 The ribbon uses a separate 56-entry built-in Typst catalog, conservative context scanner, native source generator, and symbol adapter. It reuses the selected-symbol feedback, themed categories, compact Insert menu, and Monaco editing contract. Markup insertion produces inline math; existing math receives a native identifier with boundary spacing. Comments, raw content, code, strings, labels, references, URLs, incomplete syntax, partial identifiers, and cross-context selections are unavailable.
 

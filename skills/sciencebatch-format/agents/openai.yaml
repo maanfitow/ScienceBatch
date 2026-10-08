@@ -1,0 +1,4 @@
+interface:
+  display_name: "ScienceBatch Format"
+  short_description: "Format source with symbols and structures"
+  default_prompt: "Use $sciencebatch-format to format source with symbols, tables, or matrices."

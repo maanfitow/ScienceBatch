@@ -1,0 +1,4 @@
+interface:
+  display_name: "ScienceBatch Export PDF"
+  short_description: "Compile or export a requested PDF"
+  default_prompt: "Use $sciencebatch-export-pdf to explicitly compile or export a PDF."

@@ -1,10 +1,10 @@
 # Writing Ribbon Final Review
 
-Review state as of 2026-10-06. This report covers the LaTeX and Typst writing ribbon branch `feat/writing-ribbon`, including the newly authorized Bold/Italic delivery. It records implementation scope, the Monaco mitigation, verification evidence, native-QA provenance, and branch integration order. It is not a release certification.
+Review state as of 2026-10-06. This report covers the LaTeX and Typst writing ribbon and Bold/Italic work. PR #1 (Git) merged into `develop` first as `84d9584`, followed by PR #2 (writing ribbon) as `e052afc826b3f9d7c92f272e612b248e8512c46e`; this is integration provenance, not a release certification. Native QA statuses below remain in force.
 
 ## Branch and integration
 
-The starting branch state for this continuation was clean at `9d165da` (`feat: add LaTeX and Typst writing ribbon`); the earlier `d5d21ae` handoff baseline is historical. A final `git ls-remote` check found `develop` and `main` still at `a55bb59`, and `feat/git-status-panel` at `d5d21ae`. The merge base of `feat/git-status-panel` and `feat/writing-ribbon` is `d5d21ae`; the ribbon commit descends directly from it. Integrate `feat/git-status-panel` first, followed by `feat/writing-ribbon`. No PR, commit, push, or merge is part of this review.
+The original review requested integration of `feat/git-status-panel` followed by `feat/writing-ribbon`; that instruction is historical and complete. PR #1 (Git) was merged first as `84d9584`, and PR #2 (writing ribbon) was merged second as `e052afc826b3f9d7c92f272e612b248e8512c46e`. The prior branch snapshots and remote observations in the original review are historical, not current branch instructions. Merge order alone does not certify native acceptance or release readiness.
 
 ## Implemented behavior
 

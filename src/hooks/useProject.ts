@@ -13,6 +13,7 @@ import { DEFAULT_TYPST_SOURCE } from '../editor/typstData';
 import { WorkspaceTab, isProjectAsset, tabIsDirty } from '../types/workspace';
 import type { GitRepositoryInfo } from '../types/git';
 import { reloadWorkspaceTabs } from './gitWorkspaceRefresh';
+import { WorkspaceExportLease } from '../editor/workspaceExportLease';
 
 interface UseProjectOptions {
   compile: (source: string, engine: EngineType, projectDir?: string | null, mainFile?: string | null) => Promise<void>;
@@ -36,6 +37,26 @@ const flattenFilePaths = (items: FileItem[], base: string): string[] => {
   return result;
 };
 
+const collectProjectMacros = (diskSources: Map<string, string>, tabs: WorkspaceTab[]): Set<string> => {
+  const sources = new Map(diskSources);
+  for (const tab of tabs) {
+    if (tab.kind === 'source' && tab.path && /\.(cls|sty)$/i.test(tab.path)) sources.set(tab.path, tab.content);
+  }
+  const commands = new Set<string>();
+  for (const source of sources.values()) for (const command of extractMacrosFromSource(source)) commands.add(command);
+  return commands;
+};
+
+const sameOpenStyleSources = (left: WorkspaceTab[], right: WorkspaceTab[]): boolean => {
+  const styleSources = (tabs: WorkspaceTab[]) => new Map(tabs.flatMap(tab =>
+    tab.kind === 'source' && tab.path && /\.(cls|sty)$/i.test(tab.path) ? [[tab.path, tab.content] as const] : [],
+  ));
+  const leftSources = styleSources(left);
+  const rightSources = styleSources(right);
+  return leftSources.size === rightSources.size
+    && Array.from(leftSources).every(([path, content]) => rightSources.get(path) === content);
+};
+
 export function useProject({
   compile,
   clearCompilationAndDiagnostics,
@@ -54,29 +75,58 @@ export function useProject({
   const [tabs, setTabsState] = useState<WorkspaceTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const tabsRef = useRef<WorkspaceTab[]>([]);
+  const documentRevisionsRef = useRef<Map<string, number>>(new Map());
+  const projectGenerationRef = useRef(0);
+  const scratchpadSequenceRef = useRef(0);
   const activeTabRef = useRef<string | null>(null);
   const activeSourceTabRef = useRef<string | null>(null);
   const fileRequestRef = useRef(0);
   const worktreeUpdateBusyRef = useRef(false);
+  const workspaceExportLeaseRef = useRef<WorkspaceExportLease | null>(null);
+  if (!workspaceExportLeaseRef.current) workspaceExportLeaseRef.current = new WorkspaceExportLease();
+  const [workspaceExportBusy, setWorkspaceExportBusy] = useState(false);
   const projectConfigRawRef = useRef<string | null>(null);
+  const projectDiskMacrosRef = useRef<Set<string>>(new Set());
+  const projectDiskStyleSourcesRef = useRef<Map<string, string>>(new Map());
   const [worktreeUpdateBusy, setWorktreeUpdateBusyState] = useState(false);
+  const workspaceOperationBusy = () => worktreeUpdateBusyRef.current || workspaceExportLeaseRef.current?.active === true;
   const setWorktreeUpdateBusy = useCallback((busy: boolean) => {
     worktreeUpdateBusyRef.current = busy;
-    setWorktreeUpdateBusyState(busy);
+    setWorktreeUpdateBusyState(busy || workspaceExportLeaseRef.current?.active === true);
+  }, []);
+  const acquireWorkspaceExportLease = useCallback((leaseId: string) => {
+    if (!workspaceExportLeaseRef.current?.acquire(leaseId, worktreeUpdateBusyRef.current)) return false;
+    setWorkspaceExportBusy(true);
+    setWorktreeUpdateBusyState(true);
+    return true;
+  }, []);
+  const releaseWorkspaceExportLease = useCallback((leaseId: string) => {
+    if (!workspaceExportLeaseRef.current?.release(leaseId)) return false;
+    setWorkspaceExportBusy(false);
+    setWorktreeUpdateBusyState(worktreeUpdateBusyRef.current);
+    return true;
   }, []);
   const setTabs = useCallback((next: WorkspaceTab[]) => {
+    const previous = tabsRef.current;
     tabsRef.current = next;
     setTabsState(next);
+    if (!sameOpenStyleSources(previous, next)) {
+      setProjectCustomCommands(collectProjectMacros(projectDiskStyleSourcesRef.current, next));
+    }
   }, []);
   const setSourceCode = useCallback((content: string) => {
-    if (worktreeUpdateBusyRef.current) return;
+    if (workspaceOperationBusy()) return;
     setSourceCodeState(content);
     const active = tabsRef.current.find(tab => tab.id === activeTabRef.current);
     const targetId = active?.kind === 'source' ? active.id : activeSourceTabRef.current;
-    if (targetId) setTabs(tabsRef.current.map(tab => tab.id === targetId && tab.kind === 'source' ? { ...tab, content, preview: false } : tab));
+    if (targetId) {
+      documentRevisionsRef.current.set(targetId, (documentRevisionsRef.current.get(targetId) ?? 0) + 1);
+      const nextTabs = tabsRef.current.map(tab => tab.id === targetId && tab.kind === 'source' ? { ...tab, content, preview: false } : tab);
+      setTabs(nextTabs);
+    }
   }, [setTabs]);
   const activateTab = useCallback((id: string) => {
-    if (worktreeUpdateBusyRef.current) return;
+    if (workspaceOperationBusy()) return;
     const tab = tabsRef.current.find(item => item.id === id);
     if (!tab) return;
     fileRequestRef.current++;
@@ -92,25 +142,26 @@ export function useProject({
     }
   }, []);
   const promoteTab = useCallback((id: string) => {
-    if (worktreeUpdateBusyRef.current) return;
+    if (workspaceOperationBusy()) return;
     setTabs(tabsRef.current.map(tab => tab.id === id ? { ...tab, preview: false } : tab));
   }, [setTabs]);
   const resetTabs = useCallback((path: string | null, content: string, tabEngine: EngineType) => {
     fileRequestRef.current++;
-    const id = `source:${path || 'scratchpad'}`;
+    const id = path ? `source:${path}` : `source:scratchpad:${++scratchpadSequenceRef.current}`;
     setTabs([{ id, path, name: path?.split(/[/\\]/).pop() || `Untitled.${tabEngine === 'typst' ? 'typ' : 'tex'}`, kind: 'source', pinned: false, preview: false, content, savedContent: content }]);
+    if (!documentRevisionsRef.current.has(id)) documentRevisionsRef.current.set(id, 0);
     activeTabRef.current = id;
     activeSourceTabRef.current = id;
     setActiveTabId(id);
   }, [setTabs]);
   const closeTabs = useCallback(async (all = false, id = activeTabRef.current, others = false) => {
-    if (worktreeUpdateBusyRef.current) return;
+    if (workspaceOperationBusy()) return;
     const closing = tabsRef.current.filter(tab => all ? !tab.pinned : others ? tab.id !== id && !tab.pinned : tab.id === id);
     if (closing.some(tabIsDirty)) {
       const confirmed = await ask('Discard unsaved changes in the tabs being closed?', { title: 'Unsaved Changes', kind: 'warning', okLabel: 'Discard', cancelLabel: 'Cancel' });
       if (!confirmed) return;
     }
-    if (worktreeUpdateBusyRef.current) return;
+    if (workspaceOperationBusy()) return;
     const ids = new Set(closing.map(tab => tab.id));
     const remaining = tabsRef.current.filter(tab => !ids.has(tab.id));
     setTabs(remaining);
@@ -132,11 +183,11 @@ export function useProject({
     }
   }, [activateTab, setTabs]);
   const togglePin = useCallback((id: string) => {
-    if (worktreeUpdateBusyRef.current) return;
+    if (workspaceOperationBusy()) return;
     setTabs(tabsRef.current.map(tab => tab.id === id ? { ...tab, pinned: !tab.pinned, preview: tab.pinned ? tab.preview : false } : tab));
   }, [setTabs]);
   const openPreviewTab = useCallback(async (nextTab: WorkspaceTab) => {
-    if (worktreeUpdateBusyRef.current) return;
+    if (workspaceOperationBusy()) return;
     const existing = tabsRef.current.find(tab => tab.id === nextTab.id);
     if (existing) { activateTab(existing.id); return; }
     const request = ++fileRequestRef.current;
@@ -146,7 +197,7 @@ export function useProject({
       if (!confirmed || request !== fileRequestRef.current) return;
     }
     if (request !== fileRequestRef.current) return;
-    if (worktreeUpdateBusyRef.current) return;
+    if (workspaceOperationBusy()) return;
     const latest = tabsRef.current;
     const replace = latest.find(tab => tab.preview);
     const index = replace ? latest.findIndex(tab => tab.id === replace.id) : latest.length;
@@ -188,21 +239,24 @@ export function useProject({
       // Dynamically scan project class and style files (.cls, .sty) for custom macros
       const clsAndStyFiles = relPaths.filter((f) => f.endsWith('.cls') || f.endsWith('.sty'));
       if (clsAndStyFiles.length > 0) {
-        const customMacros = new Set<string>();
+        const diskStyleSources = new Map<string, string>();
         for (const rel of clsAndStyFiles) {
           const absPath = `${dir}/${rel}`;
           try {
             const content = await invoke<string>('read_file_content', { path: absPath });
-            const extracted = extractMacrosFromSource(content);
-            for (const m of extracted) {
-              customMacros.add(m);
-            }
+            diskStyleSources.set(absPath, content);
           } catch (err) {
             console.warn(`Failed to scan macro file ${rel}:`, err);
           }
         }
-        setProjectCustomCommands(customMacros);
+        projectDiskStyleSourcesRef.current = diskStyleSources;
+        const diskMacros = new Set<string>();
+        for (const source of diskStyleSources.values()) for (const macro of extractMacrosFromSource(source)) diskMacros.add(macro);
+        projectDiskMacrosRef.current = diskMacros;
+        setProjectCustomCommands(collectProjectMacros(diskStyleSources, tabsRef.current));
       } else {
+        projectDiskMacrosRef.current = new Set();
+        projectDiskStyleSourcesRef.current = new Map();
         setProjectCustomCommands(new Set());
       }
 
@@ -229,11 +283,11 @@ export function useProject({
       const repositoryRoot = gitInfo.repositoryRoot;
 
       const clsAndStyFiles = relPaths.filter(path => path.endsWith('.cls') || path.endsWith('.sty'));
-      const customMacros = new Set<string>();
+      const diskStyleSources = new Map<string, string>();
       for (const rel of clsAndStyFiles) {
         try {
           const content = await invoke<string>('read_file_content', { path: `${root}/${rel}` });
-          for (const macro of extractMacrosFromSource(content)) customMacros.add(macro);
+          diskStyleSources.set(`${root}/${rel}`, content);
         } catch (error) {
           console.warn(`Failed to scan macro file ${rel}:`, error);
         }
@@ -266,8 +320,18 @@ export function useProject({
 
       setProjectFiles(files);
       setGlobalProjectFiles(relPaths);
-      setProjectCustomCommands(customMacros);
+      projectDiskStyleSourcesRef.current = diskStyleSources;
+      const diskMacros = new Set<string>();
+      for (const source of diskStyleSources.values()) for (const macro of extractMacrosFromSource(source)) diskMacros.add(macro);
+      projectDiskMacrosRef.current = diskMacros;
+      for (const tab of reloaded.tabs) {
+        if (tab.kind !== 'source') continue;
+        const prior = tabsRef.current.find(item => item.id === tab.id);
+        if (!documentRevisionsRef.current.has(tab.id)) documentRevisionsRef.current.set(tab.id, 0);
+        else if (prior && prior.content !== tab.content) documentRevisionsRef.current.set(tab.id, (documentRevisionsRef.current.get(tab.id) ?? 0) + 1);
+      }
       setTabs(reloaded.tabs);
+      setProjectCustomCommands(collectProjectMacros(diskStyleSources, reloaded.tabs));
       activeTabRef.current = reloaded.activeTabId;
       setActiveTabId(reloaded.activeTabId);
       activeSourceTabRef.current = reloaded.activeSourceTabId;
@@ -331,7 +395,7 @@ export function useProject({
 
   // Save current active file to disk and trigger compilation
   const saveFile = useCallback(async () => {
-    if (worktreeUpdateBusyRef.current) return;
+    if (workspaceOperationBusy()) return;
     const currentRoot = projectRootRef.current || projectRoot;
     const activeTab = tabsRef.current.find(tab => tab.id === activeTabRef.current);
     const currentActive = activeTab?.kind === 'source' ? activeTab.path : null;
@@ -380,7 +444,7 @@ export function useProject({
 
   // Import files into current project folder
   const importFiles = useCallback(async () => {
-    if (!projectRoot || worktreeUpdateBusyRef.current) return;
+    if (!projectRoot || workspaceOperationBusy()) return;
     try {
       const selected = await open({
         multiple: true,
@@ -399,7 +463,7 @@ export function useProject({
       if (paths.length === 0) return;
 
       for (const src of paths) {
-        if (worktreeUpdateBusyRef.current) return;
+        if (workspaceOperationBusy()) return;
         await invoke('import_file_to_project', {
           srcPath: src,
           destDir: projectRoot,
@@ -415,8 +479,8 @@ export function useProject({
   }, [projectRoot, refreshProjectFiles]);
 
   // Open existing folder as project
-  const openFolder = useCallback(async (forcedPath?: string) => {
-    if (worktreeUpdateBusyRef.current) return false;
+  const openFolder = useCallback(async (forcedPath?: string, rejectDirty = false) => {
+    if (workspaceOperationBusy()) return false;
     let targetPath = forcedPath;
 
     if (!targetPath) {
@@ -436,11 +500,12 @@ export function useProject({
     }
 
     if (tabsRef.current.some(tabIsDirty)) {
+      if (rejectDirty) return false;
       const confirmed = await ask('Discard unsaved changes before opening another project?', { title: 'Unsaved Changes', kind: 'warning', okLabel: 'Discard and Open', cancelLabel: 'Cancel' });
       if (!confirmed) return false;
     }
 
-    if (worktreeUpdateBusyRef.current) return false;
+    if (workspaceOperationBusy()) return false;
 
     clearCompilationAndDiagnostics();
 
@@ -480,6 +545,7 @@ export function useProject({
 
       setProjectRoot(targetPath);
       projectRootRef.current = targetPath;
+      projectGenerationRef.current += 1;
 
       setProjectName(name);
       setEngine(detectedEngine);
@@ -612,10 +678,11 @@ export function useProject({
 
   // Launch instant scratchpad mode
   const quickScratchpad = useCallback((chosenEngine: EngineType) => {
-    if (worktreeUpdateBusyRef.current) return;
+    if (workspaceOperationBusy()) return;
     clearCompilationAndDiagnostics();
     setProjectRoot(null);
     projectRootRef.current = null;
+    projectGenerationRef.current += 1;
     setProjectName('Scratchpad');
     setActiveFilePath(null);
     activeFilePathRef.current = null;
@@ -632,7 +699,7 @@ export function useProject({
 
   // Switch active typesetting engine
   const switchEngine = useCallback((newEngine: EngineType) => {
-    if (worktreeUpdateBusyRef.current) return;
+    if (workspaceOperationBusy()) return;
     if (newEngine === engine) return;
     setEngine(newEngine);
 
@@ -651,13 +718,14 @@ export function useProject({
   }, [engine, projectRoot, sourceCode, resetTabs]);
 
   // Close project and return to Welcome Screen
-  const closeProject = useCallback(async () => {
-    if (worktreeUpdateBusyRef.current) return;
+  const closeProject = useCallback(async (rejectDirty = false) => {
+    if (workspaceOperationBusy()) return;
     if (tabsRef.current.some(tabIsDirty)) {
+      if (rejectDirty) return false;
       const confirmed = await ask('Discard unsaved changes and close this project?', { title: 'Unsaved Changes', kind: 'warning', okLabel: 'Discard and Close', cancelLabel: 'Cancel' });
       if (!confirmed) return;
     }
-    if (worktreeUpdateBusyRef.current) return;
+    if (workspaceOperationBusy()) return;
     setTabs([]);
     activeTabRef.current = null;
     activeSourceTabRef.current = null;
@@ -665,6 +733,7 @@ export function useProject({
     fileRequestRef.current++;
     setProjectRoot(null);
     projectRootRef.current = null;
+    projectGenerationRef.current += 1;
     setProjectName('');
     setActiveFilePath(null);
     activeFilePathRef.current = null;
@@ -673,13 +742,15 @@ export function useProject({
     setProjectFiles([]);
     setGlobalProjectFiles([]);
     setProjectCustomCommands(new Set());
+    projectDiskMacrosRef.current = new Set();
+    projectDiskStyleSourcesRef.current = new Map();
     clearCompilationAndDiagnostics();
     onEnterWelcomeMode?.();
   }, [clearCompilationAndDiagnostics, onEnterWelcomeMode, setTabs]);
 
   // File tree operations
-  const selectFile = useCallback(async (filePath: string, permanent = false) => {
-    if (worktreeUpdateBusyRef.current) return;
+  const selectFile = useCallback(async (filePath: string, permanent = false, sourceOverride?: string) => {
+    if (workspaceOperationBusy()) return;
     const kind = isProjectAsset(filePath) ? 'asset' : 'source';
     const id = `${kind}:${filePath}`;
     if (tabsRef.current.some(tab => tab.id === id)) {
@@ -690,7 +761,7 @@ export function useProject({
     const request = ++fileRequestRef.current;
     const root = projectRootRef.current;
     try {
-      const content = kind === 'source' ? await invoke<string>('read_file_content', { path: filePath }) : '';
+      const content = kind === 'source' ? (sourceOverride ?? await invoke<string>('read_file_content', { path: filePath })) : '';
       if (request !== fileRequestRef.current || root !== projectRootRef.current) return;
       await openPreviewTab({ id, path: filePath, name: filePath.split(/[/\\]/).pop() || filePath, kind, pinned: false, preview: !permanent, content, savedContent: content });
     } catch (e) {
@@ -699,7 +770,7 @@ export function useProject({
   }, [activateTab, openPreviewTab, promoteTab]);
 
   const setMainFile = useCallback(async (filePath: string) => {
-    if (!projectRoot || worktreeUpdateBusyRef.current) return;
+    if (!projectRoot || workspaceOperationBusy()) return;
     const relName = filePath.replace(`${projectRoot}/`, '');
     setMainFilePath(relName);
     mainFilePathRef.current = relName;
@@ -713,7 +784,7 @@ export function useProject({
         updatedAt: new Date().toISOString(),
       };
       const rawConfig = JSON.stringify(configJson, null, 2);
-      if (worktreeUpdateBusyRef.current) return;
+      if (workspaceOperationBusy()) return;
       await invoke('write_file_content', {
         path: configPath,
         content: rawConfig,
@@ -726,10 +797,10 @@ export function useProject({
   }, [projectRoot, projectName, engine]);
 
   const createFile = useCallback(async (parentDir: string, name: string) => {
-    if (worktreeUpdateBusyRef.current) return;
+    if (workspaceOperationBusy()) return;
     try {
       const fullPath = `${parentDir}/${name}`;
-      if (worktreeUpdateBusyRef.current) return;
+      if (workspaceOperationBusy()) return;
       await invoke('write_file_content', { path: fullPath, content: '' });
       if (projectRoot) await refreshProjectFiles(projectRoot);
       selectFile(fullPath);
@@ -741,10 +812,10 @@ export function useProject({
   }, [projectRoot, refreshProjectFiles, selectFile]);
 
   const createFolder = useCallback(async (parentDir: string, name: string) => {
-    if (worktreeUpdateBusyRef.current) return;
+    if (workspaceOperationBusy()) return;
     try {
       const fullPath = `${parentDir}/${name}`;
-      if (worktreeUpdateBusyRef.current) return;
+      if (workspaceOperationBusy()) return;
       await invoke('write_file_content', { path: `${fullPath}/.gitkeep`, content: '' });
       if (projectRoot) await refreshProjectFiles(projectRoot);
       toast.success(`Created folder ${name}`);
@@ -755,9 +826,49 @@ export function useProject({
   }, [projectRoot, refreshProjectFiles]);
 
   const deleteFile = useCallback(async (_path: string) => {
-    if (worktreeUpdateBusyRef.current) return;
+    if (workspaceOperationBusy()) return;
     toast.info('File deletion: please remove file via system file explorer for safety.');
   }, []);
+
+  const saveDocument = useCallback(async (documentId: string, expectedRevision: number, expectedGeneration: number, allowedRoots: string[]) => {
+    if (workspaceOperationBusy()) return { ok: false as const, code: 'git.locked', message: 'A Git worktree update is in progress.' };
+    const tab = tabsRef.current.find(item => item.id === documentId && item.kind === 'source');
+    const root = projectRootRef.current;
+    if (!tab || !tab.path || !root) return { ok: false as const, code: 'document.unavailable', message: 'The selected document cannot be saved to disk.' };
+    const content = tab.content;
+    const revision = documentRevisionsRef.current.get(documentId) ?? 0;
+    const generation = projectGenerationRef.current;
+    if (revision !== expectedRevision || generation !== expectedGeneration) {
+      return { ok: false as const, code: 'conflict.revision', message: 'The document or project changed before the save began.' };
+    }
+    try {
+      const rootPath = root.replace(/\\/g, '/').replace(/\/$/, '');
+      const filePath = tab.path.replace(/\\/g, '/');
+      const relativeFile = filePath.startsWith(`${rootPath}/`) ? filePath.slice(rootPath.length + 1) : filePath;
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(tab.savedContent));
+      const expectedSha256 = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+      if (root !== projectRootRef.current || projectGenerationRef.current !== generation || documentRevisionsRef.current.get(documentId) !== revision
+        || !tabsRef.current.some(item => item.id === documentId)) {
+        return { ok: false as const, code: 'conflict.revision', message: 'The document changed while the save was being prepared.' };
+      }
+      await invoke('workspace_apply_disk', { projectRoot: root, file: relativeFile, content, expectedSha256, allowedRoots });
+    } catch (error) {
+      const message = String(error);
+      const code = message.match(/^([a-z][a-z0-9_.-]+):/)?.[1] ?? 'io.write';
+      return { ok: false as const, code, message };
+    }
+    if (root !== projectRootRef.current || projectGenerationRef.current !== generation
+      || documentRevisionsRef.current.get(documentId) !== revision || !tabsRef.current.some(item => item.id === documentId)) {
+      return { ok: false as const, code: 'conflict.project', message: 'The project changed while the document was being saved.' };
+    }
+    setTabs(tabsRef.current.map(item => item.id === documentId ? { ...item, savedContent: content } : item));
+    if (/\.(cls|sty)$/i.test(tab.path)) {
+      projectDiskStyleSourcesRef.current.set(tab.path, content);
+      projectDiskMacrosRef.current = collectProjectMacros(projectDiskStyleSourcesRef.current, []);
+      setProjectCustomCommands(collectProjectMacros(projectDiskStyleSourcesRef.current, tabsRef.current));
+    }
+    return { ok: true as const, documentId, path: tab.path, revision, saved: true };
+  }, [setTabs]);
 
   return {
     tabs,
@@ -775,8 +886,11 @@ export function useProject({
     engine,
     sourceCode,
     setSourceCode,
+    getProjectGeneration: () => projectGenerationRef.current,
     setEngine,
     saveFile,
+    saveDocument,
+    getDocumentRevision: (id: string) => documentRevisionsRef.current.get(id) ?? 0,
     importFiles,
     openFolder,
     createProject,
@@ -793,5 +907,9 @@ export function useProject({
     refreshAfterGitUpdate,
     setWorktreeUpdateBusy,
     worktreeUpdateBusy,
+    workspaceExportBusy,
+    getWorkspaceExportLeaseId: () => workspaceExportLeaseRef.current?.id ?? null,
+    acquireWorkspaceExportLease,
+    releaseWorkspaceExportLease,
   };
 }

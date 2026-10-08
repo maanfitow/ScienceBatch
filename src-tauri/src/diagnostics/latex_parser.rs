@@ -1,6 +1,6 @@
-use std::path::Path;
-use crate::types::DiagnosticItem;
 use super::suggestions::get_smart_suggestion;
+use crate::types::DiagnosticItem;
+use std::path::Path;
 
 pub fn prepare_latex_source(source: &str) -> (String, usize, usize) {
     let mut modified = source.to_string();
@@ -8,12 +8,16 @@ pub fn prepare_latex_source(source: &str) -> (String, usize, usize) {
     let mut inserted_lines = 0;
 
     // 0. Neutralize XeTeXtracingfonts to prevent Tectonic C-library SIGSEGV when fonts are missing from OS fontconfig
-    let tracing_guard = "\\newcount\\sciencebatchtracingfonts\\let\\XeTeXtracingfonts\\sciencebatchtracingfonts\n";
+    let tracing_guard =
+        "\\newcount\\sciencebatchtracingfonts\\let\\XeTeXtracingfonts\\sciencebatchtracingfonts\n";
     prepended_lines += tracing_guard.lines().count();
     modified = format!("{tracing_guard}{modified}");
 
     // 1. Resolve xcolor option clash (e.g. tikz loaded before \usepackage[options]{xcolor})
-    if modified.contains("\\usepackage[") && modified.contains("{xcolor}") && !modified.contains("\\PassOptionsToPackage") {
+    if modified.contains("\\usepackage[")
+        && modified.contains("{xcolor}")
+        && !modified.contains("\\PassOptionsToPackage")
+    {
         if let Some(xcolor_idx) = modified.find("{xcolor}") {
             let sub = &modified[..xcolor_idx];
             if let Some(bracket_start) = sub.rfind("\\usepackage[") {
@@ -106,9 +110,8 @@ pub fn is_valid_tex_file_candidate(cand: &str, project_dir: Option<&str>) -> boo
     }
     let lower = clean.to_lowercase();
     let extensions = [
-        ".tex", ".sty", ".cls", ".bib", ".bbl", ".aux", ".def",
-        ".ldf", ".fd", ".cfg", ".dtx", ".ins", ".toc", ".lof", ".lot",
-        ".out", ".png", ".jpg", ".jpeg", ".pdf", ".eps",
+        ".tex", ".sty", ".cls", ".bib", ".bbl", ".aux", ".def", ".ldf", ".fd", ".cfg", ".dtx",
+        ".ins", ".toc", ".lof", ".lot", ".out", ".png", ".jpg", ".jpeg", ".pdf", ".eps",
     ];
     if extensions.iter().any(|ext| lower.ends_with(ext)) {
         return true;
@@ -153,9 +156,29 @@ pub fn parse_latex_log(
     project_dir: Option<&str>,
     main_file: Option<&str>,
 ) -> (Vec<DiagnosticItem>, Vec<DiagnosticItem>) {
+    parse_latex_log_with_snapshot(
+        raw_log,
+        total_injected,
+        root_file,
+        project_dir,
+        main_file,
+        None,
+    )
+}
+
+/// Parse a compiler log using the set of files captured in an in-memory project.
+/// This variant resolves extensionless TeX input names without consulting disk.
+pub fn parse_latex_log_with_snapshot(
+    raw_log: &str,
+    total_injected: usize,
+    root_file: &str,
+    project_dir: Option<&str>,
+    main_file: Option<&str>,
+    snapshot_files: Option<&std::collections::BTreeSet<String>>,
+) -> (Vec<DiagnosticItem>, Vec<DiagnosticItem>) {
     let mut errors = Vec::new();
     let mut warnings = Vec::new();
-    let mut file_stack: Vec<(usize, String)> = Vec::new();
+    let mut file_stack: Vec<(usize, Option<String>)> = Vec::new();
     let mut paren_depth: usize = 0;
 
     let log_lines: Vec<&str> = raw_log.lines().collect();
@@ -180,26 +203,37 @@ pub fn parse_latex_log(
                 }
             }
 
-            let current_file = file_stack.last().map(|(_, f)| f.clone()).unwrap_or_else(|| root_file.to_string());
+            let current_file = file_stack.last().and_then(|(_, file)| file.clone());
+
+            if snapshot_files.is_some() && current_file.is_none() {
+                detected_line = None;
+            }
 
             // If the error indicates a missing package (.sty) or document class (.cls),
             // the 'l.<line>' printed in the log comes from an internal \usepackage or style file,
             // not the user's main source code. Do not assign it to the main file line.
-            if msg.contains("File") && msg.contains("not found") && (msg.contains(".sty") || msg.contains(".cls")) {
+            if msg.contains("File")
+                && msg.contains("not found")
+                && (msg.contains(".sty") || msg.contains(".cls"))
+            {
                 detected_line = None;
-            } else if current_file == root_file {
+            } else if snapshot_files.is_none()
+                && current_file.as_deref().unwrap_or(root_file) == root_file
+            {
                 if let Some(ref mut l) = detected_line {
                     if *l > total_injected {
                         *l -= total_injected;
                     }
                 }
+            } else if snapshot_files.is_some() && current_file.as_deref() == Some(root_file) {
+                clear_injected_main_location(&mut detected_line, total_injected);
             }
 
             errors.push(DiagnosticItem {
                 severity: "error".into(),
                 message: msg,
                 line: detected_line,
-                file: Some(current_file),
+                file: current_file,
                 suggestion,
             });
         } else if trimmed.starts_with("LaTeX Warning:")
@@ -219,21 +253,28 @@ pub fn parse_latex_log(
                 detected_line = num_str.parse().ok();
             }
 
-            let current_file = file_stack.last().map(|(_, f)| f.clone()).unwrap_or_else(|| root_file.to_string());
+            let current_file = file_stack.last().and_then(|(_, file)| file.clone());
 
-            if current_file == root_file {
+            if snapshot_files.is_some() && current_file.is_none() {
+                detected_line = None;
+            }
+
+            if snapshot_files.is_none() && current_file.as_deref().unwrap_or(root_file) == root_file
+            {
                 if let Some(ref mut l) = detected_line {
                     if *l > total_injected {
                         *l -= total_injected;
                     }
                 }
+            } else if snapshot_files.is_some() && current_file.as_deref() == Some(root_file) {
+                clear_injected_main_location(&mut detected_line, total_injected);
             }
 
             warnings.push(DiagnosticItem {
                 severity: "warning".into(),
                 message: msg,
                 line: detected_line,
-                file: Some(current_file),
+                file: current_file,
                 suggestion,
             });
         }
@@ -245,9 +286,21 @@ pub fn parse_latex_log(
                 paren_depth += 1;
                 let remainder = &line[idx + 1..];
                 if let Some(cand) = extract_candidate_filename(remainder) {
-                    if is_valid_tex_file_candidate(&cand, project_dir) {
-                        let normalized = normalize_tex_file_name(&cand, main_file, project_dir);
-                        file_stack.push((paren_depth, normalized));
+                    let normalized = if let Some(files) = snapshot_files {
+                        resolve_snapshot_tex_name(&cand, files)
+                    } else if is_valid_tex_file_candidate(&cand, project_dir) {
+                        Some(normalize_tex_file_name(&cand, main_file, project_dir))
+                    } else {
+                        None
+                    };
+                    if snapshot_files.is_some() {
+                        if normalized.is_some() || looks_like_engine_file(&cand) {
+                            // Preserve unknown package/class frames too. Their diagnostics must
+                            // not be attributed to the last project source file on the stack.
+                            file_stack.push((paren_depth, normalized));
+                        }
+                    } else if let Some(normalized) = normalized {
+                        file_stack.push((paren_depth, Some(normalized)));
                     }
                 }
             } else if ch == ')' {
@@ -262,4 +315,103 @@ pub fn parse_latex_log(
     }
 
     (errors, warnings)
+}
+
+fn clear_injected_main_location(line: &mut Option<usize>, injected: usize) {
+    // The compiler preparation may insert lines at the start and after the document class.
+    // A total count cannot map a compiler line back across both insertion points exactly.
+    if injected > 0 {
+        *line = None;
+    }
+}
+
+fn looks_like_engine_file(candidate: &str) -> bool {
+    let clean = candidate.trim_matches('"').trim_start_matches("./");
+    let lower = clean.to_ascii_lowercase();
+    [
+        ".tex", ".sty", ".cls", ".bib", ".bbl", ".aux", ".def", ".ldf", ".fd", ".cfg", ".dtx",
+        ".ins", ".toc", ".lof", ".lot", ".out", ".pdf", ".png", ".jpg", ".jpeg", ".eps",
+    ]
+    .iter()
+    .any(|extension| lower.ends_with(extension))
+}
+
+fn resolve_snapshot_tex_name(
+    candidate: &str,
+    files: &std::collections::BTreeSet<String>,
+) -> Option<String> {
+    let clean = candidate
+        .trim_matches('"')
+        .trim_start_matches("./")
+        .replace('\\', "/");
+    if files.contains(&clean) {
+        return Some(clean);
+    }
+    if Path::new(&clean).extension().is_some() {
+        return None;
+    }
+    [
+        ".tex", ".sty", ".cls", ".bib", ".bbl", ".def", ".ldf", ".fd", ".cfg", ".pdf", ".png",
+        ".jpg", ".jpeg", ".eps",
+    ]
+    .iter()
+    .map(|extension| format!("{clean}{extension}"))
+    .find(|path| files.contains(path))
+}
+
+#[cfg(test)]
+mod snapshot_location_tests {
+    use super::*;
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn maps_extensionless_nested_inputs_to_snapshot_files_without_disk_reads() {
+        let files = BTreeSet::from(["paper.tex".to_owned(), "sections/body.tex".to_owned()]);
+        let log = "(paper.tex\n(sections/body\n! Undefined control sequence.\nl.2 \\UnknownCommand\n)\n)\n";
+        let (errors, _) = parse_latex_log_with_snapshot(
+            log,
+            0,
+            "paper.tex",
+            None,
+            Some("paper.tex"),
+            Some(&files),
+        );
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].file.as_deref(), Some("sections/body.tex"));
+        assert_eq!(errors[0].line, Some(2));
+    }
+
+    #[test]
+    fn unknown_package_frames_and_unframed_errors_have_unknown_locations() {
+        let files = BTreeSet::from(["paper.tex".to_owned()]);
+        let log = "(paper.tex\n(foo.sty\n! Package failure.\nl.250 \\bad\n)\n)\n! Unframed failure.\nl.12 \\bad\n";
+        let (errors, _) = parse_latex_log_with_snapshot(
+            log,
+            0,
+            "paper.tex",
+            None,
+            Some("paper.tex"),
+            Some(&files),
+        );
+        assert_eq!(errors.len(), 2);
+        assert_eq!(errors[0].file, None);
+        assert_eq!(errors[0].line, None);
+        assert_eq!(errors[1].file, None);
+        assert_eq!(errors[1].line, None);
+    }
+
+    #[test]
+    fn injected_main_file_lines_are_not_reported_when_unprovable() {
+        let files = BTreeSet::from(["paper.tex".to_owned()]);
+        let (errors, _) = parse_latex_log_with_snapshot(
+            "(paper.tex\n! Failure.\nl.2 \\\\bad\n)\n",
+            2,
+            "paper.tex",
+            None,
+            Some("paper.tex"),
+            Some(&files),
+        );
+        assert_eq!(errors[0].file.as_deref(), Some("paper.tex"));
+        assert_eq!(errors[0].line, None);
+    }
 }

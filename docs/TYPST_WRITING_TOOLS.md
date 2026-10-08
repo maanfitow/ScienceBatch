@@ -1,6 +1,6 @@
 # Typst Writing Tools — SPEC-WRITE-004
 
-**Status:** Deliveries T1 (Symbols) and T2 (tables, matrices, and compatible editing) are implemented on `feat/writing-ribbon`. See the [T1 verification record](TYPST_SYMBOLS_QA.md) and [T2 verification record](TYPST_STRUCTURES_QA.md); native release checks remain open.
+**Status:** Deliveries T1 (Symbols) and T2 (tables, matrices, and compatible editing) are integrated into `develop` through PR #2 (`e052afc826b3f9d7c92f272e612b248e8512c46e`). See the [T1 verification record](TYPST_SYMBOLS_QA.md) and [T2 verification record](TYPST_STRUCTURES_QA.md); native release checks remain open. Merge provenance does not upgrade QA evidence.
 
 ## Purpose and delivery order
 
@@ -104,7 +104,7 @@ Keep `writingBridge.ts` language-neutral. Introduce a small typed adapter contra
 
 Place Typst catalog, scanner, generators, and parser in dedicated frontend modules. Reuse dialog/grid/themed-select components where practical, without a general ribbon rewrite. Update Typst completion and language registrations for emitted identifiers. Typst has no equivalent of the current LaTeX linter; do not add entries to the LaTeX registry or imply one already exists.
 
-Assign T1 and T2 separately to `sciencebatch_implementer`, with explicit files and acceptance criteria. The coordinator owns this specification, adapter decisions, diff review, and final verification. Preserve the existing branch and uncommitted LaTeX work. No commit, push, publish, or merge is assigned by this specification.
+The original T1/T2 implementation assignment used separate scopes and explicit acceptance criteria; that branch-preservation instruction is historical and both deliveries are integrated in `develop`. No further implementation is authorized by this historical assignment note.
 
 Required checks per delivery:
 
