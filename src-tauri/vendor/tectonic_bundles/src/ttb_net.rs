@@ -143,6 +143,10 @@ impl CachableBundle<'_, TTBFileIndex> for TTBNetBundle<TTBFileIndex> {
         &mut self.index
     }
 
+    fn all_infos(&mut self) -> Vec<TTBFileInfo> {
+        self.index.iter().cloned().collect()
+    }
+
     fn search(&mut self, name: &str) -> Option<TTBFileInfo> {
         self.index.search(name)
     }

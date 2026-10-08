@@ -68,6 +68,10 @@ impl FileInfo for TTBFileInfo {
     fn path(&self) -> &str {
         &self.path
     }
+
+    fn length(&self) -> Option<u64> {
+        Some(self.real_len as u64)
+    }
 }
 
 #[derive(Default, Debug)]

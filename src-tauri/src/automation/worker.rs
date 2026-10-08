@@ -14,6 +14,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::process::{Child, Command};
+use tokio::sync::OwnedSemaphorePermit;
 
 #[derive(Serialize)]
 #[serde(deny_unknown_fields)]
@@ -58,6 +59,7 @@ pub async fn run_worker(
     snapshot: &ProjectSnapshot,
     timeout: Duration,
     cancellation: Arc<AtomicBool>,
+    permit: OwnedSemaphorePermit,
 ) -> Result<CompileResponse, AutomationError> {
     let request = build_request(snapshot)?;
     let bytes = serde_json::to_vec(&request).map_err(|e| {
@@ -73,6 +75,16 @@ pub async fn run_worker(
         "Encoded worker message exceeds 256 MiB.",
     )?;
     let executable = super::worker_executable()?;
+    run_worker_request(executable, bytes, timeout, cancellation, permit).await
+}
+
+async fn run_worker_request(
+    executable: std::path::PathBuf,
+    bytes: Vec<u8>,
+    timeout: Duration,
+    cancellation: Arc<AtomicBool>,
+    permit: OwnedSemaphorePermit,
+) -> Result<CompileResponse, AutomationError> {
     let (cancel_sender, cancel_receiver) = tokio::sync::oneshot::channel();
     let mut guard = DropCancel(Some(cancel_sender));
     let task = tokio::spawn(run_worker_process(
@@ -81,6 +93,7 @@ pub async fn run_worker(
         timeout,
         cancellation,
         cancel_receiver,
+        permit,
     ));
     let result = task.await.map_err(|e| {
         AutomationError::new(
@@ -108,6 +121,7 @@ async fn run_worker_process(
     timeout: Duration,
     cancellation: Arc<AtomicBool>,
     drop_cancel: tokio::sync::oneshot::Receiver<()>,
+    permit: OwnedSemaphorePermit,
 ) -> Result<CompileResponse, AutomationError> {
     run_worker_process_with_limits(
         executable,
@@ -115,6 +129,7 @@ async fn run_worker_process(
         timeout,
         cancellation,
         drop_cancel,
+        Some(permit),
         MAX_PROTOCOL_BYTES,
         MAX_LOG_BYTES,
     )
@@ -127,6 +142,7 @@ async fn run_worker_process_with_limits(
     timeout: Duration,
     cancellation: Arc<AtomicBool>,
     drop_cancel: tokio::sync::oneshot::Receiver<()>,
+    permit: Option<OwnedSemaphorePermit>,
     output_limit: usize,
     log_limit: usize,
 ) -> Result<CompileResponse, AutomationError> {
@@ -174,9 +190,11 @@ async fn run_worker_process_with_limits(
         .min(Duration::from_secs(900));
     let started = tokio::time::Instant::now();
     tokio::pin!(drop_cancel);
+    let mut permit = permit;
     let status = loop {
         if cancellation.load(Ordering::Relaxed) {
             stop_and_reap(&mut child).await;
+            drop(permit.take());
             let _ = writer.await;
             let _ = out_reader.await;
             let _ = err_reader.await;
@@ -189,6 +207,7 @@ async fn run_worker_process_with_limits(
         let remaining = deadline.saturating_sub(started.elapsed());
         if remaining.is_zero() {
             stop_and_reap(&mut child).await;
+            drop(permit.take());
             let _ = writer.await;
             let _ = out_reader.await;
             let _ = err_reader.await;
@@ -199,10 +218,46 @@ async fn run_worker_process_with_limits(
             ));
         }
         tokio::select! {
-            status=child.wait()=>break status.map_err(|e|AutomationError::new("worker.crashed",format!("Cannot wait for compiler worker: {e}"),4))?,
-            Some(())=overflow_receiver.recv()=>{stop_and_reap(&mut child).await;let _=writer.await;let _=out_reader.await;let _=err_reader.await;return Err(AutomationError::new("resource.limit_exceeded","Compiler worker output exceeded its protocol or log limit; the worker was reaped.",3));},
-            _=&mut drop_cancel=>{stop_and_reap(&mut child).await;let _=writer.await;let _=out_reader.await;let _=err_reader.await;return Err(AutomationError::new("operation.interrupted","Compilation request was dropped and its worker was reaped.",130));},
-            _=tokio::time::sleep(Duration::from_millis(30))=>{}
+            status = child.wait() => match status {
+                Ok(status) => {
+                    drop(permit.take());
+                    break status;
+                }
+                Err(error) => {
+                    stop_and_reap(&mut child).await;
+                    drop(permit.take());
+                    return Err(AutomationError::new(
+                        "worker.crashed",
+                        format!("Cannot wait for compiler worker: {error}"),
+                        4,
+                    ));
+                }
+            },
+            Some(()) = overflow_receiver.recv() => {
+                stop_and_reap(&mut child).await;
+                drop(permit.take());
+                let _ = writer.await;
+                let _ = out_reader.await;
+                let _ = err_reader.await;
+                return Err(AutomationError::new(
+                    "resource.limit_exceeded",
+                    "Compiler worker output exceeded its protocol or log limit; the worker was reaped.",
+                    3,
+                ));
+            }
+            _ = &mut drop_cancel => {
+                stop_and_reap(&mut child).await;
+                drop(permit.take());
+                let _ = writer.await;
+                let _ = out_reader.await;
+                let _ = err_reader.await;
+                return Err(AutomationError::new(
+                    "operation.interrupted",
+                    "Compilation request was dropped and its worker was reaped.",
+                    130,
+                ));
+            }
+            _ = tokio::time::sleep(Duration::from_millis(30)) => {}
         }
     };
     let write_result = writer.await.map_err(|e| {
@@ -802,11 +857,69 @@ mod supervisor_tests {
             Duration::from_secs(2),
             Arc::new(AtomicBool::new(false)),
             receiver,
+            None,
             4096,
             4096,
         )
         .await;
         result
+    }
+
+    #[cfg(target_os = "linux")]
+    #[tokio::test(flavor = "current_thread")]
+    async fn dropped_compile_request_keeps_its_permit_until_worker_is_reaped() {
+        let fixture = script("exec sleep 30");
+        let pid_file = fixture.directory.join("worker.pid");
+        std::fs::write(
+            &fixture.path,
+            format!(
+                "#!/bin/sh\nprintf '%s' \"$$\" > '{}'\nexec sleep 30\n",
+                pid_file.display()
+            ),
+        )
+        .unwrap();
+        let semaphore = Arc::new(tokio::sync::Semaphore::new(1));
+        let permit = semaphore.clone().try_acquire_owned().unwrap();
+
+        let request = tokio::spawn(run_worker_request(
+            fixture.path.clone(),
+            b"{}".to_vec(),
+            Duration::from_secs(60),
+            Arc::new(AtomicBool::new(false)),
+            permit,
+        ));
+        let worker_pid = tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if let Ok(pid) = std::fs::read_to_string(&pid_file) {
+                    if let Ok(pid) = pid.trim().parse::<u32>() {
+                        break pid;
+                    }
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("worker should start and publish its PID");
+        assert!(semaphore.clone().try_acquire_owned().is_err());
+
+        request.abort();
+        request.await.expect_err("the MCP request future was dropped");
+        assert!(
+            semaphore.clone().try_acquire_owned().is_err(),
+            "the detached supervisor must keep the permit while the child is still running"
+        );
+
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while std::path::Path::new(&format!("/proc/{worker_pid}")).exists() {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("cancelled worker should be reaped");
+        assert!(
+            semaphore.clone().try_acquire_owned().is_ok(),
+            "the permit should be released as soon as the worker is reaped"
+        );
     }
 
     #[tokio::test]
@@ -836,6 +949,7 @@ mod supervisor_tests {
             timeout,
             cancellation,
             receiver,
+            None,
             output_limit,
             log_limit,
         )
@@ -904,6 +1018,7 @@ mod supervisor_tests {
             Duration::from_secs(5),
             cancellation.clone(),
             receiver,
+            None,
             1024,
             1024,
         ));

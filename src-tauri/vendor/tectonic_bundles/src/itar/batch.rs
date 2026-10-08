@@ -4,7 +4,9 @@
 //! Concurrent byte-range reads for indexed-tar bundles.
 
 use super::{read_file_with_retries, ItarBundle, ItarFileInfo};
+use crate::{cache::consume_download_bytes, ByteRange};
 use std::{
+    io::Read,
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering},
         Mutex,
@@ -12,9 +14,9 @@ use std::{
     thread,
 };
 use tectonic_errors::prelude::*;
-use tectonic_geturl::{DefaultBackend, GetUrlBackend};
+use tectonic_geturl::{DefaultBackend, GetUrlBackend, RangeReader};
 use tectonic_io_base::OpenResult;
-use tectonic_status_base::{tt_note, NoopStatusBackend, StatusBackend};
+use tectonic_status_base::{tt_note, tt_warning, NoopStatusBackend, StatusBackend};
 
 const DEFAULT_PREFETCH_CONCURRENCY: usize = 16;
 const MAX_PREFETCH_CONCURRENCY: usize = 64;
@@ -132,6 +134,119 @@ pub(super) fn open(
         .into_iter()
         .map(|slot| slot.into_inner().unwrap_or(OpenResult::NotAvailable))
         .collect()
+}
+
+const PREPARE_RANGE_CONCURRENCY: usize = 4;
+const PREPARE_RETRY_ATTEMPTS: usize = 3;
+const PREPARE_RETRY_SLEEP_MS: u64 = 500;
+
+/// Fetch a small wave of coalesced ranges. Each worker owns its HTTP client,
+/// and the caller limits each wave to four ranges of at most 32 MiB.
+pub(super) fn open_ranges(
+    url: &str,
+    ranges: &[ByteRange],
+    status: &mut dyn StatusBackend,
+) -> Vec<OpenResult<Vec<u8>>> {
+    if ranges.is_empty() {
+        return Vec::new();
+    }
+
+    let concurrency = PREPARE_RANGE_CONCURRENCY.min(ranges.len());
+    tt_note!(status, "fetching {} coalesced bundle ranges", ranges.len());
+    let next = AtomicUsize::new(0);
+    let results: Vec<Mutex<OpenResult<Vec<u8>>>> = (0..ranges.len())
+        .map(|_| Mutex::new(OpenResult::NotAvailable))
+        .collect();
+
+    thread::scope(|scope| {
+        let mut workers = Vec::with_capacity(concurrency);
+        for _ in 0..concurrency {
+            let worker = thread::Builder::new().spawn_scoped(scope, || {
+                let mut reader = DefaultBackend::default().open_range_reader(url);
+                let mut status = NoopStatusBackend {};
+                loop {
+                    let index = next.fetch_add(1, Ordering::Relaxed);
+                    if index >= ranges.len() {
+                        break;
+                    }
+                    let result = read_range_with_retries(&mut reader, &ranges[index], &mut status);
+                    if let Ok(mut slot) = results[index].lock() {
+                        *slot = result;
+                    }
+                }
+            });
+            match worker {
+                Ok(worker) => workers.push(worker),
+                Err(_) => break,
+            }
+        }
+        for worker in workers {
+            let _ = worker.join();
+        }
+    });
+
+    results
+        .into_iter()
+        .map(|slot| slot.into_inner().unwrap_or(OpenResult::NotAvailable))
+        .collect()
+}
+
+fn read_range_with_retries(
+    reader: &mut tectonic_geturl::DefaultRangeReader,
+    range: &ByteRange,
+    status: &mut dyn StatusBackend,
+) -> OpenResult<Vec<u8>> {
+    if range.length == 0 {
+        return OpenResult::Ok(Vec::new());
+    }
+
+    if range.length.checked_add(1).is_none() {
+        return OpenResult::Err(anyhow!("bundle range length overflow"));
+    }
+    for attempt in 0..PREPARE_RETRY_ATTEMPTS {
+        if let Err(error) = consume_download_bytes(range.length as u64) {
+            return OpenResult::Err(error.into());
+        }
+        let mut stream = match reader.read_range(range.offset, range.length) {
+            Ok(stream) => stream,
+            Err(error) => {
+                tt_warning!(status,
+                    "failure fetching bundle range ({}/{PREPARE_RETRY_ATTEMPTS})",
+                    attempt + 1; error
+                );
+                thread::sleep(std::time::Duration::from_millis(PREPARE_RETRY_SLEEP_MS));
+                continue;
+            }
+        };
+        let mut bytes = vec![0; range.length];
+        if let Err(error) = stream.read_exact(&mut bytes) {
+            tt_warning!(status,
+                "short bundle range response ({}/{PREPARE_RETRY_ATTEMPTS})",
+                attempt + 1; error.into()
+            );
+            thread::sleep(std::time::Duration::from_millis(PREPARE_RETRY_SLEEP_MS));
+            continue;
+        }
+        let mut extra = [0u8; 1];
+        match stream.read(&mut extra) {
+            Ok(0) => return OpenResult::Ok(bytes),
+            Ok(_) => {
+                if let Err(error) = consume_download_bytes(1) {
+                    return OpenResult::Err(error.into());
+                }
+                return OpenResult::Err(anyhow!("bundle range response was oversized"));
+            }
+            Err(error) => {
+                tt_warning!(status,
+                    "failure checking bundle range length ({}/{PREPARE_RETRY_ATTEMPTS})",
+                    attempt + 1; error.into()
+                );
+            }
+        }
+        thread::sleep(std::time::Duration::from_millis(PREPARE_RETRY_SLEEP_MS));
+    }
+
+    OpenResult::Err(anyhow!("failed to fetch an exact bundle byte range"))
 }
 
 #[cfg(test)]
