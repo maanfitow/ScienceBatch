@@ -136,7 +136,6 @@ pub(super) fn open(
         .collect()
 }
 
-const PREPARE_RANGE_CONCURRENCY: usize = 4;
 const PREPARE_RETRY_ATTEMPTS: usize = 3;
 const PREPARE_RETRY_SLEEP_MS: u64 = 500;
 
@@ -151,7 +150,7 @@ pub(super) fn open_ranges(
         return Vec::new();
     }
 
-    let concurrency = PREPARE_RANGE_CONCURRENCY.min(ranges.len());
+    let concurrency = super::MAX_PREPARE_CONCURRENT_RANGES.min(ranges.len());
     tt_note!(status, "fetching {} coalesced bundle ranges", ranges.len());
     let next = AtomicUsize::new(0);
     let results: Vec<Mutex<OpenResult<Vec<u8>>>> = (0..ranges.len())

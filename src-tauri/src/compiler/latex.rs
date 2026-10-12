@@ -3,12 +3,16 @@ use tectonic::driver::ProcessingSessionBuilder;
 use tectonic::status::NoopStatusBackend;
 use tectonic_bundles::Bundle;
 
-use crate::types::{CompileResponse, DiagnosticItem};
-use crate::diagnostics::latex_parser::{parse_latex_log, prepare_latex_source};
 use super::embedded::EmbeddedPackageBundle;
+use crate::diagnostics::latex_parser::{parse_latex_log, prepare_latex_source};
+use crate::types::{CompileResponse, DiagnosticItem};
 
 /// Executes in-memory compilation using Tectonic's ProcessingSessionBuilder for LaTeX.
-pub fn compile_latex_to_pdf(latex: &str, project_dir: Option<&str>, main_file: Option<&str>) -> CompileResponse {
+pub fn compile_latex_to_pdf(
+    latex: &str,
+    project_dir: Option<&str>,
+    main_file: Option<&str>,
+) -> CompileResponse {
     let (processed_latex, prepended_lines, inserted_lines) = prepare_latex_source(latex);
     let total_injected = prepended_lines + inserted_lines;
     let mut status = NoopStatusBackend::default();
@@ -32,7 +36,7 @@ pub fn compile_latex_to_pdf(latex: &str, project_dir: Option<&str>, main_file: O
         }
     };
 
-    let bundle: Box<dyn Bundle> = match config.default_bundle(false) {
+    let bundle: Box<dyn Bundle> = match config.default_bundle(true) {
         Ok(b) => Box::new(EmbeddedPackageBundle { inner: b }),
         Err(e) => {
             return CompileResponse {
@@ -118,7 +122,8 @@ pub fn compile_latex_to_pdf(latex: &str, project_dir: Option<&str>, main_file: O
     };
 
     let root_file = main_file.unwrap_or("main.tex");
-    let (mut errors, warnings) = parse_latex_log(&raw_log, total_injected, root_file, project_dir, main_file);
+    let (mut errors, warnings) =
+        parse_latex_log(&raw_log, total_injected, root_file, project_dir, main_file);
 
     if result.is_ok() {
         if let Some(pdf) = files.remove("texput.pdf") {

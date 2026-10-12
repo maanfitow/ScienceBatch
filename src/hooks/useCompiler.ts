@@ -88,7 +88,7 @@ export function useCompiler() {
   const compileWorkspace = useCallback(async (
     request: WorkspaceCompileRequest,
     isCurrent: () => boolean,
-  ): Promise<{ success: boolean; errors: DiagnosticItem[]; warnings: DiagnosticItem[]; pdfBytes: number[]; error?: { code: string; message: string } } | null> => {
+  ): Promise<{ success: boolean; errors: DiagnosticItem[]; warnings: DiagnosticItem[]; pdfBytes: number[]; error?: { code: string; message: string; details?: unknown; diagnostics?: unknown[] } } | null> => {
     if (activeCompilationKindRef.current === 'workspace') {
       return {
         success: false,
@@ -135,15 +135,39 @@ export function useCompiler() {
       if (currentReqId !== compilationIdRef.current) return null;
       if (!isCurrent()) { toast.dismiss(toastId); return null; }
       const wasExplicitlyCancelled = explicitlyCancelledWorkspaceJobsRef.current.has(request.jobId);
-      const rawMessage = typeof err === 'string' ? err : err instanceof Error ? err.message : 'Unknown compilation error';
+      const outer = err && typeof err === 'object' ? err as Record<string, unknown> : null;
+      const nested = outer?.error && typeof outer.error === 'object' ? outer.error as Record<string, unknown> : outer;
+      const rawMessage = typeof nested?.message === 'string'
+        ? nested.message
+        : typeof err === 'string' ? err : err instanceof Error ? err.message : 'Unknown compilation error';
       const message = wasExplicitlyCancelled && !rawMessage.includes(':') ? 'operation.interrupted: Workspace compilation was cancelled.' : rawMessage;
-      const code = message.match(/^([a-z][a-z0-9_.-]+):/)?.[1];
+      const code = typeof nested?.code === 'string' ? nested.code : message.match(/^([a-z][a-z0-9_.-]+):/)?.[1];
+      const details = nested?.details ?? outer?.details;
+      const diagnostics = Array.isArray(nested?.diagnostics) ? nested.diagnostics : Array.isArray(outer?.diagnostics) ? outer.diagnostics : undefined;
+      const structuredDiagnostics: DiagnosticItem[] = diagnostics?.flatMap(item => {
+        if (!item || typeof item !== 'object') return [];
+        const value = item as Record<string, unknown>;
+        if (typeof value.message !== 'string') return [];
+        return [{
+          severity: typeof value.severity === 'string' ? value.severity : 'error',
+          message: value.message,
+          ...(typeof value.file === 'string' ? { file: value.file } : {}),
+          ...(typeof value.line === 'number' ? { line: value.line } : {}),
+          ...(typeof value.suggestion === 'string' ? { suggestion: value.suggestion } : {}),
+        }];
+      }) ?? [];
+      const fallbackMessage = details === undefined ? message : `${message}\n${JSON.stringify(details, null, 2)}`;
+      const fallbackDiagnostic: DiagnosticItem = { severity: 'error', message: fallbackMessage, suggestion: 'Check the workspace diagnostics and retry compilation.' };
+      const errorItems = structuredDiagnostics.filter(item => item.severity.toLowerCase() === 'error');
+      const warningItems = structuredDiagnostics.filter(item => item.severity.toLowerCase() === 'warning');
       setCompilationStatus('error');
       setStatusMessage(message);
       setActiveTab('diagnostics');
-      setErrors([{ severity: 'error', message, suggestion: 'Check the workspace diagnostics and retry compilation.' }]);
+      setRawLog(JSON.stringify({ code, message, details, diagnostics }, null, 2));
+      setErrors(errorItems.length ? errorItems : [fallbackDiagnostic]);
+      setWarnings(warningItems);
       toast.error('Compilation Error', { id: toastId, description: message.slice(0, 180) });
-      return { success: false, errors: [{ severity: 'error', message, suggestion: 'Check the workspace diagnostics and retry compilation.' }], warnings: [], pdfBytes: [], ...(code ? { error: { code, message } } : {}) };
+      return { success: false, errors: errorItems.length ? errorItems : [fallbackDiagnostic], warnings: warningItems, pdfBytes: [], ...(code ? { error: { code, message, ...(details !== undefined ? { details } : {}), ...(diagnostics ? { diagnostics } : {}) } } : {}) };
     } finally {
       explicitlyCancelledWorkspaceJobsRef.current.delete(request.jobId);
       if (currentReqId === compilationIdRef.current) {

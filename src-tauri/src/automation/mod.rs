@@ -6,6 +6,9 @@ pub mod bridge_client;
 mod compiler;
 pub mod mcp;
 mod project;
+mod resource_cache;
+mod resource_prepare;
+pub mod resource_project;
 mod resources;
 mod worker;
 
@@ -32,6 +35,9 @@ pub fn run_automation_worker() {
 }
 pub fn run_resource_prepare_worker() {
     resources::run_prepare_worker();
+}
+pub fn run_resource_project_worker() {
+    resource_prepare::run_worker();
 }
 pub fn failure_for_cli(command: &str, code: String, message: String, exit_code: i32) -> Envelope {
     Envelope {
@@ -154,6 +160,22 @@ pub struct OperationContext {
     pub allow_write: bool,
     pub allow_resource_download: bool,
     pub cancellation: Arc<AtomicBool>,
+    /// Optional non-blocking progress channel used by desktop adapters.
+    pub resource_progress: Option<tokio::sync::broadcast::Sender<ResourceProgress>>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceProgress {
+    pub job_id: String,
+    pub bundle_digest: String,
+    pub phase: String,
+    pub completed_resources: usize,
+    pub total_resources: usize,
+    pub downloaded_bytes: u64,
+    pub max_download_bytes: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resource_path: Option<String>,
 }
 
 impl OperationContext {
@@ -300,6 +322,44 @@ impl AutomationService {
                 compiler::export_and_summarize(&snapshot, &args, result, &context)
             }
             "resources.status" => resources::status(),
+            "resources.analyze" | "resources.plan" | "resources.list" => {
+                let snapshot = project::resolve_capture(&args, &context)?;
+                resource_project::dispatch(command, &snapshot, &args)
+            }
+            "resources.cache_list" | "resources.cache_remove" => {
+                if command == "resources.cache_remove" && !context.allow_write {
+                    return Err(AutomationError::new(
+                        "permission.write_required",
+                        "Cache removal requires explicit write permission.",
+                        2,
+                    ));
+                }
+                let snapshot = project::resolve_capture(&args, &context)?;
+                let operation = command.to_owned();
+                let context = context.clone();
+                tokio::task::spawn_blocking(move || {
+                    resource_cache::dispatch(&operation, &snapshot, &args, &context)
+                })
+                .await
+                .map_err(|error| {
+                    AutomationError::new(
+                        "internal.unexpected",
+                        format!("Resource cache operation task failed: {error}"),
+                        4,
+                    )
+                })?
+            }
+            "resources.prepare_project" => {
+                let permit = self.worker_limit.clone().try_acquire_owned().map_err(|_| {
+                    AutomationError::new(
+                        "worker.busy",
+                        "Another compiler or resource worker is already active in this instance.",
+                        3,
+                    )
+                })?;
+                let snapshot = project::resolve_capture(&args, &context)?;
+                resource_prepare::prepare_snapshot(&snapshot, &args, &context, permit).await
+            }
             "resources.prepare" => {
                 let permit = self.worker_limit.clone().try_acquire_owned().map_err(|_| {
                     AutomationError::new(
@@ -339,6 +399,65 @@ impl AutomationService {
             )
         })?;
         worker::run_worker(snapshot, timeout, cancellation, permit).await
+    }
+
+    /// Prepare the known resources for an already captured project snapshot.
+    /// Tauri workspace adapters use this entrypoint to preserve dirty overlays.
+    pub async fn prepare_resources_snapshot(
+        &self,
+        snapshot: &ProjectSnapshot,
+        args: &Value,
+        context: &OperationContext,
+    ) -> Result<(Value, Vec<PublicDiagnostic>), AutomationError> {
+        let permit = self.worker_limit.clone().try_acquire_owned().map_err(|_| {
+            AutomationError::new(
+                "worker.busy",
+                "Another compiler or resource worker is already active in this instance.",
+                3,
+            )
+        })?;
+        resource_prepare::prepare_snapshot(snapshot, args, context, permit).await
+    }
+
+    /// Run a read-only resource operation against a captured in-memory snapshot.
+    /// Snapshot analysis is kept off the async runtime's executor threads.
+    pub async fn resources_snapshot_operation(
+        &self,
+        operation: String,
+        snapshot: ProjectSnapshot,
+        args: Value,
+        context: OperationContext,
+    ) -> Result<(Value, Vec<PublicDiagnostic>), AutomationError> {
+        tokio::task::spawn_blocking(move || match operation.as_str() {
+            "resources.cache_list" => {
+                resource_cache::dispatch(&operation, &snapshot, &args, &context)
+            }
+            "resources.cache_remove" if context.allow_write => {
+                resource_cache::dispatch(&operation, &snapshot, &args, &context)
+            }
+            "resources.cache_remove" => Err(AutomationError::new(
+                "permission.write_required",
+                "Cache removal requires explicit write permission.",
+                2,
+            )),
+            _ => resource_project::dispatch(&operation, &snapshot, &args),
+        })
+        .await
+        .map_err(|error| {
+            AutomationError::new(
+                "internal.unexpected",
+                format!("Resource analysis task failed: {error}"),
+                4,
+            )
+        })?
+    }
+
+    /// Wait until the shared isolated compiler/resource worker slot is free.
+    /// Shutdown uses this after cancellation so detached cleanup remains reaped.
+    pub async fn wait_for_workers_idle(&self) {
+        if let Ok(permit) = self.worker_limit.clone().acquire_owned().await {
+            drop(permit);
+        }
     }
 }
 

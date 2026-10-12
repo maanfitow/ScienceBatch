@@ -18,7 +18,7 @@
 use crate::{Bundle, CachableBundle, FileIndex, FileInfo, NET_RETRY_ATTEMPTS, NET_RETRY_SLEEP_MS};
 use flate2::read::GzDecoder;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     io::{BufRead, BufReader, Cursor, Read},
     str::FromStr,
     thread,
@@ -30,6 +30,106 @@ use tectonic_io_base::{digest, InputHandle, InputOrigin, IoProvider, OpenResult}
 use tectonic_status_base::{tt_note, tt_warning, NoopStatusBackend, StatusBackend};
 
 mod batch;
+
+const MAX_PREPARE_RANGE_BYTES: u64 = 32 * 1024 * 1024;
+const MAX_PREPARE_COALESCE_GAP_BYTES: u64 = 1024;
+const MAX_PREPARE_CONCURRENT_RANGES: usize = 4;
+
+struct PrepareRangeGroup<'a> {
+    range: crate::ByteRange,
+    files: Vec<&'a ItarFileInfo>,
+}
+
+struct PrepareSelection<'a> {
+    groups: Vec<PrepareRangeGroup<'a>>,
+    zero_length_files: Vec<&'a ItarFileInfo>,
+}
+
+fn group_prepare_resources(infos: &[ItarFileInfo]) -> Result<PrepareSelection<'_>> {
+    let mut ordered: Vec<&ItarFileInfo> = infos.iter().collect();
+    ordered.sort_unstable_by(|left, right| {
+        left.offset
+            .cmp(&right.offset)
+            .then_with(|| left.name.cmp(&right.name))
+    });
+
+    let mut names = HashSet::with_capacity(ordered.len());
+    let mut groups: Vec<PrepareRangeGroup<'_>> = Vec::new();
+    let mut zero_length_files = Vec::new();
+    for info in ordered {
+        if !names.insert(info.name.as_str()) {
+            bail!("bundle resource selection contains duplicate names");
+        }
+
+        let length = u64::try_from(info.length)
+            .map_err(|_| anyhow!("resource '{}' length does not fit in 64 bits", info.name))?;
+        if length > MAX_PREPARE_RANGE_BYTES {
+            bail!(
+                "resource '{}' exceeds the 32 MiB preparation range limit",
+                info.name
+            );
+        }
+        let end = info
+            .offset
+            .checked_add(length)
+            .ok_or_else(|| anyhow!("resource '{}' range overflows", info.name))?;
+        if length == 0 {
+            zero_length_files.push(info);
+            continue;
+        }
+
+        if let Some(group) = groups.last_mut() {
+            let start = group.range.offset;
+            let group_end = start
+                .checked_add(group.range.length as u64)
+                .ok_or_else(|| anyhow!("preparation range overflows"))?;
+            if info.offset < group_end {
+                bail!("bundle index contains overlapping resource ranges");
+            }
+
+            let gap = info.offset - group_end;
+            let combined_length = end
+                .checked_sub(start)
+                .ok_or_else(|| anyhow!("preparation range overflows"))?;
+            if gap <= MAX_PREPARE_COALESCE_GAP_BYTES && combined_length <= MAX_PREPARE_RANGE_BYTES {
+                group.range.length = usize::try_from(combined_length)
+                    .map_err(|_| anyhow!("preparation range does not fit in memory"))?;
+                group.files.push(info);
+                continue;
+            }
+        }
+
+        groups.push(PrepareRangeGroup {
+            range: crate::ByteRange {
+                offset: info.offset,
+                length: usize::try_from(length)
+                    .map_err(|_| anyhow!("resource range does not fit in memory"))?,
+            },
+            files: vec![info],
+        });
+    }
+
+    Ok(PrepareSelection {
+        groups,
+        zero_length_files,
+    })
+}
+
+/// Estimate the bytes transferred by the first attempt to prepare these files.
+///
+/// The estimate uses the same deterministic range grouping as
+/// [`CachableBundle::prepare_resources`], including any small gaps coalesced
+/// between neighboring resources. Zero-length resources contribute no bytes.
+pub fn estimate_prepare_bytes(infos: &[ItarFileInfo]) -> Result<u64> {
+    group_prepare_resources(infos)?
+        .groups
+        .iter()
+        .try_fold(0u64, |total, group| {
+            total
+                .checked_add(group.range.length as u64)
+                .ok_or_else(|| anyhow!("preparation byte estimate overflows"))
+        })
+}
 
 /// Read a single file's bytes through `reader`, retrying on transient failures.
 ///
@@ -334,67 +434,17 @@ impl CachableBundle<'_, ItarFileIndex> for ItarBundle {
         status: &mut dyn StatusBackend,
         write_resource: &mut dyn FnMut(&ItarFileInfo, &[u8]) -> Result<()>,
     ) -> Result<usize> {
-        use crate::ByteRange;
-
-        const MAX_RANGE_BYTES: u64 = 32 * 1024 * 1024;
-        const MAX_CONCURRENT_RANGES: usize = 4;
-
-        struct RangeGroup<'a> {
-            range: ByteRange,
-            files: Vec<&'a ItarFileInfo>,
+        let selection = group_prepare_resources(infos)?;
+        let mut prepared = 0usize;
+        for info in selection.zero_length_files {
+            write_resource(info, &[])?;
+            prepared = prepared
+                .checked_add(1)
+                .ok_or_else(|| anyhow!("prepared resource count overflows"))?;
         }
 
-        let mut ordered: Vec<&ItarFileInfo> = infos.iter().collect();
-        ordered.sort_unstable_by_key(|info| info.offset);
-
-        let mut prepared = 0;
-        let mut groups: Vec<RangeGroup<'_>> = Vec::new();
-        for info in ordered {
-            let length = info.length as u64;
-            if length > MAX_RANGE_BYTES {
-                bail!(
-                    "resource '{}' exceeds the 32 MiB preparation range limit",
-                    info.name
-                );
-            }
-            let end = info
-                .offset
-                .checked_add(length)
-                .ok_or_else(|| anyhow!("resource '{}' range overflows", info.name))?;
-            if length == 0 {
-                write_resource(info, &[])?;
-                prepared += 1;
-                continue;
-            }
-
-            if let Some(group) = groups.last_mut() {
-                let start = group.range.offset;
-                let group_end = start
-                    .checked_add(group.range.length as u64)
-                    .ok_or_else(|| anyhow!("preparation range overflows"))?;
-                if info.offset < group_end {
-                    bail!("bundle index contains overlapping resource ranges");
-                }
-                if end.saturating_sub(start) <= MAX_RANGE_BYTES {
-                    group.range.length = usize::try_from(end - start)
-                        .map_err(|_| anyhow!("preparation range does not fit in memory"))?;
-                    group.files.push(info);
-                    continue;
-                }
-            }
-
-            groups.push(RangeGroup {
-                range: ByteRange {
-                    offset: info.offset,
-                    length: usize::try_from(length)
-                        .map_err(|_| anyhow!("resource range does not fit in memory"))?,
-                },
-                files: vec![info],
-            });
-        }
-
-        for wave in groups.chunks(MAX_CONCURRENT_RANGES) {
-            let ranges: Vec<ByteRange> = wave.iter().map(|group| group.range).collect();
+        for wave in selection.groups.chunks(MAX_PREPARE_CONCURRENT_RANGES) {
+            let ranges: Vec<crate::ByteRange> = wave.iter().map(|group| group.range).collect();
             let results = batch::open_ranges(&self.url, &ranges, status);
             if results.len() != wave.len() {
                 bail!("resource range worker returned an incomplete result set");
@@ -426,7 +476,9 @@ impl CachableBundle<'_, ItarFileIndex> for ItarBundle {
 
                 for (info, slice_start, slice_end) in slices {
                     write_resource(info, &bytes[slice_start..slice_end])?;
-                    prepared += 1;
+                    prepared = prepared
+                        .checked_add(1)
+                        .ok_or_else(|| anyhow!("prepared resource count overflows"))?;
                 }
             }
         }
@@ -440,7 +492,99 @@ mod tests {
     use super::*;
     use std::collections::BTreeMap;
 
+    fn info(name: &str, offset: u64, length: usize) -> ItarFileInfo {
+        ItarFileInfo {
+            name: name.to_owned(),
+            offset,
+            length,
+        }
+    }
+
+    #[test]
+    fn estimate_uses_only_bounded_gap_coalescing() {
+        let infos = [
+            info("third", 2048, 3),
+            info("first", 0, 3),
+            info("second", 1027, 3),
+        ];
+        // first -> second has a 1024-byte gap; second -> third has a 1018-byte gap.
+        assert_eq!(estimate_prepare_bytes(&infos).unwrap(), 2051);
+
+        let separated = [info("first", 0, 3), info("second", 1028, 3)];
+        // A 1025-byte gap is not transferred.
+        assert_eq!(estimate_prepare_bytes(&separated).unwrap(), 6);
+    }
+
+    #[test]
+    fn estimate_coalesces_adjacent_files_and_enforces_range_boundary() {
+        let adjacent = [
+            info("first", 0, 16 * 1024 * 1024),
+            info("second", 16 * 1024 * 1024, 16 * 1024 * 1024),
+        ];
+        assert_eq!(
+            estimate_prepare_bytes(&adjacent).unwrap(),
+            MAX_PREPARE_RANGE_BYTES
+        );
+
+        let too_large = [info(
+            "first",
+            0,
+            usize::try_from(MAX_PREPARE_RANGE_BYTES).unwrap() + 1,
+        )];
+        assert!(estimate_prepare_bytes(&too_large).is_err());
+
+        let split_at_boundary = [
+            info("first", 0, 16 * 1024 * 1024),
+            info("second", 16 * 1024 * 1024 + 1, 16 * 1024 * 1024),
+        ];
+        assert_eq!(
+            estimate_prepare_bytes(&split_at_boundary).unwrap(),
+            MAX_PREPARE_RANGE_BYTES
+        );
+    }
+
+    #[test]
+    fn estimate_rejects_duplicate_names_overlaps_and_overflow() {
+        assert!(estimate_prepare_bytes(&[info("same", 0, 1), info("same", 8, 1)]).is_err());
+        assert!(estimate_prepare_bytes(&[info("one", 0, 4), info("two", 3, 4)]).is_err());
+        assert!(estimate_prepare_bytes(&[info("overflow", u64::MAX - 1, 4)]).is_err());
+    }
+
+    #[test]
+    fn zero_length_resources_are_estimated_and_published_without_network() {
+        let selected = [info("empty", 17, 0), info("also-empty", 42, 0)];
+        assert_eq!(estimate_prepare_bytes(&selected).unwrap(), 0);
+
+        let mut bundle = ItarBundle::new("http://127.0.0.1:1/bundle.tar".into()).unwrap();
+        let mut writes = Vec::new();
+        let prepared = bundle
+            .prepare_resources(&selected, &mut NoopStatusBackend {}, &mut |info, bytes| {
+                writes.push((info.name().to_owned(), bytes.to_vec()));
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(prepared, 2);
+        assert_eq!(
+            writes,
+            vec![("empty".into(), vec![]), ("also-empty".into(), vec![])]
+        );
+    }
+
     fn prepare_fixture_body(
+        body: &'static [u8],
+        request_count: usize,
+    ) -> (std::result::Result<usize, String>, usize) {
+        prepare_fixture_response(
+            "HTTP/1.1 206 Partial Content",
+            "bytes 0-2/3",
+            body,
+            request_count,
+        )
+    }
+
+    fn prepare_fixture_response(
+        status_line: &'static str,
+        content_range: &'static str,
         body: &'static [u8],
         request_count: usize,
     ) -> (std::result::Result<usize, String>, usize) {
@@ -464,8 +608,8 @@ mod tests {
                 let mut response = stream;
                 write!(
                     response,
-                    "HTTP/1.1 206 Partial Content\r\nContent-Range: bytes 0-2/3\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                    body.len()
+                    "{status_line}\r\nContent-Range: {content_range}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len(),
                 )
                 .unwrap();
                 response.write_all(body).unwrap();
@@ -556,6 +700,77 @@ mod tests {
     }
 
     #[test]
+    fn preparation_does_not_download_sparse_gaps() {
+        use std::io::{BufRead, BufReader, Write};
+
+        let _guard = crate::cache::PREPARE_BUDGET_TEST_LOCK.lock().unwrap();
+        let mut body = vec![b'x'; 2000];
+        body[2..5].copy_from_slice(b"abc");
+        body[1500..1502].copy_from_slice(b"de");
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server_body = body.clone();
+        let server = std::thread::spawn(move || {
+            let mut requested_ranges = Vec::new();
+            for _ in 0..2 {
+                let (stream, _) = listener.accept().unwrap();
+                let mut request = BufReader::new(stream.try_clone().unwrap());
+                let mut line = String::new();
+                let mut requested_range = None;
+                loop {
+                    line.clear();
+                    request.read_line(&mut line).unwrap();
+                    if line == "\r\n" || line.is_empty() {
+                        break;
+                    }
+                    if let Some((name, value)) = line.split_once(':') {
+                        if name.eq_ignore_ascii_case("range") {
+                            requested_range = Some(value.trim().to_owned());
+                        }
+                    }
+                }
+
+                let range = requested_range.unwrap();
+                let bounds = range.strip_prefix("bytes=").unwrap();
+                let (start, end) = bounds.split_once('-').unwrap();
+                let start = start.parse::<usize>().unwrap();
+                let end = end.parse::<usize>().unwrap();
+                let response_body = &server_body[start..=end];
+                requested_ranges.push(range);
+                let mut response = stream;
+                write!(
+                    response,
+                    "HTTP/1.1 206 Partial Content\r\nContent-Range: bytes {start}-{end}/{}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    server_body.len(),
+                    response_body.len()
+                )
+                .unwrap();
+                response.write_all(response_body).unwrap();
+            }
+            requested_ranges
+        });
+
+        let mut bundle = ItarBundle::new(format!("http://{address}/bundle.tar")).unwrap();
+        let infos = [info("near-start", 2, 3), info("far-away", 1500, 2)];
+        let mut written = BTreeMap::new();
+        let count = bundle
+            .prepare_resources(&infos, &mut NoopStatusBackend {}, &mut |resource, bytes| {
+                written.insert(resource.name().to_owned(), bytes.to_vec());
+                Ok(())
+            })
+            .unwrap();
+        let requested_ranges = server.join().unwrap();
+
+        let mut requested_ranges = requested_ranges;
+        requested_ranges.sort();
+        assert_eq!(requested_ranges, vec!["bytes=1500-1501", "bytes=2-4"]);
+        assert_eq!(estimate_prepare_bytes(&infos).unwrap(), 5);
+        assert_eq!(count, 2);
+        assert_eq!(written.get("near-start").unwrap(), b"abc");
+        assert_eq!(written.get("far-away").unwrap(), b"de");
+    }
+
+    #[test]
     fn preparation_does_not_publish_short_or_oversized_ranges() {
         let (short_result, short_writes) = prepare_fixture_body(b"ab", 3);
         assert!(short_result.is_err());
@@ -564,5 +779,13 @@ mod tests {
         let (oversized_result, oversized_writes) = prepare_fixture_body(b"abcd", 1);
         assert!(oversized_result.is_err());
         assert_eq!(oversized_writes, 0);
+    }
+
+    #[test]
+    fn preparation_rejects_malformed_http_status() {
+        let (status_result, status_writes) =
+            prepare_fixture_response("HTTP/1.1 200 OK", "bytes 0-2/3", b"abc", 3);
+        assert!(status_result.is_err());
+        assert_eq!(status_writes, 0);
     }
 }

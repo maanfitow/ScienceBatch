@@ -21,6 +21,13 @@ async fn main() {
         sciencebatch_lib::automation::run_resource_prepare_worker();
         return;
     }
+    if args
+        .first()
+        .is_some_and(|a| a == "--resource-project-worker")
+    {
+        sciencebatch_lib::automation::run_resource_project_worker();
+        return;
+    }
     let (command, request, context, flag_error) = parse_args(&args);
     if command == "help" || command == "version" {
         let envelope = Envelope {
@@ -82,7 +89,7 @@ fn parse_args(
     if args.is_empty() || args == ["--help"] || args == ["-h"] {
         return (
             "help".into(),
-            json!({"usage":"sciencebatch-cli project inspect|create|read|search|apply ... --json; diagnostics --project PATH --json; compile --project PATH --main FILE --output FILE --json; resources status|prepare --json"}),
+            json!({"usage":"sciencebatch-cli project inspect|create|read|search|apply ... --json; diagnostics --project PATH --json; compile --project PATH --main FILE --output FILE --json; resources status|prepare|analyze|plan|list|prepare-project ... --json"}),
             context,
             None,
         );
@@ -114,12 +121,20 @@ fn parse_args(
         .to_owned()
     } else if args.first().is_some_and(|a| a == "resources") {
         cursor = 1;
-        let subcommand = match args.get(cursor).map(String::as_str) {
-            Some("status") => "resources.status",
-            Some("prepare") => "resources.prepare",
-            _ => return usage("resources.status", "Expected resources status or prepare."),
-        }
-        .to_owned();
+        let subcommand =
+            match args.get(cursor).map(String::as_str) {
+                Some("status") => "resources.status",
+                Some("prepare") => "resources.prepare",
+                Some("analyze") => "resources.analyze",
+                Some("plan") => "resources.plan",
+                Some("list") => "resources.list",
+                Some("prepare-project") => "resources.prepare_project",
+                _ => return usage(
+                    "resources.status",
+                    "Expected resources status, prepare, analyze, plan, list, or prepare-project.",
+                ),
+            }
+            .to_owned();
         cursor += 1;
         subcommand
     } else if args.first().is_some_and(|a| a == "mcp") {
@@ -200,15 +215,39 @@ fn parse_args(
             "output" => "output",
             "timeout" => "timeout",
             "root" => "root",
+            "selection" => "selection",
+            "expected-input-digest" => "expectedInputDigest",
+            "expected-plan-digest" => "expectedPlanDigest",
+            "cursor" => "cursor",
+            "limit" => "limit",
+            "max-download-bytes" => "maxDownloadBytes",
+            "max-storage-bytes" => "maxStorageBytes",
             _ => return usage(&command, &format!("Unknown option {flag}.")),
         };
-        if field == "timeout" {
+        if matches!(
+            field,
+            "timeout" | "limit" | "maxDownloadBytes" | "maxStorageBytes"
+        ) {
             match value.parse::<u64>() {
                 Ok(n) => {
                     values.insert(field.into(), json!(n));
                 }
                 Err(_) => return usage(&command, "Timeout must be an integer."),
             }
+        } else if field == "selection" {
+            let selection: Vec<sciencebatch_lib::automation::resource_project::ResourceSelector> =
+                match serde_json::from_str(&value) {
+                    Ok(selection) => selection,
+                    Err(error) => {
+                        return usage(
+                            &command,
+                            &format!(
+                                "--selection must be a JSON array of exact selectors: {error}"
+                            ),
+                        )
+                    }
+                };
+            values.insert(field.into(), json!(selection));
         } else {
             values.insert(field.into(), json!(value));
         }
@@ -240,6 +279,36 @@ fn parse_args(
         ],
         "resources.status" => &["json"],
         "resources.prepare" => &["engine", "json", "allow-resource-download"],
+        "resources.analyze" => &["project", "main", "engine", "selection", "json"],
+        "resources.plan" => &[
+            "project",
+            "main",
+            "engine",
+            "selection",
+            "expected-input-digest",
+            "json",
+        ],
+        "resources.list" => &[
+            "project",
+            "main",
+            "engine",
+            "selection",
+            "expected-plan-digest",
+            "cursor",
+            "limit",
+            "json",
+        ],
+        "resources.prepare_project" => &[
+            "project",
+            "main",
+            "engine",
+            "selection",
+            "expected-input-digest",
+            "expected-plan-digest",
+            "max-download-bytes",
+            "max-storage-bytes",
+            "json",
+        ],
         _ => &[],
     };
     if seen.iter().any(|key| !allowed.contains(&key.as_str())) {
@@ -254,6 +323,10 @@ fn parse_args(
             | "project.apply"
             | "diagnostics"
             | "compile"
+            | "resources.analyze"
+            | "resources.plan"
+            | "resources.list"
+            | "resources.prepare_project"
     ) && values.get("project").is_none()
     {
         return usage(&command, "--project is required.");
@@ -272,6 +345,29 @@ fn parse_args(
     }
     if command == "project.apply" && values.get("expectedSha256").is_none() {
         return usage(&command, "--expected-sha256 is required.");
+    }
+    if matches!(
+        command.as_str(),
+        "resources.analyze" | "resources.plan" | "resources.list" | "resources.prepare_project"
+    ) && values.get("project").is_none()
+    {
+        return usage(&command, "--project is required.");
+    }
+    if command == "resources.plan" && values.get("expectedInputDigest").is_none() {
+        return usage(&command, "--expected-input-digest is required.");
+    }
+    if matches!(
+        command.as_str(),
+        "resources.list" | "resources.prepare_project"
+    ) && values.get("expectedPlanDigest").is_none()
+    {
+        return usage(&command, "--expected-plan-digest is required.");
+    }
+    if command == "resources.list"
+        && values.get("cursor").is_some()
+        && values.get("limit").is_none()
+    {
+        return usage(&command, "--limit is required when --cursor is supplied.");
     }
     if overwrite {
         values.insert("overwrite".into(), json!(true));
@@ -385,7 +481,8 @@ fn parse_args(
     }
     let mut context = context;
     context.allow_write = true;
-    context.allow_resource_download = allow_download || command == "resources.prepare";
+    context.allow_resource_download =
+        allow_download || command == "resources.prepare" || command == "resources.prepare_project";
     (command, Value::Object(values), context, None)
 }
 

@@ -4,12 +4,101 @@ use super::{
 };
 use crate::types::{CompileResponse, DiagnosticItem};
 use serde_json::{json, Value};
-use std::collections::BTreeMap;
+use sha2::{Digest, Sha256};
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+
+const MAX_RECORDED_RESOURCE_MISSES: usize = 200;
+
+#[derive(Clone, Default)]
+struct IndexedResourceMisses {
+    resources: BTreeMap<String, super::resource_project::CatalogResource>,
+    omitted: usize,
+}
+
+impl IndexedResourceMisses {
+    fn record(&mut self, resource: super::resource_project::CatalogResource) {
+        if self.resources.contains_key(&resource.path) {
+            return;
+        }
+        if self.resources.len() < MAX_RECORDED_RESOURCE_MISSES {
+            self.resources.insert(resource.path.clone(), resource);
+        } else {
+            self.omitted = self.omitted.saturating_add(1);
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.resources.is_empty() && self.omitted == 0
+    }
+
+    fn details(&self) -> Value {
+        let pinned = super::resource_project::pinned_catalog().ok();
+        let resources = self
+            .resources
+            .values()
+            .map(|resource| {
+                json!({
+                    "path": resource.path,
+                    "offset": resource.offset,
+                    "length": resource.length,
+                    "sha256": resource.sha256,
+                })
+            })
+            .collect::<Vec<_>>();
+        json!({
+            "bundleDigest": pinned.as_ref().map(|catalog| catalog.digest.as_str()),
+            "indexSha256": pinned.as_ref().map(|catalog| catalog.index_sha256.as_str()),
+            "missingResources": resources,
+            "missingOmitted": self.omitted,
+            "omittedMayIncludeDuplicates": true,
+            "probeCoverage": "possible_probes",
+            "recovery": "Add or review selectors for the missing paths, analyze the project again, explicitly prepare the selected resources, then retry compilation.",
+        })
+    }
+}
+
+fn should_report_indexed_misses(
+    run_succeeded: bool,
+    valid_pdf: bool,
+    diagnostics_empty: bool,
+    misses_empty: bool,
+) -> bool {
+    !misses_empty && !(run_succeeded && valid_pdf && diagnostics_empty)
+}
+
+fn indexed_misses_error(
+    misses: &IndexedResourceMisses,
+    diagnostics: Vec<PublicDiagnostic>,
+) -> AutomationError {
+    AutomationError::new(
+        "cache.unavailable_offline",
+        "The document could not compile because one or more resources may be missing from the offline cache.",
+        3,
+    )
+    .with_details(misses.details())
+    .with_diagnostics(diagnostics)
+}
+
+fn indexed_path_for_name(
+    name: &str,
+    known: &BTreeSet<String>,
+    indexed_by_basename: &BTreeMap<String, Vec<String>>,
+) -> Option<String> {
+    let clean = name.trim_start_matches("./");
+    if known.contains(clean) {
+        return Some(clean.to_owned());
+    }
+    let basename = clean.rsplit('/').next().unwrap_or(clean);
+    indexed_by_basename
+        .get(basename)
+        .filter(|paths| paths.len() == 1)
+        .and_then(|paths| paths.first().cloned())
+}
 
 pub fn worker_executable() -> Result<PathBuf, AutomationError> {
     let current = std::env::current_exe().map_err(|e| {
@@ -357,6 +446,86 @@ mod tests {
     use super::*;
 
     #[test]
+    fn optional_indexed_probes_do_not_fail_a_valid_clean_compile() {
+        assert!(!should_report_indexed_misses(true, true, true, false));
+        assert!(should_report_indexed_misses(false, false, false, false));
+        assert!(should_report_indexed_misses(true, false, true, false));
+        assert!(should_report_indexed_misses(true, true, false, false));
+        assert!(!should_report_indexed_misses(false, false, false, true));
+    }
+
+    #[test]
+    fn missing_resource_details_are_bounded_and_identifiable() {
+        let mut misses = IndexedResourceMisses::default();
+        for index in 0..(MAX_RECORDED_RESOURCE_MISSES + 7) {
+            let path = format!("tex/latex/test/resource-{index}.sty");
+            misses.record(super::super::resource_project::CatalogResource {
+                path,
+                offset: index as u64,
+                length: 12,
+                sha256: format!("{index:064x}"),
+            });
+        }
+        let details = misses.details();
+        assert_eq!(misses.resources.len(), MAX_RECORDED_RESOURCE_MISSES);
+        assert_eq!(misses.omitted, 7);
+        assert_eq!(details["missingResources"].as_array().unwrap().len(), 200);
+        assert_eq!(details["missingOmitted"], 7);
+        assert!(details["bundleDigest"]
+            .as_str()
+            .is_some_and(|value| !value.is_empty()));
+        assert!(details["indexSha256"]
+            .as_str()
+            .is_some_and(|value| !value.is_empty()));
+        assert_eq!(
+            details["missingResources"][0]["path"],
+            "tex/latex/test/resource-0.sty"
+        );
+        assert_eq!(details["missingResources"][0]["length"], 12);
+        assert_eq!(details["missingResources"][0]["offset"], 0);
+        assert_eq!(
+            details["missingResources"][0]["sha256"],
+            format!("{:064x}", 0)
+        );
+        assert_eq!(details["probeCoverage"], "possible_probes");
+        let recovery = details["recovery"].as_str().unwrap();
+        assert!(recovery.contains("selectors"));
+        assert!(recovery.contains("analyze"));
+        assert!(recovery.contains("explicitly prepare"));
+    }
+
+    #[test]
+    fn indexed_missing_error_keeps_details_and_compiler_diagnostics() {
+        let mut misses = IndexedResourceMisses::default();
+        misses.record(super::super::resource_project::CatalogResource {
+            path: "article.cls".into(),
+            offset: 42,
+            length: 123,
+            sha256: format!("{:064x}", 7),
+        });
+        let error = indexed_misses_error(
+            &misses,
+            vec![PublicDiagnostic {
+                severity: "error".into(),
+                code: "compile.engine_error".into(),
+                message: "Missing document class.".into(),
+                origin: "compiler".into(),
+                file: Some("main.tex".into()),
+                line: Some(1),
+                column: None,
+                suggestion: None,
+            }],
+        );
+        assert_eq!(error.code, "cache.unavailable_offline");
+        assert_eq!(
+            error.details.as_ref().unwrap()["missingResources"][0]["path"],
+            "article.cls"
+        );
+        assert_eq!(error.diagnostics.len(), 1);
+        assert_eq!(error.diagnostics[0].message, "Missing document class.");
+    }
+
+    #[test]
     fn atomic_pdf_export_preserves_existing_destinations_without_overwrite() {
         let root = std::env::temp_dir().join(format!(
             "sciencebatch-pdf-export-test-{}-{}",
@@ -429,12 +598,11 @@ fn failure_response(message: &str, file: Option<String>) -> CompileResponse {
 
 fn compile_latex(snapshot: &ProjectSnapshot) -> Result<CompileResponse, AutomationError> {
     use std::io::Cursor;
+    use std::str::FromStr;
     use tectonic::driver::{OutputFormat, ProcessingSessionBuilder};
     use tectonic::status::NoopStatusBackend;
-    use tectonic_bundles::{detect_bundle, Bundle};
-    use tectonic_io_base::{
-        digest::DigestData, InputHandle, InputOrigin, IoProvider, OpenResult, OutputHandle,
-    };
+    use tectonic_bundles::Bundle;
+    use tectonic_io_base::{digest::DigestData, InputHandle, InputOrigin, IoProvider, OpenResult};
     use tectonic_status_base::StatusBackend;
 
     let config = match tectonic::config::PersistentConfig::open(false) {
@@ -445,40 +613,71 @@ fn compile_latex(snapshot: &ProjectSnapshot) -> Result<CompileResponse, Automati
             )))
         }
     };
-    let mut inner = match detect_bundle(config.default_bundle_loc().to_owned(), true, None) {
-        Ok(Some(b)) => b,
-        Ok(None) => {
-            return Err(cache_error(
-                "The local LaTeX resource bundle is missing or incomplete. Run `sciencebatch-cli resources prepare --engine latex --json` to download the existing bundle.".into(),
-            ))
-        }
-        Err(_) => return Err(cache_error("The local LaTeX resource bundle is missing or incomplete. Run `sciencebatch-cli resources prepare --engine latex --json` to resume preparation.".into())),
+    let pinned = super::resource_project::pinned_catalog()?;
+    if config.default_bundle_loc() != pinned.url {
+        return Err(AutomationError::new(
+            "resources.bundle_identity_mismatch",
+            "The configured LaTeX bundle does not match the bundle pinned by the resource catalog.",
+            3,
+        ));
+    }
+    let embedded_index_digest = format!("{:x}", Sha256::digest(&pinned.index_bytes));
+    if embedded_index_digest != pinned.index_sha256 {
+        return Err(AutomationError::new(
+            "resources.catalog_invalid",
+            "The embedded resource catalog index does not match its pinned SHA-256 digest.",
+            4,
+        )
+        .with_details(json!({"catalogSha256": pinned.catalog_sha256,"expectedIndexSha256": pinned.index_sha256,"actualIndexSha256": embedded_index_digest})));
+    }
+    super::resource_project::validate_pinned_cache_identity_if_present()?;
+    let Some(format_resource) = super::resource_project::catalog_resource("latex.ltx")? else {
+        return Err(AutomationError::new(
+            "resources.catalog_missing_resource",
+            "The pinned bundle index is missing the required LaTeX format source.",
+            3,
+        ));
     };
-    let mut bundle_status = NoopStatusBackend::default();
-    match inner.input_open_name("latex.ltx", &mut bundle_status) {
-        OpenResult::Ok(_) => {}
-        OpenResult::Err(_) | OpenResult::NotAvailable => {
-            return Err(cache_error("The local LaTeX resource index or required format source is missing. Run `sciencebatch-cli resources prepare --engine latex --json` to resume preparation.".into()));
+    if super::resource_project::starter_resource_bytes("latex.ltx")?.is_none()
+        && super::resource_project::verified_cached_bytes("latex.ltx")?.is_none()
+    {
+        let mut misses = IndexedResourceMisses::default();
+        misses.record(format_resource);
+        return Err(indexed_misses_error(&misses, Vec::new()));
+    }
+
+    let cached_bundle_files = super::resource_project::pinned_resource_paths()?
+        .into_iter()
+        .collect::<BTreeSet<_>>();
+    let mut indexed_by_basename = BTreeMap::<String, Vec<String>>::new();
+    for path in &cached_bundle_files {
+        if let Some(basename) = path.rsplit('/').next() {
+            indexed_by_basename
+                .entry(basename.to_owned())
+                .or_default()
+                .push(path.clone());
         }
     }
-    let cached_bundle_files = inner
-        .all_files()
-        .into_iter()
-        .collect::<std::collections::BTreeSet<_>>();
-    let cache_miss = Arc::new(AtomicBool::new(false));
+    let missing_resources = Arc::new(Mutex::new(IndexedResourceMisses::default()));
+    let integrity_error = Arc::new(Mutex::new(None::<AutomationError>));
     struct StrictBundle {
-        inner: Box<dyn Bundle>,
-        known: std::collections::BTreeSet<String>,
-        cache_miss: Arc<AtomicBool>,
+        digest: String,
+        known: BTreeSet<String>,
+        indexed_by_basename: BTreeMap<String, Vec<String>>,
+        missing_resources: Arc<Mutex<IndexedResourceMisses>>,
+        integrity_error: Arc<Mutex<Option<AutomationError>>>,
     }
     impl IoProvider for StrictBundle {
         fn input_open_name(
             &mut self,
             name: &str,
-            status: &mut dyn StatusBackend,
+            _status: &mut dyn StatusBackend,
         ) -> OpenResult<InputHandle> {
+            use super::resource_project::{
+                catalog_resource, starter_resource_bytes, verified_cached_bytes,
+            };
             let lower = name.rsplit('/').next().unwrap_or(name).to_ascii_lowercase();
-            let bytes = match lower.as_str() {
+            let icon_bytes = match lower.as_str() {
                 "simpleicons.sty" => Some(
                     include_bytes!("../../embedded_packages/simpleicons/simpleicons.sty")
                         .as_slice(),
@@ -495,77 +694,93 @@ fn compile_latex(snapshot: &ProjectSnapshot) -> Result<CompileResponse, Automati
                 ),
                 _ => None,
             };
-            if let Some(bytes) = bytes {
+            if let Some(bytes) = icon_bytes {
                 return OpenResult::Ok(InputHandle::new(
                     name,
                     Cursor::new(bytes.to_vec()),
                     InputOrigin::Other,
                 ));
             }
-            match self.inner.input_open_name(name, status) {
-                OpenResult::NotAvailable => {
-                    let clean = name.trim_start_matches("./");
-                    if self.known.contains(clean)
-                        || self
-                            .known
-                            .contains(clean.rsplit('/').next().unwrap_or(clean))
-                    {
-                        self.cache_miss
-                            .store(true, std::sync::atomic::Ordering::Relaxed);
-                    }
-                    OpenResult::NotAvailable
+            let Some(path) = indexed_path_for_name(name, &self.known, &self.indexed_by_basename)
+            else {
+                return OpenResult::NotAvailable;
+            };
+            match starter_resource_bytes(&path) {
+                Ok(Some(bytes)) => {
+                    return OpenResult::Ok(InputHandle::new(
+                        name,
+                        Cursor::new(bytes),
+                        InputOrigin::Other,
+                    ));
                 }
-                result => result,
+                Err(error) => {
+                    *self
+                        .integrity_error
+                        .lock()
+                        .unwrap_or_else(|poison| poison.into_inner()) = Some(error);
+                    return OpenResult::Err(tectonic_errors::Error::msg(
+                        "embedded starter resource failed pinned integrity verification",
+                    ));
+                }
+                Ok(None) => {}
             }
-        }
-        fn input_open_name_with_abspath(
-            &mut self,
-            name: &str,
-            status: &mut dyn StatusBackend,
-        ) -> OpenResult<(InputHandle, Option<PathBuf>)> {
-            match self.input_open_name(name, status) {
-                OpenResult::Ok(h) => OpenResult::Ok((h, None)),
-                OpenResult::Err(e) => OpenResult::Err(e),
-                OpenResult::NotAvailable => OpenResult::NotAvailable,
+            match catalog_resource(&path) {
+                Ok(Some(resource)) => match verified_cached_bytes(&path) {
+                    Ok(Some(bytes)) => OpenResult::Ok(InputHandle::new(
+                        name,
+                        Cursor::new(bytes),
+                        InputOrigin::Other,
+                    )),
+                    Ok(None) => {
+                        self.missing_resources
+                            .lock()
+                            .unwrap_or_else(|poison| poison.into_inner())
+                            .record(resource);
+                        OpenResult::NotAvailable
+                    }
+                    Err(error) => {
+                        *self
+                            .integrity_error
+                            .lock()
+                            .unwrap_or_else(|poison| poison.into_inner()) = Some(error);
+                        OpenResult::Err(tectonic_errors::Error::msg(
+                            "cached bundle resource failed pinned integrity verification",
+                        ))
+                    }
+                },
+                Ok(None) => {
+                    let error = AutomationError::new(
+                        "resources.catalog_missing_resource",
+                        "The pinned bundle index contains a resource that is absent from the embedded catalog.",
+                        3,
+                    )
+                    .with_details(json!({"path":path}));
+                    *self
+                        .integrity_error
+                        .lock()
+                        .unwrap_or_else(|poison| poison.into_inner()) = Some(error);
+                    OpenResult::Err(tectonic_errors::Error::msg(
+                        "indexed bundle resource is absent from the pinned resource catalog",
+                    ))
+                }
+                Err(error) => {
+                    *self
+                        .integrity_error
+                        .lock()
+                        .unwrap_or_else(|poison| poison.into_inner()) = Some(error);
+                    OpenResult::Err(tectonic_errors::Error::msg(
+                        "resource catalog could not verify the requested bundle resource",
+                    ))
+                }
             }
-        }
-        fn input_open_primary(&mut self, s: &mut dyn StatusBackend) -> OpenResult<InputHandle> {
-            self.inner.input_open_primary(s)
-        }
-        fn input_open_primary_with_abspath(
-            &mut self,
-            s: &mut dyn StatusBackend,
-        ) -> OpenResult<(InputHandle, Option<PathBuf>)> {
-            self.inner.input_open_primary_with_abspath(s)
-        }
-        fn input_open_format(
-            &mut self,
-            n: &str,
-            s: &mut dyn StatusBackend,
-        ) -> OpenResult<InputHandle> {
-            self.inner.input_open_format(n, s)
-        }
-        fn write_format(
-            &mut self,
-            n: &str,
-            d: &[u8],
-            s: &mut dyn StatusBackend,
-        ) -> tectonic_errors::Result<()> {
-            self.inner.write_format(n, d, s)
-        }
-        fn output_open_name(&mut self, n: &str) -> OpenResult<OutputHandle> {
-            self.inner.output_open_name(n)
-        }
-        fn output_open_stdout(&mut self) -> OpenResult<OutputHandle> {
-            self.inner.output_open_stdout()
         }
     }
     impl Bundle for StrictBundle {
         fn get_digest(&mut self) -> tectonic_errors::Result<DigestData> {
-            self.inner.get_digest()
+            DigestData::from_str(&self.digest)
         }
         fn all_files(&self) -> Vec<String> {
-            self.inner.all_files()
+            self.known.iter().cloned().collect()
         }
     }
 
@@ -651,9 +866,11 @@ fn compile_latex(snapshot: &ProjectSnapshot) -> Result<CompileResponse, Automati
     let mut builder = ProcessingSessionBuilder::default();
     builder
         .bundle(Box::new(StrictBundle {
-            inner,
+            digest: pinned.digest,
             known: cached_bundle_files,
-            cache_miss: cache_miss.clone(),
+            indexed_by_basename,
+            missing_resources: missing_resources.clone(),
+            integrity_error: integrity_error.clone(),
         }))
         .project_io_provider(Box::new(project_io))
         .allow_external_tools(false)
@@ -682,7 +899,7 @@ fn compile_latex(snapshot: &ProjectSnapshot) -> Result<CompileResponse, Automati
             .to_string()
             .contains("external bibliography tools are disabled")
     }) {
-        return Err(AutomationError::new("dependency.external_tool_unsupported", "This document requires Biber or another external bibliography tool. Automation compilation runs without external tools; use the desktop compiler or switch to a supported bibliography workflow.", 1));
+        return Err(AutomationError::new("dependency.external_tool_unsupported", "This document requests an external bibliography tool such as Biber. ScienceBatch supports in-memory BibTeX; use backend=bibtex or provide a compatible bibliography workflow.", 1));
     }
     let mut files = session.into_file_data();
     let log = files.remove(&log_name).map(|f| f.data).unwrap_or_default();
@@ -701,20 +918,11 @@ fn compile_latex(snapshot: &ProjectSnapshot) -> Result<CompileResponse, Automati
             2,
         ));
     }
-    if cache_miss.load(std::sync::atomic::Ordering::Relaxed) {
-        return Err(cache_error("A required LaTeX resource is listed in the local bundle but is not cached. Run `sciencebatch-cli resources prepare --engine latex --json` to resume preparation.".into()));
-    }
     let raw_lower = raw_log.to_ascii_lowercase();
-    if raw_lower.contains("bundle index is not available in the offline cache")
+    let offline_cache_error = raw_lower
+        .contains("bundle index is not available in the offline cache")
         || raw_lower.contains("this bundle isn't cached")
-        || raw_lower.contains("couldn't find cached")
-    {
-        return Err(AutomationError::new(
-            "cache.unavailable_offline",
-            "A required compiler resource is unavailable in the offline cache.",
-            3,
-        ));
-    }
+        || raw_lower.contains("couldn't find cached");
     let snapshot_paths = snapshot
         .files
         .keys()
@@ -747,23 +955,79 @@ fn compile_latex(snapshot: &ProjectSnapshot) -> Result<CompileResponse, Automati
             });
         }
     }
-    if run.is_ok() {
-        if let Some(pdf) = files.remove(&pdf_name) {
-            if pdf.data.len() > MAX_PDF_BYTES {
-                return Err(AutomationError::new(
-                    "resource.limit_exceeded",
-                    "Compiled PDF exceeds 64 MiB.",
-                    3,
-                ));
-            }
-            return Ok(CompileResponse {
-                pdf_bytes: pdf.data,
-                success: true,
-                errors,
-                warnings,
-                raw_log,
-            });
-        }
+    let pdf = if run.is_ok() {
+        files.remove(&pdf_name).map(|file| file.data)
+    } else {
+        None
+    };
+    if pdf
+        .as_ref()
+        .is_some_and(|bytes| bytes.len() > MAX_PDF_BYTES)
+    {
+        return Err(AutomationError::new(
+            "resource.limit_exceeded",
+            "Compiled PDF exceeds 64 MiB.",
+            3,
+        ));
+    }
+    let valid_pdf = pdf.as_deref().is_some_and(is_structurally_valid_pdf);
+    let missing_snapshot = missing_resources
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner())
+        .clone();
+    let integrity_snapshot = integrity_error
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner())
+        .clone();
+    if let Some(mut error) = integrity_snapshot {
+        let partial = CompileResponse {
+            pdf_bytes: Vec::new(),
+            success: false,
+            errors: errors.clone(),
+            warnings: warnings.clone(),
+            raw_log: raw_log.clone(),
+        };
+        error.diagnostics = public_diagnostics(snapshot, &partial);
+        return Err(error);
+    }
+    if !missing_snapshot.is_empty()
+        && should_report_indexed_misses(run.is_ok(), valid_pdf, errors.is_empty(), false)
+    {
+        let partial = CompileResponse {
+            pdf_bytes: Vec::new(),
+            success: false,
+            errors: errors.clone(),
+            warnings: warnings.clone(),
+            raw_log: raw_log.clone(),
+        };
+        return Err(indexed_misses_error(
+            &missing_snapshot,
+            public_diagnostics(snapshot, &partial),
+        ));
+    }
+    if let Some(pdf_bytes) = pdf.filter(|_| valid_pdf && errors.is_empty()) {
+        return Ok(CompileResponse {
+            pdf_bytes,
+            success: true,
+            errors,
+            warnings,
+            raw_log,
+        });
+    }
+    if offline_cache_error {
+        let partial = CompileResponse {
+            pdf_bytes: Vec::new(),
+            success: false,
+            errors: errors.clone(),
+            warnings: warnings.clone(),
+            raw_log: raw_log.clone(),
+        };
+        return Err(AutomationError::new(
+            "cache.unavailable_offline",
+            "A required compiler resource is unavailable in the offline cache.",
+            3,
+        )
+        .with_diagnostics(public_diagnostics(snapshot, &partial)));
     }
     if errors.is_empty() {
         errors.push(DiagnosticItem {
@@ -782,6 +1046,15 @@ fn compile_latex(snapshot: &ProjectSnapshot) -> Result<CompileResponse, Automati
         warnings,
         raw_log,
     })
+}
+
+fn is_structurally_valid_pdf(bytes: &[u8]) -> bool {
+    bytes.starts_with(b"%PDF-")
+        && bytes
+            .windows(5)
+            .rev()
+            .take(4096)
+            .any(|window| window == b"%%EOF")
 }
 
 fn source_lines_before_t1_insertion(source: &str) -> usize {

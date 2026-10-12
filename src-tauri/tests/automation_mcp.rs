@@ -65,6 +65,10 @@ async fn stdio_mcp_initializes_lists_tools_and_enforces_project_root_and_write_p
         "sciencebatch_compile",
         "sciencebatch_resources_status",
         "sciencebatch_resources_prepare",
+        "sciencebatch_resources_analyze",
+        "sciencebatch_resources_plan",
+        "sciencebatch_resources_list",
+        "sciencebatch_resources_prepare_project",
         "sciencebatch_workspace_instances",
         "sciencebatch_workspace",
     ] {
@@ -81,6 +85,23 @@ async fn stdio_mcp_initializes_lists_tools_and_enforces_project_root_and_write_p
             .and_then(|annotation| annotation.read_only_hint),
         Some(true)
     );
+    for name in [
+        "sciencebatch_resources_analyze",
+        "sciencebatch_resources_plan",
+        "sciencebatch_resources_list",
+    ] {
+        let tool = tools
+            .iter()
+            .find(|tool| tool.name == name)
+            .expect("resource read tool");
+        assert_eq!(
+            tool.annotations
+                .as_ref()
+                .and_then(|annotation| annotation.read_only_hint),
+            Some(true),
+            "{name} must be advertised as read-only"
+        );
+    }
     let output_schema = serde_json::to_value(
         read_tool
             .output_schema
@@ -149,6 +170,83 @@ async fn stdio_mcp_initializes_lists_tools_and_enforces_project_root_and_write_p
     assert_eq!(download_denied.is_error, Some(true));
     assert_eq!(
         download_denied.structured_content.unwrap()["error"]["code"],
+        "resources.download_denied"
+    );
+
+    let project_analysis = client
+        .peer()
+        .call_tool(
+            CallToolRequestParams::new("sciencebatch_resources_analyze").with_arguments(map(
+                json!({
+                    "project": root,
+                    "engine": "latex",
+                    "main": "main.tex"
+                }),
+            )),
+        )
+        .await
+        .expect("call read-only project resource analysis");
+    assert_eq!(
+        project_analysis.is_error,
+        Some(false),
+        "{:#?}",
+        project_analysis.structured_content
+    );
+    let analyzed = project_analysis
+        .structured_content
+        .expect("analysis envelope");
+    assert_eq!(analyzed["ok"], true);
+    assert!(analyzed["data"]["planDigest"].is_string());
+    let input_digest = analyzed["data"]["inputDigest"]
+        .as_str()
+        .expect("analysis input digest");
+    let plan_digest = analyzed["data"]["planDigest"]
+        .as_str()
+        .expect("analysis plan digest");
+    let planned = client
+        .peer()
+        .call_tool(
+            CallToolRequestParams::new("sciencebatch_resources_plan").with_arguments(map(json!({
+                "project": root,
+                "engine": "latex",
+                "main": "main.tex",
+                "expectedInputDigest": input_digest
+            }))),
+        )
+        .await
+        .expect("call digest-guarded project resource plan");
+    assert_eq!(planned.is_error, Some(false));
+    assert_eq!(planned.structured_content.unwrap()["ok"], true);
+
+    let listed = client
+        .peer()
+        .call_tool(
+            CallToolRequestParams::new("sciencebatch_resources_list").with_arguments(map(json!({
+                "project": root,
+                "engine": "latex",
+                "main": "main.tex",
+                "expectedPlanDigest": plan_digest,
+                "limit": 20
+            }))),
+        )
+        .await
+        .expect("call plan-bound project resource list");
+    assert_eq!(listed.is_error, Some(false));
+    assert_eq!(listed.structured_content.unwrap()["ok"], true);
+
+    let generic_prepare_denied = client
+        .peer()
+        .call_tool(
+            CallToolRequestParams::new("sciencebatch_workspace").with_arguments(map(json!({
+                "instanceId": "11111111111111111111111111111111",
+                "operation": "resources.prepare_project"
+            }))),
+        )
+        .await
+        .expect("call denied generic resource preparation");
+    assert_eq!(generic_prepare_denied.is_error, Some(true));
+    assert_eq!(
+        generic_prepare_denied.structured_content.unwrap()["error"]["code"],
         "resources.download_denied"
     );
 

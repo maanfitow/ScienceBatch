@@ -22,7 +22,8 @@ import {
   Archive,
   FileText,
   FileCode,
-  Globe
+  Globe,
+  Package
 } from 'lucide-react';
 import { useTheme } from '../themes/ThemeContext';
 import { RecentProject } from '../types';
@@ -38,6 +39,7 @@ interface MenuBarProps {
   onExportHtml: () => void;
   onCloseProject: () => void;
   onCompile: () => void;
+  onOpenProjectResources: () => void;
   onCancelCompile?: () => void;
   isCompiling: boolean;
   activeTab: 'preview' | 'diagnostics';
@@ -67,6 +69,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   onExportHtml,
   onCloseProject,
   onCompile,
+  onOpenProjectResources,
   onCancelCompile,
   isCompiling,
   activeTab,
@@ -406,6 +409,15 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   <span>Compile Document</span>
                 </div>
                 <span className="menu-shortcut">Ctrl+S</span>
+              </button>
+            )}
+
+            {hasOpenProject && (
+              <button className="menu-dropdown-item" onClick={() => { onOpenProjectResources(); closeMenu(); }}>
+                <div className="menu-item-left">
+                  <Package size={14} />
+                  <span>Project Resources…</span>
+                </div>
               </button>
             )}
 

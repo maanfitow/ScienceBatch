@@ -13,7 +13,7 @@ export interface WorkspaceAutomationReply {
   id: string;
   ok: boolean;
   data?: unknown;
-  error?: { code: string; message: string; details?: unknown };
+  error?: { code: string; message: string; details?: unknown; diagnostics?: unknown[] };
 }
 
 export interface AutomationDocument {
@@ -49,5 +49,7 @@ export interface WorkspaceCompileRequest {
   mainFile: string;
   overlays: Record<string, string>;
   allowedRoots: string[];
+  workspaceIdentity?: Record<string, unknown>;
+  templateAssets?: 'starter-latex' | 'starter-typst' | null;
   timeoutSeconds?: number;
 }

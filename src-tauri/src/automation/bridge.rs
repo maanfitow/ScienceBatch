@@ -46,6 +46,8 @@ pub struct BridgeError {
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub details: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub diagnostics: Option<Vec<super::PublicDiagnostic>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -234,6 +236,17 @@ fn serve_client(
         );
         return;
     }
+    if !allowed_operation(&request.operation) {
+        let _ = write_reply(
+            &mut stream,
+            error_reply(
+                &request.id,
+                "usage.invalid_argument",
+                "Workspace operation is not supported by this bridge.",
+            ),
+        );
+        return;
+    }
 
     let ready_deadline = Instant::now() + Duration::from_secs(10);
     while !state.handler_ready.load(Ordering::Acquire)
@@ -302,10 +315,13 @@ fn serve_client(
     }
     let monitor = match stream.try_clone() {
         Ok(socket) => socket,
-        Err(_) => return,
+        Err(_) => {
+            notify_job_disconnect(&app, &request);
+            return;
+        }
     };
     let _ = monitor.set_nonblocking(true);
-    let deadline = Instant::now() + Duration::from_secs(30 * 60 + 5);
+    let deadline = Instant::now() + operation_timeout(&request.operation);
     loop {
         match receiver.try_recv() {
             Ok(reply) => {
@@ -314,6 +330,7 @@ fn serve_client(
             }
             Err(tokio::sync::oneshot::error::TryRecvError::Empty) => {}
             Err(tokio::sync::oneshot::error::TryRecvError::Closed) => {
+                notify_job_disconnect(&app, &request);
                 let _ = write_reply(
                     &mut stream,
                     error_reply(
@@ -328,27 +345,21 @@ fn serve_client(
         let mut probe = [0u8; 1];
         match monitor.peek(&mut probe) {
             Ok(0) => {
-                if request.operation == "workspace.compile" {
-                    let job_id = request
-                        .args
-                        .get("jobId")
-                        .and_then(Value::as_str)
-                        .unwrap_or(&request.id);
-                    let _ = app.emit(
-                        "workspace-automation-disconnected",
-                        serde_json::json!({ "id": request.id, "jobId": job_id }),
-                    );
-                }
+                notify_job_disconnect(&app, &request);
                 if let Ok(mut pending) = state.pending.lock() {
                     pending.remove(&request.id);
                 }
                 return;
             }
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {}
-            Err(_) => return,
+            Err(_) => {
+                notify_job_disconnect(&app, &request);
+                return;
+            }
             Ok(_) => {}
         }
         if stopping.load(Ordering::Acquire) || Instant::now() >= deadline {
+            notify_job_disconnect(&app, &request);
             if let Ok(mut pending) = state.pending.lock() {
                 pending.remove(&request.id);
             }
@@ -364,6 +375,29 @@ fn serve_client(
         }
         thread::sleep(Duration::from_millis(50));
     }
+}
+
+fn notify_job_disconnect(app: &AppHandle, request: &BridgeRequest) {
+    let kind = match request.operation.as_str() {
+        "workspace.compile" => Some("compilation"),
+        "workspace.resources.prepare_project" => Some("resource-preparation"),
+        _ => None,
+    };
+    let Some(kind) = kind else { return };
+    let job_id = request
+        .args
+        .get("jobId")
+        .and_then(Value::as_str)
+        .unwrap_or(&request.id);
+    let _ = app.emit(
+        "workspace-automation-disconnected",
+        serde_json::json!({
+            "id": request.id,
+            "jobId": job_id,
+            "operation": request.operation,
+            "kind": kind,
+        }),
+    );
 }
 
 fn write_reply(stream: &mut TcpStream, reply: BridgeReply) -> std::io::Result<()> {
@@ -391,7 +425,37 @@ pub fn error_reply(id: &str, code: &str, message: &str) -> BridgeReply {
             code: code.to_string(),
             message: message.to_string(),
             details: None,
+            diagnostics: None,
         }),
+    }
+}
+
+fn allowed_operation(operation: &str) -> bool {
+    matches!(
+        operation,
+        "workspace.inspect"
+            | "workspace.read"
+            | "workspace.openProject"
+            | "workspace.openFile"
+            | "workspace.activate"
+            | "workspace.apply"
+            | "workspace.save"
+            | "workspace.close"
+            | "workspace.compile"
+            | "workspace.cancel"
+            | "workspace.resources.analyze"
+            | "workspace.resources.plan"
+            | "workspace.resources.list"
+            | "workspace.resources.prepare_project"
+            | "workspace.cancel_resources"
+    )
+}
+
+fn operation_timeout(operation: &str) -> Duration {
+    if operation == "workspace.resources.prepare_project" {
+        Duration::from_secs(30 * 60 + 30)
+    } else {
+        Duration::from_secs(30 * 60 + 5)
     }
 }
 
@@ -410,6 +474,42 @@ fn random_hex_32() -> Result<String, String> {
     getrandom::fill(&mut bytes)
         .map_err(|error| format!("Unable to generate bridge credentials: {error}"))?;
     Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{allowed_operation, operation_timeout};
+    use std::time::Duration;
+
+    #[test]
+    fn bridge_allowlist_includes_resource_operations_and_rejects_unknown_calls() {
+        for operation in [
+            "workspace.resources.analyze",
+            "workspace.resources.plan",
+            "workspace.resources.list",
+            "workspace.resources.prepare_project",
+            "workspace.cancel_resources",
+        ] {
+            assert!(
+                allowed_operation(operation),
+                "{operation} should be allowed"
+            );
+        }
+        assert!(!allowed_operation("workspace.resources.delete"));
+        assert!(!allowed_operation("resources.prepare_project"));
+    }
+
+    #[test]
+    fn resource_preparation_bridge_deadline_matches_client_timeout() {
+        assert_eq!(
+            operation_timeout("workspace.resources.prepare_project"),
+            Duration::from_secs(30 * 60 + 30)
+        );
+        assert_eq!(
+            operation_timeout("workspace.resources.analyze"),
+            Duration::from_secs(30 * 60 + 5)
+        );
+    }
 }
 
 fn random_hex_16() -> Result<String, String> {

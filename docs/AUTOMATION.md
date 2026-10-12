@@ -83,6 +83,17 @@ sciencebatch-cli resources status --json
 sciencebatch-cli resources prepare --engine latex --json
 ```
 
+Project resource analysis is an offline workflow. It reads the disk project (or a live snapshot through MCP/workspace), the optional read-only `sciencebatch.resources.json`, local and embedded assets, and the pinned bundle catalog. It never compiles, accesses the network, creates cache directories, or edits the manifest. `resources.plan` requires the `inputDigest` returned by analysis. `resources.list` pages requirements and unresolved references using a matching `planDigest` and optional cursor. `resources.prepare-project` requires a current `planDigest`, re-resolves the same project snapshot, then downloads only the exact selected pinned resources. The CLI's explicit command authorizes this operation; MCP requires `--allow-resource-download`. Neither path compiles. Example:
+
+```sh
+sciencebatch-cli resources analyze --project ./paper --engine latex --main main.tex --json
+sciencebatch-cli resources plan --project ./paper --engine latex --main main.tex --expected-input-digest INPUT_DIGEST --json
+sciencebatch-cli resources list --project ./paper --engine latex --main main.tex --expected-plan-digest PLAN_DIGEST --limit 100 --json
+sciencebatch-cli resources prepare-project --project ./paper --engine latex --main main.tex --expected-plan-digest PLAN_DIGEST --json
+```
+
+`--selection` accepts a JSON array of exact `pack`, `package`, or pinned-bundle `resource` selectors. Selectors cannot supply URLs, scripts, arbitrary CTAN versions, offsets, or hashes. Preparation uses bounded `--max-download-bytes` and `--max-storage-bytes` limits. Its output keeps `firstAttemptTransferEstimateBytes` separate from conservative `budgetChargedBytes`; `bytesDownloaded` is exact only for a successful no-retry transfer and is null when exact transfer cannot be established. The analysis still reports unresolved dynamic references, so prepared known resources do not claim a complete dependency closure. To prepare and compile, invoke the separate explicit compile command after preparation.
+
 On Linux, Tectonic normally stores shared resources under `$XDG_CACHE_HOME/tectonic` (or `~/.cache/tectonic`): `bundles/hashes/` contains bundle digests and check metadata, `bundles/data/` contains indexes and cached resource files, and `formats/` contains reusable `.fmt` files and atomic format-cache staging files. Explicit preparation may populate these shared resources; compilation may create cache directories and a missing format from already cached resources. It never downloads. `TECTONIC_CACHE_DIR` overrides Tectonic's cache base; use `resources status` to obtain the effective bundle location. Other platforms use Tectonic's per-user cache directory.
 
 Explicit source edits additionally use stable per-target lock files under the per-user ScienceBatch cache's `transaction-locks/` directory (`~/.cache/sciencebatch/transaction-locks` on Linux). These files coordinate concurrent edits and contain no document source. Atomic edit/PDF staging files exist only beside the requested destination and are removed after success or failure. The owner-private workspace registry is under app-local data (`~/.local/share/com.sciencebatch.editor/workspace-bridge` on Linux), separate from compiler caches. Typst uses bundled resources without a downloadable cache.
@@ -113,11 +124,17 @@ sciencebatch_diagnostics
 sciencebatch_compile
 sciencebatch_resources_status
 sciencebatch_resources_prepare
+sciencebatch_resources_analyze
+sciencebatch_resources_plan
+sciencebatch_resources_list
+sciencebatch_resources_prepare_project
 sciencebatch_workspace_instances
 sciencebatch_workspace
 ```
 
-Workspace operations are `inspect`, `read`, `openProject`, `openFile`, `activate`, `apply`, `save`, `close`, `compile`, and `cancel`. The host selects one running app instance using its `instanceId`; if more than one is available, the client must choose. Workspace inspection exposes the available project, tabs, document IDs, dirty state, engine, and current revisions without saving. Workspace read returns the exact selected buffer and revision. Mutations must provide `documentId`, `expectedRevision`, `expectedProjectRoot`, and `workspaceGeneration`; `save` targets one selected document. Workspace compile carries a `jobId` and `timeoutSeconds`, derives the engine from the selected main file, and uses live source-tab overlays. `compile` and `cancel` are explicit workspace actions.
+The project resource analyze, plan, and list MCP tools are read-only and never compile. `sciencebatch_resources_prepare_project` requires the server to have been launched with `--allow-resource-download`, plus a fresh `expectedPlanDigest`. The generic live-workspace tool accepts `resources.analyze`, `resources.plan`, `resources.list`, and `resources.prepare_project`; it uses current workspace generation/project-root guards and frontend-captured dirty source overlays, including the resource manifest. Its prepare operation has the same download permission requirement and is cancellable through request cancellation. The internal bridge uses `workspace.resources.*` operation names and a separate `workspace.cancel_resources` route; callers cannot cancel a resource job by guessing a job ID through the MCP workspace tool.
+
+Workspace operations are `inspect`, `read`, `openProject`, `openFile`, `activate`, `apply`, `save`, `close`, `compile`, `cancel`, `resources.analyze`, `resources.plan`, `resources.list`, and `resources.prepare_project`. The host selects one running app instance using its `instanceId`; if more than one is available, the client must choose. Workspace inspection exposes the available project, tabs, document IDs, dirty state, engine, and current revisions without saving. Workspace read returns the exact selected buffer and revision. Mutations must provide `documentId`, `expectedRevision`, `expectedProjectRoot`, and `workspaceGeneration`; `save` targets one selected document. Workspace compile carries a `jobId` and `timeoutSeconds`, derives the engine from the selected main file, and uses live source-tab overlays. Resource analysis and preparation use the selected project's current generation and project root; the frontend captures dirty source buffers and the resource manifest for each request. Resource preparation has a separate 30-minute worker timeout and can be cancelled through the matching active job. Compile and resource preparation are explicit workspace actions.
 
 The CLI workspace adapter offers the same operations. List instances, inspect one, then pass operation arguments as one JSON object using `--args`. Repeat `--root` to constrain accessible projects; when omitted, the launch directory is the allowed root:
 

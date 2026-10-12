@@ -11,7 +11,7 @@ pub use compiler::run_compiler_worker;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .setup(|app| {
             use tauri::Manager;
             let workspace_bridge =
@@ -77,6 +77,8 @@ pub fn run() {
             commands::workspace::workspace_export_pdf,
             commands::workspace::compile_workspace_snapshot,
             commands::workspace::cancel_workspace_compilation,
+            commands::resources::resources_workspace_operation,
+            commands::resources::cancel_project_resources,
             commands::files::list_project_files,
             commands::files::read_file_content,
             commands::files::existing_file_paths,
@@ -107,8 +109,31 @@ pub fn run() {
             commands::git::pull_git_remote,
             commands::git::push_git_remote,
         ])
-        .run(tauri::generate_context!())
-        .expect("error running tauri application");
+        .build(tauri::generate_context!())
+        .expect("failed to build ScienceBatch application");
+    app.run(|app_handle, event| {
+        if let tauri::RunEvent::ExitRequested { api, .. } = event {
+            use tauri::Manager;
+
+            let jobs = app_handle
+                .state::<commands::workspace::WorkspaceCompileJobs>()
+                .inner()
+                .clone();
+            let compiler = app_handle.state::<CompilerManager>().inner().clone();
+            if jobs.is_shutdown_complete() && compiler.is_shutdown_complete() {
+                return;
+            }
+            api.prevent_exit();
+            if jobs.start_shutdown() {
+                compiler.start_shutdown();
+                let app = app_handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    let _ = tokio::join!(jobs.cancel_all_and_wait(), compiler.cancel_and_wait());
+                    app.exit(0);
+                });
+            }
+        }
+    });
 }
 
 #[cfg(test)]

@@ -69,6 +69,7 @@ export function useProject({
   const [projectName, setProjectName] = useState<string>('');
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
   const [mainFilePath, setMainFilePath] = useState<string | null>(null);
+  const [templateAssets, setTemplateAssets] = useState<'starter-latex' | 'starter-typst' | null>(null);
   const [projectFiles, setProjectFiles] = useState<FileItem[]>([]);
   const [engine, setEngine] = useState<EngineType>('latex');
   const [sourceCode, setSourceCodeState] = useState<string>(DEFAULT_LATEX_SOURCE);
@@ -545,6 +546,7 @@ export function useProject({
 
       setProjectRoot(targetPath);
       projectRootRef.current = targetPath;
+      setTemplateAssets(null);
       projectGenerationRef.current += 1;
 
       setProjectName(name);
@@ -682,6 +684,7 @@ export function useProject({
     clearCompilationAndDiagnostics();
     setProjectRoot(null);
     projectRootRef.current = null;
+    setTemplateAssets(chosenEngine === 'typst' ? 'starter-typst' : 'starter-latex');
     projectGenerationRef.current += 1;
     setProjectName('Scratchpad');
     setActiveFilePath(null);
@@ -707,10 +710,12 @@ export function useProject({
       if (sourceCode === DEFAULT_LATEX_SOURCE || sourceCode === DEFAULT_TYPST_SOURCE) {
         const nextSource = newEngine === 'typst' ? DEFAULT_TYPST_SOURCE : DEFAULT_LATEX_SOURCE;
         setSourceCodeState(nextSource);
+        setTemplateAssets(newEngine === 'typst' ? 'starter-typst' : 'starter-latex');
         resetTabs(null, nextSource, newEngine);
 
         return;
       }
+      setTemplateAssets(null);
     }
 
     toast.info(`Typesetting engine set to ${newEngine.toUpperCase()}`);
@@ -733,6 +738,7 @@ export function useProject({
     fileRequestRef.current++;
     setProjectRoot(null);
     projectRootRef.current = null;
+    setTemplateAssets(null);
     projectGenerationRef.current += 1;
     setProjectName('');
     setActiveFilePath(null);
@@ -882,6 +888,7 @@ export function useProject({
     projectName,
     activeFilePath,
     mainFilePath,
+    templateAssets,
     projectFiles,
     engine,
     sourceCode,

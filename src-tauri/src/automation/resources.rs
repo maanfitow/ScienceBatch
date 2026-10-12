@@ -135,7 +135,7 @@ pub(super) fn status() -> Result<(Value, Vec<super::PublicDiagnostic>), Automati
     ))
 }
 
-fn cache_directory() -> Result<std::path::PathBuf, AutomationError> {
+pub(super) fn cache_directory() -> Result<std::path::PathBuf, AutomationError> {
     if let Some(root) = std::env::var_os("TECTONIC_CACHE_DIR") {
         return Ok(std::path::PathBuf::from(root).join("bundles"));
     }
@@ -644,9 +644,17 @@ async fn run_prepare_process_with_timeout(
             Some("resource.limit_exceeded") => "resource.limit_exceeded",
             Some("operation.timeout") => "operation.timeout",
             Some("worker.crashed") => "worker.crashed",
+            Some("worker.protocol_invalid") => "worker.protocol_invalid",
+            Some("resources.bundle_identity_mismatch") => "resources.bundle_identity_mismatch",
+            Some("resources.catalog_invalid") => "resources.catalog_invalid",
+            Some("path.symlink_rejected") => "path.symlink_rejected",
+            Some("cache.integrity_failed") => "cache.integrity_failed",
+            Some("permission.resource_download_required") => {
+                "permission.resource_download_required"
+            }
             _ => "cache.unavailable_offline",
         };
-        return Err(AutomationError::new(
+        let error = AutomationError::new(
             code,
             response
                 .message
@@ -656,7 +664,11 @@ async fn run_prepare_process_with_timeout(
                 "worker.crashed" => 4,
                 _ => 3,
             },
-        ));
+        );
+        return Err(match response.details {
+            Some(details) if !details.is_null() => error.with_details(details),
+            _ => error,
+        });
     }
     Ok((
         json!({"engine":"latex","prepared":true,"files":response.files,"bytesDownloaded":response.downloaded_bytes,"resumable":true}),
@@ -820,6 +832,7 @@ struct PrepareResponse {
     downloaded_bytes: Option<u64>,
     code: Option<String>,
     message: Option<String>,
+    details: Option<Value>,
 }
 
 pub fn run_prepare_worker() {
@@ -856,6 +869,18 @@ fn run_prepare_worker_blocking() {
             "cache.unavailable_offline",
             format!("Cannot open compiler resource config: {e}"),
         ),
+    };
+    let cache_directory = match cache_directory() {
+        Ok(cache) => cache,
+        Err(error) => emit_prepare_error(error.code, error.message),
+    };
+    let _bundle_lock = match super::resource_prepare::acquire_bundle_lock_for_url(
+        &cache_directory,
+        config.default_bundle_loc(),
+        std::time::Instant::now() + PREPARE_TIMEOUT,
+    ) {
+        Ok(lock) => lock,
+        Err(error) => emit_prepare_error(error.code, error.message),
     };
     let mut bundle = match detect_bundle(config.default_bundle_loc().to_owned(), false, None) {
         Ok(Some(b)) => b,

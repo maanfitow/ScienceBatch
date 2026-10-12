@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useHotkeys } from 'react-hotkeys-hook';
-import { Toaster } from 'sonner';
+import { Toaster, toast } from 'sonner';
 import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
 import { MenuBar } from './components/MenuBar';
 import { Toolbar } from './components/Toolbar';
@@ -11,17 +12,21 @@ import { WelcomeScreen } from './components/WelcomeScreen';
 import { NewProjectModal } from './components/NewProjectModal';
 import { CloneRepositoryModal } from './components/CloneRepositoryModal';
 import { WorkspaceTabs } from './components/WorkspaceTabs';
+import { ProjectResourcesDialog } from './components/ProjectResourcesDialog';
 import { SidebarActivityBar, SidebarContentPanels } from './components/sidebar';
 import { WritingRibbon } from './components/writing/WritingRibbon';
 
-import { useRecentProjects, useCompiler, useExport, useProject, useSidebar } from './hooks';
+import { useRecentProjects, useCompiler, useExport, useProject, useProjectResources, useSidebar } from './hooks';
 import { useGitOperation } from './hooks/useGitOperation';
 import { useWorkspaceAutomation } from './hooks/useWorkspaceAutomation';
 import { ViewMode } from './types';
 import { tabIsDirty, type WorkspaceTab } from './types/workspace';
+import type { ProjectResourceSnapshot } from './types/projectResources';
+import type { ProjectResourceOperation } from './types/projectResources';
 import type { WritingEditorBridge, WritingEditorState } from './types/writing';
 import { inspectPackageEligibility } from './editor/writing';
 import { validateWorkspaceEdit } from './editor/workspaceAutomationBridge';
+import { captureProjectSnapshot } from './editor/projectResourceSnapshot';
 import type { AutomationEditorBridge, WorkspaceAutomationReply, WorkspaceAutomationRequest } from './types/automation';
 import './App.css';
 
@@ -43,11 +48,6 @@ const normalizeWorkspacePath = (path: string): string => {
 const resolveMainFilePath = (projectRoot: string, mainFilePath: string): string => {
   const path = mainFilePath.replace(/\\/g, '/');
   return path.startsWith('/') || /^[A-Za-z]:\//.test(path) ? path : `${projectRoot}/${path}`;
-};
-
-const engineForMainFile = (projectRoot: string | null, mainFilePath: string | null, fallback: 'latex' | 'typst'): 'latex' | 'typst' => {
-  if (!projectRoot || !mainFilePath) return fallback;
-  return /\.typ$/i.test(mainFilePath) ? 'typst' : 'latex';
 };
 
 const waitForRenderTurn = () => new Promise<void>(resolve => {
@@ -96,6 +96,10 @@ export const App: React.FC = () => {
 
   const compiler = useCompiler();
   const exportService = useExport();
+  const compileWorkspaceDelegateRef = React.useRef<() => Promise<void>>(async () => undefined);
+  const compileForProject = useCallback(async () => {
+    await compileWorkspaceDelegateRef.current();
+  }, []);
 
   useEffect(() => {
     const preventNativeContextMenu = (event: MouseEvent) => {
@@ -107,7 +111,7 @@ export const App: React.FC = () => {
   }, []);
 
   const project = useProject({
-    compile: compiler.compile,
+    compile: compileForProject,
     clearCompilationAndDiagnostics: compiler.clearCompilationAndDiagnostics,
     recordRecentProject,
     removeRecentProject,
@@ -118,6 +122,66 @@ export const App: React.FC = () => {
   projectRef.current = project;
   const compilerRef = React.useRef(compiler);
   compilerRef.current = compiler;
+  const workspaceSnapshot = captureProjectSnapshot(project);
+  const workspaceSnapshotRef = React.useRef(workspaceSnapshot);
+  workspaceSnapshotRef.current = workspaceSnapshot;
+  const isWorkspaceSnapshotCurrent = useCallback((fingerprint: string) => workspaceSnapshotRef.current?.fingerprint === fingerprint, []);
+  const projectResources = useProjectResources(workspaceSnapshot, isWorkspaceSnapshotCurrent);
+  useEffect(() => {
+    projectResources.setSidebarVisible(Boolean(project.projectRoot && sidebar.state.isOpen
+      && (sidebar.state.activeTopTool === 'dependencies' || sidebar.state.activeBottomTool === 'dependencies')));
+  }, [project.projectRoot, projectResources.setSidebarVisible, sidebar.state.activeBottomTool, sidebar.state.activeTopTool, sidebar.state.isOpen]);
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: UnlistenFn | undefined;
+    void listen<{ id: string; jobId: string; operation: string; kind: string }>('workspace-automation-disconnected', event => {
+      const payload = event.payload;
+      if (payload.operation === 'workspace.resources.prepare_project' && payload.kind === 'resource-preparation') {
+        void projectResources.cancelJob(payload.jobId);
+      }
+    }).then(stop => {
+      if (disposed) stop(); else unlisten = stop;
+    }).catch(() => undefined);
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [projectResources.cancelJob]);
+  const compileLiveWorkspace = useCallback(async (providedSnapshot?: ProjectResourceSnapshot) => {
+    const current = projectRef.current;
+    const snapshot = providedSnapshot ?? captureProjectSnapshot(current);
+    if (!Object.keys(snapshot.overlays).length) {
+      toast.error('No source document is open', { description: 'Open or create a source document before compiling.' });
+      return;
+    }
+    const jobId = `desktop-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
+    const result = await compilerRef.current.compileWorkspace({
+      jobId,
+      engine: snapshot.engine,
+      projectRoot: snapshot.projectRoot,
+      mainFile: snapshot.mainFile,
+      overlays: snapshot.overlays,
+      allowedRoots: snapshot.allowedRoots,
+      workspaceIdentity: snapshot.workspaceIdentity,
+      templateAssets: snapshot.templateAssets,
+      timeoutSeconds: 120,
+    }, () => isWorkspaceSnapshotCurrent(snapshot.fingerprint));
+    if (!result || result.success || !isWorkspaceSnapshotCurrent(snapshot.fingerprint)) return;
+    const details = result.error?.details;
+    if (details && typeof details === 'object') {
+      const indexedMisses = (details as Record<string, unknown>).missingResources;
+      if (Array.isArray(indexedMisses)) projectResources.offerRecoveryPaths(indexedMisses, snapshot.fingerprint);
+    }
+    const possibleMissingResource = Boolean(result.error?.code.startsWith('resources.'))
+      || result.errors.some(item => /resource|file not found|not found|missing/i.test(item.message));
+    if (possibleMissingResource) {
+      toast.error('Compilation may need project resources', {
+        description: result.error?.message ?? result.errors[0]?.message ?? 'Review the missing resource and prepare it explicitly.',
+        action: { label: 'Project Resources…', onClick: projectResources.open },
+      });
+    }
+  }, [isWorkspaceSnapshotCurrent, projectResources.offerRecoveryPaths, projectResources.open]);
+  compileWorkspaceDelegateRef.current = () => compileLiveWorkspace();
   const automationEditorBridgeRef = React.useRef<AutomationEditorBridge | null>(null);
   const handleAutomationEditorBridgeChange = useCallback((bridge: AutomationEditorBridge | null) => {
     automationEditorBridgeRef.current = bridge;
@@ -127,7 +191,7 @@ export const App: React.FC = () => {
     const current = projectRef.current;
     const args = request.args ?? {};
     const respond = (data: unknown): WorkspaceAutomationReply => ({ schemaVersion: 1, id: request.id, ok: true, data });
-    const reject = (code: string, message: string, details?: unknown): WorkspaceAutomationReply => ({ schemaVersion: 1, id: request.id, ok: false, error: { code, message, details } });
+    const reject = (code: string, message: string, details?: unknown, diagnostics?: unknown[]): WorkspaceAutomationReply => ({ schemaVersion: 1, id: request.id, ok: false, error: { code, message, ...(details !== undefined ? { details } : {}), ...(diagnostics ? { diagnostics } : {}) } });
     const stringArg = (key: string) => typeof args[key] === 'string' ? args[key] as string : null;
     const numberArg = (key: string) => typeof args[key] === 'number' && Number.isInteger(args[key]) ? args[key] as number : null;
     const allowedRoots = Array.isArray(args.allowedRoots) ? args.allowedRoots.filter((item): item is string => typeof item === 'string') : [];
@@ -138,7 +202,7 @@ export const App: React.FC = () => {
         || numberArg('workspaceGeneration') !== currentGeneration) {
         return reject('conflict.project', 'The workspace project changed since it was inspected.', { projectRoot: currentRoot, workspaceGeneration: currentGeneration });
       }
-      if (current.getWorkspaceExportLeaseId() && ['workspace.openProject', 'workspace.openFile', 'workspace.activate', 'workspace.apply', 'workspace.save', 'workspace.close', 'workspace.compile'].includes(request.operation)) {
+      if (current.getWorkspaceExportLeaseId() && ['workspace.openProject', 'workspace.openFile', 'workspace.activate', 'workspace.apply', 'workspace.save', 'workspace.close', 'workspace.compile', 'workspace.resources.analyze', 'workspace.resources.plan', 'workspace.resources.list', 'workspace.resources.prepare_project'].includes(request.operation)) {
         return reject('workspace.busy', 'A PDF export is finalizing the current workspace snapshot.');
       }
       if (current.worktreeUpdateBusy) return reject('git.locked', 'A Git worktree update is in progress.');
@@ -354,42 +418,83 @@ export const App: React.FC = () => {
           }
           return respond({ closed: true, documentId: documentId ?? null });
         }
+        case 'workspace.resources.analyze':
+        case 'workspace.resources.plan':
+        case 'workspace.resources.list':
+        case 'workspace.resources.prepare_project': {
+          const conflict = checkExpectedContext();
+          if (conflict) return conflict;
+          const authorizedRoot = await authorizeCurrentRoot();
+          if (authorizedRoot && typeof authorizedRoot !== 'string') return authorizedRoot;
+          const snapshot = captureProjectSnapshot(current);
+          if (!contextStillCurrent() || !isWorkspaceSnapshotCurrent(snapshot.fingerprint)) {
+            return reject('conflict.revision', 'The workspace changed while its resource snapshot was being captured.');
+          }
+          const operation = request.operation.slice('workspace.'.length) as ProjectResourceOperation;
+          const jobId = stringArg('jobId') ?? request.id;
+          const externalPrepare = operation === 'resources.prepare_project';
+          if (externalPrepare && !projectResources.adoptExternalJob(jobId, snapshot)) {
+            return reject('worker.busy', 'Another project resource preparation is already active.');
+          }
+          try {
+            const resourceRequest = {
+              operation,
+              jobId,
+              engine: snapshot.engine,
+              projectRoot: authorizedRoot,
+              mainFile: snapshot.mainFile,
+              overlays: snapshot.overlays,
+              allowedRoots,
+              workspaceIdentity: snapshot.workspaceIdentity,
+              templateAssets: snapshot.templateAssets,
+              ...(Array.isArray(args.selection) ? { selection: args.selection } : {}),
+              ...(stringArg('expectedInputDigest') ? { expectedInputDigest: stringArg('expectedInputDigest') } : {}),
+              ...(stringArg('expectedPlanDigest') ? { expectedPlanDigest: stringArg('expectedPlanDigest') } : {}),
+              ...(stringArg('cursor') ? { cursor: stringArg('cursor') } : {}),
+              ...(numberArg('limit') !== null ? { limit: numberArg('limit') } : {}),
+              ...(numberArg('maxDownloadBytes') !== null ? { maxDownloadBytes: numberArg('maxDownloadBytes') } : {}),
+              ...(numberArg('maxStorageBytes') !== null ? { maxStorageBytes: numberArg('maxStorageBytes') } : {}),
+            };
+            const data = await invoke<unknown>('resources_workspace_operation', { request: resourceRequest });
+            if (!contextStillCurrent() || !isWorkspaceSnapshotCurrent(snapshot.fingerprint)) {
+              return reject('conflict.revision', 'The workspace changed during the resource operation. Analyze it again before preparing.');
+            }
+            return respond(data);
+          } finally {
+            if (externalPrepare) projectResources.finishExternalJob(jobId);
+          }
+        }
+        case 'workspace.cancel_resources': {
+          const jobId = stringArg('jobId');
+          if (!jobId) return reject('argument.invalid', 'A project resource job ID is required.');
+          if (jobId !== projectResources.activeJobId) return reject('job.not_found', 'The requested resource preparation is not owned by this workspace session.');
+          const cancelled = await invoke<boolean>('cancel_project_resources', { jobId });
+          return respond({ jobId, cancelled });
+        }
         case 'workspace.compile': {
           const conflict = checkExpectedContext();
           if (conflict) return conflict;
           const authorizedRoot = await authorizeCurrentRoot();
           if (authorizedRoot && typeof authorizedRoot !== 'string') return authorizedRoot;
           if (!contextStillCurrent()) return reject('conflict.project', 'The project changed while access was being checked.');
-          const root = current.projectRoot;
-          const mainFile = current.mainFilePath ?? `main.${current.engine === 'typst' ? 'typ' : 'tex'}`;
-          const engine = engineForMainFile(root, current.mainFilePath, current.engine);
-          const relativeMain = root && mainFile.startsWith(root) ? mainFile.slice(root.length).replace(/^[/\\]/, '') : mainFile;
-          const overlays: Record<string, string> = {};
-          const documents = current.tabs.filter(tab => tab.kind === 'source');
-          for (const tab of documents) {
-            const path = tab.path && root ? (tab.path.startsWith(root) ? tab.path.slice(root.length).replace(/^[/\\]/, '') : tab.path) : relativeMain;
-            overlays[path.replace(/\\/g, '/')] = tab.content;
-          }
+          const snapshot = captureProjectSnapshot(current);
+          const engine = snapshot.engine;
+          const relativeMain = snapshot.mainFile;
+          const overlays = snapshot.overlays;
           if (!Object.keys(overlays).length) return reject('document.unavailable', 'There is no source document to compile.');
-          const documentIdentity = JSON.stringify(documents.map(tab => [tab.id, tab.path, current.getDocumentRevision(tab.id)]).sort(([left], [right]) => String(left).localeCompare(String(right))));
-          const selectedMainPath = current.mainFilePath;
-          const isSnapshotCurrent = () => {
-            const latest = projectRef.current;
-            const latestDocuments = latest.tabs.filter(tab => tab.kind === 'source');
-            const latestIdentity = JSON.stringify(latestDocuments.map(tab => [tab.id, tab.path, latest.getDocumentRevision(tab.id)]).sort(([left], [right]) => String(left).localeCompare(String(right))));
-            return latest.projectRoot === root && latest.getProjectGeneration() === currentGeneration
-              && latest.mainFilePath === selectedMainPath
-              && engineForMainFile(latest.projectRoot, latest.mainFilePath, latest.engine) === engine
-              && latestIdentity === documentIdentity;
-          };
+          const isSnapshotCurrent = () => contextStillCurrent() && isWorkspaceSnapshotCurrent(snapshot.fingerprint);
           const timeoutSeconds = numberArg('timeoutSeconds') ?? 120;
           if (timeoutSeconds < 1 || timeoutSeconds > 900) return reject('argument.invalid', 'Compilation timeout must be between 1 and 900 seconds.');
           const jobId = stringArg('jobId') ?? request.id;
-          const result = await compilerRef.current.compileWorkspace({ jobId, engine, projectRoot: authorizedRoot, mainFile: relativeMain, overlays, timeoutSeconds, allowedRoots }, isSnapshotCurrent);
+          const result = await compilerRef.current.compileWorkspace({
+            jobId, engine, projectRoot: authorizedRoot, mainFile: relativeMain, overlays,
+            timeoutSeconds, allowedRoots, workspaceIdentity: snapshot.workspaceIdentity,
+            templateAssets: snapshot.templateAssets,
+          }, isSnapshotCurrent);
           if (!result || !isSnapshotCurrent()) {
             return reject('conflict.stale_result', 'The workspace changed during compilation; the result was not applied to the preview.');
           }
-          if (result.error) return reject(result.error.code, result.error.message);
+          if (result.error) return reject(result.error.code, result.error.message, result.error.details, result.error.diagnostics);
           if (!result.success) {
             return reject('compile.document_failed', 'The workspace document failed to compile.', {
               jobId,
@@ -437,9 +542,13 @@ export const App: React.FC = () => {
           return reject('operation.unsupported', `Unsupported workspace operation: ${request.operation}`);
       }
     } catch (error) {
-      const message = String(error);
-      const code = message.match(/^([a-z][a-z0-9_.-]+):/)?.[1] ?? 'workspace.operation_failed';
-      return reject(code, message);
+      const outer = error && typeof error === 'object' ? error as Record<string, unknown> : null;
+      const nested = outer?.error && typeof outer.error === 'object' ? outer.error as Record<string, unknown> : outer;
+      const rawMessage = typeof nested?.message === 'string' ? nested.message : error instanceof Error ? error.message : String(error);
+      const code = typeof nested?.code === 'string' ? nested.code : rawMessage.match(/^([a-z][a-z0-9_.-]+):/)?.[1] ?? 'workspace.operation_failed';
+      const details = nested?.details ?? outer?.details;
+      const diagnostics = Array.isArray(nested?.diagnostics) ? nested.diagnostics : Array.isArray(outer?.diagnostics) ? outer.diagnostics : undefined;
+      return reject(code, rawMessage, details, diagnostics);
     }
   }, []);
   useWorkspaceAutomation(handleWorkspaceAutomationRequest, jobId => {
@@ -706,9 +815,7 @@ export const App: React.FC = () => {
     setTimeout(() => setJumpToLine(null), 150);
   };
 
-  const handleCompileCurrent = () => {
-    compiler.compile(project.sourceCode, project.engine, project.projectRoot, project.mainFilePath);
-  };
+  const handleCompileCurrent = () => { void compileLiveWorkspace(); };
 
   return (
     <div className="app-layout">
@@ -728,6 +835,7 @@ export const App: React.FC = () => {
         onExportHtml={() => exportService.exportHtml(project.projectRoot, project.projectName, project.sourceCode, project.engine, project.mainFilePath)}
         onCloseProject={project.closeProject}
         onCompile={handleCompileCurrent}
+        onOpenProjectResources={projectResources.open}
         onCancelCompile={compiler.cancelCompilation}
         isCompiling={compiler.isCompiling}
         activeTab={compiler.activeTab}
@@ -836,6 +944,7 @@ export const App: React.FC = () => {
                     onBranchChanged={() => project.refreshAfterGitUpdate()}
                     onWorktreeUpdateBusyChange={project.setWorktreeUpdateBusy}
                     hasUnsavedChanges={project.tabs.some(tabIsDirty)}
+                    resources={projectResources}
                     onSetMainFile={project.setMainFile}
                     onCreateFile={project.createFile}
                     onCreateFolder={project.createFolder}
@@ -926,6 +1035,12 @@ export const App: React.FC = () => {
         onClose={() => { if (!cloneOperation.running) setIsCloneRepositoryModalOpen(false); }}
         onOpenExisting={path => project.openFolder(path)}
         onClone={cloneRepository}
+      />
+
+      <ProjectResourcesDialog
+        resources={projectResources}
+        projectName={projectResources.activeWorkspaceLabel?.projectName ?? project.projectName}
+        onClose={() => projectResources.setIsOpen(false)}
       />
 
       <Toaster position="bottom-right" richColors closeButton />

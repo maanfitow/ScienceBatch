@@ -1,10 +1,12 @@
 use super::{
-    AutomationError, ProjectSnapshot, SnapshotFileKind, MAX_ASSET_BYTES, MAX_ENTRIES,
-    MAX_LOG_BYTES, MAX_PDF_BYTES, MAX_PROTOCOL_BYTES, MAX_SNAPSHOT_BYTES, MAX_TEXT_BYTES,
+    AutomationError, ProjectSnapshot, PublicDiagnostic, SnapshotFileKind, MAX_ASSET_BYTES,
+    MAX_ENTRIES, MAX_LOG_BYTES, MAX_PDF_BYTES, MAX_PROTOCOL_BYTES, MAX_SNAPSHOT_BYTES,
+    MAX_TEXT_BYTES,
 };
 use crate::types::{CompileResponse, DiagnosticItem};
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::io::Read;
 use std::path::PathBuf;
@@ -15,6 +17,8 @@ use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 use tokio::process::{Child, Command};
 use tokio::sync::OwnedSemaphorePermit;
+
+const MAX_WORKER_ERROR_BYTES: usize = 1024 * 1024;
 
 #[derive(Serialize)]
 #[serde(deny_unknown_fields)]
@@ -53,6 +57,10 @@ struct WorkerFailure {
     code: String,
     message: String,
     exit_code: i32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    details: Option<Value>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    diagnostics: Vec<PublicDiagnostic>,
 }
 
 pub async fn run_worker(
@@ -75,7 +83,38 @@ pub async fn run_worker(
         "Encoded worker message exceeds 256 MiB.",
     )?;
     let executable = super::worker_executable()?;
-    run_worker_request(executable, bytes, timeout, cancellation, permit).await
+    let cache_lease = if snapshot.engine == "latex" {
+        let cache = super::resources::cache_directory()?;
+        let digest = super::resource_project::pinned_catalog()?.digest;
+        Some(
+            tokio::task::spawn_blocking(move || {
+                super::resource_prepare::acquire_cache_read_lock(
+                    &cache,
+                    &digest,
+                    std::time::Instant::now() + Duration::from_secs(3),
+                )
+            })
+            .await
+            .map_err(|error| {
+                AutomationError::new(
+                    "internal.unexpected",
+                    format!("Cache lease task failed: {error}"),
+                    4,
+                )
+            })??,
+        )
+    } else {
+        None
+    };
+    run_worker_request(
+        executable,
+        bytes,
+        timeout,
+        cancellation,
+        permit,
+        cache_lease,
+    )
+    .await
 }
 
 async fn run_worker_request(
@@ -84,6 +123,7 @@ async fn run_worker_request(
     timeout: Duration,
     cancellation: Arc<AtomicBool>,
     permit: OwnedSemaphorePermit,
+    cache_lease: Option<super::resource_prepare::CacheReadLock>,
 ) -> Result<CompileResponse, AutomationError> {
     let (cancel_sender, cancel_receiver) = tokio::sync::oneshot::channel();
     let mut guard = DropCancel(Some(cancel_sender));
@@ -94,6 +134,7 @@ async fn run_worker_request(
         cancellation,
         cancel_receiver,
         permit,
+        cache_lease,
     ));
     let result = task.await.map_err(|e| {
         AutomationError::new(
@@ -122,6 +163,7 @@ async fn run_worker_process(
     cancellation: Arc<AtomicBool>,
     drop_cancel: tokio::sync::oneshot::Receiver<()>,
     permit: OwnedSemaphorePermit,
+    cache_lease: Option<super::resource_prepare::CacheReadLock>,
 ) -> Result<CompileResponse, AutomationError> {
     run_worker_process_with_limits(
         executable,
@@ -130,6 +172,7 @@ async fn run_worker_process(
         cancellation,
         drop_cancel,
         Some(permit),
+        cache_lease,
         MAX_PROTOCOL_BYTES,
         MAX_LOG_BYTES,
     )
@@ -143,6 +186,7 @@ async fn run_worker_process_with_limits(
     cancellation: Arc<AtomicBool>,
     drop_cancel: tokio::sync::oneshot::Receiver<()>,
     permit: Option<OwnedSemaphorePermit>,
+    _cache_lease: Option<super::resource_prepare::CacheReadLock>,
     output_limit: usize,
     log_limit: usize,
 ) -> Result<CompileResponse, AutomationError> {
@@ -493,9 +537,26 @@ fn validate_worker_failure(
     let Some(error) = response.worker_error.as_ref() else {
         return Ok(None);
     };
+    ensure_within_limit(
+        serde_json::to_vec(error).map_or(usize::MAX, |bytes| bytes.len()),
+        MAX_WORKER_ERROR_BYTES,
+        "Compiler worker error details exceed 1 MiB.",
+    )
+    .map_err(|_| {
+        AutomationError::new(
+            "worker.protocol_invalid",
+            "Compiler worker error details exceed the 1 MiB protocol limit.",
+            4,
+        )
+    })?;
     let (code, expected_exit) = match error.code.as_str() {
         "path.outside_project" => ("path.outside_project", 2),
+        "path.symlink_rejected" => ("path.symlink_rejected", 2),
         "cache.unavailable_offline" => ("cache.unavailable_offline", 3),
+        "resources.bundle_identity_mismatch" => ("resources.bundle_identity_mismatch", 3),
+        "resources.cache_invalid" => ("resources.cache_invalid", 3),
+        "resources.catalog_missing_resource" => ("resources.catalog_missing_resource", 3),
+        "resources.catalog_invalid" => ("resources.catalog_invalid", 4),
         "dependency.external_tool_unsupported" => ("dependency.external_tool_unsupported", 1),
         "resource.limit_exceeded" => ("resource.limit_exceeded", 3),
         "operation.timeout" => ("operation.timeout", 124),
@@ -522,11 +583,13 @@ fn validate_worker_failure(
             4,
         ));
     }
-    Ok(Some(AutomationError::new(
-        code,
-        error.message.clone(),
-        expected_exit,
-    )))
+    let mut automation_error = AutomationError::new(code, error.message.clone(), expected_exit);
+    if let Some(details) = error.details.clone() {
+        automation_error = automation_error.with_details(details);
+    }
+    Ok(Some(
+        automation_error.with_diagnostics(error.diagnostics.clone()),
+    ))
 }
 
 pub fn run_automation_worker() {
@@ -673,11 +736,7 @@ pub fn run_automation_worker() {
                 errors: vec![],
                 warnings: vec![],
                 raw_log: String::new(),
-                worker_error: Some(WorkerFailure {
-                    code: error.code.into(),
-                    message: error.message,
-                    exit_code: error.exit_code,
-                }),
+                worker_error: Some(bounded_worker_failure(error)),
             });
             return;
         }
@@ -700,6 +759,30 @@ pub fn run_automation_worker() {
         worker_error: None,
     };
     emit_worker_response(outgoing);
+}
+
+fn bounded_worker_failure(error: AutomationError) -> WorkerFailure {
+    let mut failure = WorkerFailure {
+        code: error.code.into(),
+        message: error.message,
+        exit_code: error.exit_code,
+        details: error.details,
+        diagnostics: error.diagnostics,
+    };
+    let encoded_size = || serde_json::to_vec(&failure).map_or(usize::MAX, |bytes| bytes.len());
+    if encoded_size() > MAX_WORKER_ERROR_BYTES {
+        let diagnostics_omitted = failure.diagnostics.len();
+        let details_omitted = failure.details.is_some();
+        failure.diagnostics.clear();
+        failure.details = Some(json!({
+            "payloadTruncated": true,
+            "detailsOmitted": details_omitted,
+            "diagnosticsOmitted": diagnostics_omitted,
+            "limitBytes": MAX_WORKER_ERROR_BYTES,
+        }));
+        failure.message = failure.message.chars().take(2_048).collect();
+    }
+    failure
 }
 
 fn emit_worker_response(outgoing: OutgoingResponse) {
@@ -847,6 +930,55 @@ mod supervisor_tests {
         assert_eq!(error.exit_code, 2);
     }
 
+    #[tokio::test]
+    async fn worker_error_roundtrip_preserves_resource_details_and_diagnostics() {
+        let response = serde_json::json!({
+            "schema_version": 1,
+            "success": false,
+            "worker_error": {
+                "code": "resources.cache_invalid",
+                "message": "Cached resource failed verification.",
+                "exit_code": 3,
+                "details": {"path": "article.cls", "expectedSha256": "pinned"},
+                "diagnostics": [{
+                    "severity": "error",
+                    "code": "compile.engine_error",
+                    "message": "The document class could not be loaded.",
+                    "origin": "compiler",
+                    "file": "main.tex",
+                    "line": 1,
+                    "column": null,
+                    "suggestion": null
+                }]
+            }
+        });
+        let error = run_fake_response(&response.to_string()).await.unwrap_err();
+        assert_eq!(error.code, "resources.cache_invalid");
+        assert_eq!(error.exit_code, 3);
+        assert_eq!(error.details.as_ref().unwrap()["path"], "article.cls");
+        assert_eq!(error.diagnostics.len(), 1);
+        assert_eq!(
+            error.diagnostics[0].message,
+            "The document class could not be loaded."
+        );
+    }
+
+    #[test]
+    fn oversized_worker_error_becomes_an_explicit_bounded_overflow() {
+        let error = AutomationError::new(
+            "cache.unavailable_offline",
+            "Offline resources are missing.",
+            3,
+        )
+        .with_details(json!({"large": "x".repeat(MAX_WORKER_ERROR_BYTES + 1)}));
+        let failure = bounded_worker_failure(error);
+        let encoded = serde_json::to_vec(&failure).unwrap();
+        assert!(encoded.len() <= MAX_WORKER_ERROR_BYTES);
+        assert_eq!(failure.code, "cache.unavailable_offline");
+        assert_eq!(failure.details.as_ref().unwrap()["payloadTruncated"], true);
+        assert_eq!(failure.details.as_ref().unwrap()["detailsOmitted"], true);
+    }
+
     async fn run_fake_response(response: &str) -> Result<CompileResponse, AutomationError> {
         let payload = serde_json::to_string(response).unwrap();
         let fixture = script(&format!("cat >/dev/null; printf '%s\\n' {payload}"));
@@ -857,6 +989,7 @@ mod supervisor_tests {
             Duration::from_secs(2),
             Arc::new(AtomicBool::new(false)),
             receiver,
+            None,
             None,
             4096,
             4096,
@@ -880,6 +1013,15 @@ mod supervisor_tests {
         .unwrap();
         let semaphore = Arc::new(tokio::sync::Semaphore::new(1));
         let permit = semaphore.clone().try_acquire_owned().unwrap();
+        let temporary = tempfile::tempdir().unwrap();
+        let cache = temporary.path().join("bundles");
+        let pinned = super::super::resource_project::pinned_catalog().unwrap();
+        let cache_lease = super::super::resource_prepare::acquire_cache_read_lock(
+            &cache,
+            &pinned.digest,
+            std::time::Instant::now() + Duration::from_secs(1),
+        )
+        .unwrap();
 
         let request = tokio::spawn(run_worker_request(
             fixture.path.clone(),
@@ -887,6 +1029,7 @@ mod supervisor_tests {
             Duration::from_secs(60),
             Arc::new(AtomicBool::new(false)),
             permit,
+            Some(cache_lease),
         ));
         let worker_pid = tokio::time::timeout(Duration::from_secs(2), async {
             loop {
@@ -901,9 +1044,27 @@ mod supervisor_tests {
         .await
         .expect("worker should start and publish its PID");
         assert!(semaphore.clone().try_acquire_owned().is_err());
+        let writer_cache = cache.clone();
+        let writer_url = pinned.url.clone();
+        let writer_blocked = tokio::task::spawn_blocking(move || {
+            super::super::resource_prepare::acquire_bundle_lock_for_url(
+                &writer_cache,
+                &writer_url,
+                std::time::Instant::now() + Duration::from_millis(100),
+            )
+            .is_err()
+        })
+        .await
+        .unwrap();
+        assert!(
+            writer_blocked,
+            "compiler supervisor should hold the shared cache lease"
+        );
 
         request.abort();
-        request.await.expect_err("the MCP request future was dropped");
+        request
+            .await
+            .expect_err("the MCP request future was dropped");
         assert!(
             semaphore.clone().try_acquire_owned().is_err(),
             "the detached supervisor must keep the permit while the child is still running"
@@ -916,6 +1077,22 @@ mod supervisor_tests {
         })
         .await
         .expect("cancelled worker should be reaped");
+        let writer_cache = cache.clone();
+        let writer_url = pinned.url.clone();
+        let writer_acquired = tokio::task::spawn_blocking(move || {
+            super::super::resource_prepare::acquire_bundle_lock_for_url(
+                &writer_cache,
+                &writer_url,
+                std::time::Instant::now() + Duration::from_secs(1),
+            )
+            .is_ok()
+        })
+        .await
+        .unwrap();
+        assert!(
+            writer_acquired,
+            "shared cache lease should be released after the child is reaped"
+        );
         assert!(
             semaphore.clone().try_acquire_owned().is_ok(),
             "the permit should be released as soon as the worker is reaped"
@@ -949,6 +1126,7 @@ mod supervisor_tests {
             timeout,
             cancellation,
             receiver,
+            None,
             None,
             output_limit,
             log_limit,
@@ -1018,6 +1196,7 @@ mod supervisor_tests {
             Duration::from_secs(5),
             cancellation.clone(),
             receiver,
+            None,
             None,
             1024,
             1024,

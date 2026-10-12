@@ -1720,16 +1720,22 @@ impl ProcessingSession {
             Some(RerunReason::Bibtex)
         } else {
             warnings = self.tex_pass(None, status)?;
-            if self.disable_external_tools {
+            let maybe_biber = if self.disable_external_tools {
                 let mut run_xml_path = PathBuf::from(&self.primary_input_tex_path);
                 run_xml_path.set_extension("run.xml");
-                if self.bs.mem.files.borrow().contains_key(&run_xml_path.display().to_string()) {
-                    return Err(Error::msg(
-                        "external bibliography tools are disabled for in-memory automation compilation",
-                    ));
+                let run_xml_key = run_xml_path.display().to_string();
+                let mem_files = self.bs.mem.files.borrow();
+                match mem_files.get(&run_xml_key) {
+                    Some(run_xml) if run_xml_requests_biber(&run_xml.data)? => {
+                        return Err(Error::msg(
+                            "external bibliography tools are disabled for in-memory automation compilation",
+                        ));
+                    }
+                    _ => None,
                 }
-            }
-            let maybe_biber = self.check_biber_requirement(status)?;
+            } else {
+                self.check_biber_requirement(status)?
+            };
 
             if let Some(biber) = maybe_biber {
                 self.bs.external_tool_pass(&biber, status)?;
@@ -2316,5 +2322,106 @@ impl ProcessingSession {
                 extra_requires,
             })
         })
+    }
+}
+
+/// Determine whether a logreq run file requests Biber without looking up or
+/// executing any external programs. Automation uses this when external tools
+/// are disabled, so ordinary BibTeX run files remain valid.
+fn run_xml_requests_biber(data: &[u8]) -> Result<bool> {
+    let mut reader = NsReader::from_reader(Cursor::new(data));
+    let mut buf = Vec::new();
+    let mut in_external = false;
+    let mut in_binary = false;
+    let mut binary_name = String::new();
+    let mut requests_biber = false;
+
+    loop {
+        let event = ctry!(reader.read_event_into(&mut buf); "error parsing run.xml file");
+
+        match event {
+            Event::Eof => break,
+            Event::Start(ref element) => {
+                let name = reader
+                    .decoder()
+                    .decode(element.local_name().into_inner())
+                    .map_err(quick_xml::Error::from)?;
+                match &*name {
+                    "external" => in_external = true,
+                    "binary" if in_external => {
+                        in_binary = true;
+                        binary_name.clear();
+                    }
+                    _ => {}
+                }
+            }
+            Event::Text(ref element) if in_binary => {
+                binary_name.push_str(&element.decode()?);
+            }
+            Event::CData(ref element) if in_binary => {
+                binary_name.push_str(&element.decode()?);
+            }
+            Event::End(ref element) => {
+                let name = reader
+                    .decoder()
+                    .decode(element.local_name().into_inner())
+                    .map_err(quick_xml::Error::from)?;
+                match &*name {
+                    "binary" => {
+                        requests_biber |= binary_name.trim() == "biber";
+                        in_binary = false;
+                    }
+                    "external" => in_external = false,
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+
+        buf.clear();
+    }
+
+    Ok(requests_biber)
+}
+
+#[cfg(test)]
+mod bibliography_requirement_tests {
+    use super::run_xml_requests_biber;
+
+    #[test]
+    fn bibtex_run_file_does_not_request_biber() {
+        let run_xml = br#"<requests><external package="biblatex"><cmdline><binary>bibtex</binary></cmdline></external></requests>"#;
+        assert_eq!(run_xml_requests_biber(run_xml).unwrap(), false);
+    }
+
+    #[test]
+    fn biber_run_file_requests_external_tool() {
+        let run_xml = br#"<requests><external package="biblatex"><cmdline><binary>biber</binary></cmdline></external></requests>"#;
+        assert_eq!(run_xml_requests_biber(run_xml).unwrap(), true);
+    }
+
+    #[test]
+    fn biber_detection_trims_whitespace_and_combines_text_and_cdata() {
+        let run_xml = br#"<requests><external><cmdline><binary>  <![CDATA[bi]]>ber  </binary></cmdline></external></requests>"#;
+        assert!(run_xml_requests_biber(run_xml).unwrap());
+    }
+
+    #[test]
+    fn biber_detection_checks_each_external_node() {
+        let run_xml = br#"<requests><external><cmdline><binary>bibtex</binary></cmdline></external><external><cmdline><binary>biber</binary></cmdline></external></requests>"#;
+        assert!(run_xml_requests_biber(run_xml).unwrap());
+    }
+
+    #[test]
+    fn unrelated_external_binaries_do_not_request_biber() {
+        let run_xml = br#"<requests><external><cmdline><binary>bibtex</binary></cmdline></external><external><cmdline><binary>makeindex</binary></cmdline></external></requests>"#;
+        assert!(!run_xml_requests_biber(run_xml).unwrap());
+    }
+
+    #[test]
+    fn malformed_run_file_is_rejected() {
+        let run_xml =
+            br#"<requests><external><cmdline><binary>biber</binary></cmdline></requests>"#;
+        assert!(run_xml_requests_biber(run_xml).is_err());
     }
 }

@@ -1,7 +1,7 @@
-use std::io::{Read, Write};
-use crate::types::WorkerRequest;
 use super::latex::compile_latex_to_pdf;
 use super::typst::compile_typst_to_pdf;
+use crate::types::WorkerRequest;
+use std::io::{Read, Write};
 
 /// Standalone entry point executed when the binary is launched with `--compile-worker`.
 pub fn run_compiler_worker() {
@@ -13,9 +13,17 @@ pub fn run_compiler_worker() {
 
     let response = if let Ok(req) = serde_json::from_str::<WorkerRequest>(&input) {
         if req.engine.to_lowercase() == "typst" {
-            compile_typst_to_pdf(&req.source, req.project_dir.as_deref(), req.main_file.as_deref())
+            compile_typst_to_pdf(
+                &req.source,
+                req.project_dir.as_deref(),
+                req.main_file.as_deref(),
+            )
         } else {
-            compile_latex_to_pdf(&req.source, req.project_dir.as_deref(), req.main_file.as_deref())
+            compile_latex_to_pdf(
+                &req.source,
+                req.project_dir.as_deref(),
+                req.main_file.as_deref(),
+            )
         }
     } else {
         compile_latex_to_pdf(&input, None, None)

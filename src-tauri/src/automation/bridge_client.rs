@@ -13,6 +13,7 @@ use super::{
 };
 
 const BRIDGE_TIMEOUT: Duration = Duration::from_secs(45);
+const PROJECT_RESOURCE_TIMEOUT: Duration = Duration::from_secs(30 * 60 + 30);
 const INSTANCE_PROBE_TIMEOUT: Duration = Duration::from_millis(100);
 
 #[derive(Clone, Debug, Serialize)]
@@ -54,6 +55,8 @@ struct BridgeError {
     message: String,
     #[serde(default)]
     details: Option<Value>,
+    #[serde(default)]
+    diagnostics: Option<Vec<PublicDiagnostic>>,
 }
 
 pub fn app_local_data_directory() -> Result<PathBuf, String> {
@@ -253,7 +256,9 @@ pub fn call_instance(
         if let Some(public) = wrapped.error.as_mut() {
             public.details = error.details.clone();
         }
-        if compile_failed {
+        if let Some(diagnostics) = error.diagnostics.clone() {
+            wrapped.diagnostics = diagnostics;
+        } else if compile_failed {
             wrapped.diagnostics = workspace_compile_diagnostics(error.details.as_ref());
         }
         Ok(wrapped)
@@ -448,6 +453,8 @@ fn operation_timeout(operation: &str, args: &Value) -> Duration {
             .unwrap_or(120)
             .clamp(1, 900);
         Duration::from_secs(seconds.saturating_add(30))
+    } else if operation == "workspace.resources.prepare_project" {
+        PROJECT_RESOURCE_TIMEOUT
     } else {
         BRIDGE_TIMEOUT
     }
@@ -566,9 +573,27 @@ fn exit_for_error_code(code: &str) -> i32 {
         || code.starts_with("permission.")
         || code.starts_with("conflict.")
         || code == "git.locked"
+        || matches!(
+            code,
+            "resources.download_denied"
+                | "resources.input_changed"
+                | "resources.plan_changed"
+                | "resources.engine_mismatch"
+                | "resources.selector_invalid"
+                | "resources.selector_unknown"
+                | "resources.selector_unsupported"
+                | "resources.manifest_invalid"
+                | "resources.manifest_version_unsupported"
+                | "resources.snapshot_invalid"
+        )
     {
         2
-    } else if code.starts_with("io.") || code.starts_with("workspace.") {
+    } else if code.starts_with("io.")
+        || code.starts_with("workspace.")
+        || code.starts_with("resources.")
+        || code.starts_with("cache.")
+        || code.starts_with("resource.")
+    {
         3
     } else {
         4
@@ -699,6 +724,26 @@ mod tests {
         drop(live_listener);
         fs::remove_dir_all(directory).expect("remove registry fixture");
     }
+
+    #[test]
+    fn project_resource_preparation_uses_worker_timeout_plus_reap_margin() {
+        assert_eq!(
+            operation_timeout("workspace.resources.prepare_project", &json!({})),
+            Duration::from_secs(30 * 60 + 30)
+        );
+        assert_eq!(
+            operation_timeout("workspace.resources.analyze", &json!({})),
+            BRIDGE_TIMEOUT
+        );
+    }
+
+    #[test]
+    fn bridge_maps_structured_resource_errors_to_public_exit_classes() {
+        assert_eq!(exit_for_error_code("resources.download_denied"), 2);
+        assert_eq!(exit_for_error_code("resources.plan_changed"), 2);
+        assert_eq!(exit_for_error_code("resources.cache_invalid"), 3);
+        assert_eq!(exit_for_error_code("cache.unavailable_offline"), 3);
+    }
 }
 
 pub fn run_workspace_cli(args: &[String]) -> i32 {
@@ -751,6 +796,11 @@ pub fn run_workspace_cli(args: &[String]) -> i32 {
         "close" => "workspace.close",
         "compile" => "workspace.compile",
         "cancel" => "workspace.cancel",
+        "resources.analyze" => "workspace.resources.analyze",
+        "resources.plan" => "workspace.resources.plan",
+        "resources.list" => "workspace.resources.list",
+        "resources.prepare_project" => "workspace.resources.prepare_project",
+        "cancel_resources" => "workspace.cancel_resources",
         _ => {
             return emit_cli_error(
                 "workspace",

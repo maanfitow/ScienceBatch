@@ -12,6 +12,7 @@ use rmcp::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
+use std::future::Future;
 use tokio_util::sync::CancellationToken;
 
 use super::bridge_client;
@@ -31,6 +32,65 @@ struct AbortOnDrop(tokio::task::JoinHandle<()>);
 impl Drop for AbortOnDrop {
     fn drop(&mut self) {
         self.0.abort();
+    }
+}
+
+struct CancelOnDrop {
+    token: CancellationToken,
+    armed: bool,
+}
+
+struct OperationCancellationOnDrop {
+    cancellation: Arc<AtomicBool>,
+    armed: bool,
+}
+
+impl OperationCancellationOnDrop {
+    fn new(cancellation: Arc<AtomicBool>) -> Self {
+        Self {
+            cancellation,
+            armed: true,
+        }
+    }
+
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for OperationCancellationOnDrop {
+    fn drop(&mut self) {
+        if self.armed {
+            self.cancellation.store(true, Ordering::Release);
+        }
+    }
+}
+
+async fn cancel_operation_if_dropped<F: Future>(
+    cancellation: Arc<AtomicBool>,
+    operation: F,
+) -> F::Output {
+    let mut guard = OperationCancellationOnDrop::new(cancellation);
+    let result = operation.await;
+    guard.disarm();
+    result
+}
+
+impl CancelOnDrop {
+    fn new(token: CancellationToken) -> Self {
+        Self { token, armed: true }
+    }
+
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for CancelOnDrop {
+    fn drop(&mut self) {
+        if self.armed {
+            self.token.cancel();
+        }
     }
 }
 
@@ -122,7 +182,48 @@ struct ResourcePrepare {
     engine: Option<EngineName>,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, JsonSchema)]
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ResourceProjectInput {
+    /// Project directory selected by the caller. Relative paths resolve from the server launch directory.
+    project: String,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    engine: Option<EngineName>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    main: Option<String>,
+    #[serde(default)]
+    selection: Vec<McpResourceSelector>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expected_input_digest: Option<String>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expected_plan_digest: Option<String>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cursor: Option<String>,
+    #[serde(default)]
+    #[schemars(range(min = 1, max = 200))]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    limit: Option<usize>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_download_bytes: Option<u64>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_storage_bytes: Option<u64>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct McpResourceSelector {
+    kind: String,
+    id: String,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 enum EngineName {
     Latex,
@@ -179,9 +280,28 @@ struct WorkspaceCall {
     output_path: Option<String>,
     #[serde(default)]
     overwrite: bool,
+    #[serde(default)]
+    engine: Option<EngineName>,
+    #[serde(default)]
+    main_file: Option<String>,
+    #[serde(default)]
+    selection: Vec<McpResourceSelector>,
+    #[serde(default)]
+    expected_input_digest: Option<String>,
+    #[serde(default)]
+    expected_plan_digest: Option<String>,
+    #[serde(default)]
+    cursor: Option<String>,
+    #[serde(default)]
+    #[schemars(range(min = 1, max = 200))]
+    limit: Option<usize>,
+    #[serde(default)]
+    max_download_bytes: Option<u64>,
+    #[serde(default)]
+    max_storage_bytes: Option<u64>,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, JsonSchema)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 enum WorkspaceOperation {
     Inspect,
@@ -194,6 +314,16 @@ enum WorkspaceOperation {
     Close,
     Compile,
     Cancel,
+    #[serde(rename = "resources.analyze")]
+    ResourcesAnalyze,
+    #[serde(rename = "resources.plan")]
+    ResourcesPlan,
+    #[serde(rename = "resources.list")]
+    ResourcesList,
+    #[serde(rename = "resources.prepare_project")]
+    ResourcesPrepareProject,
+    #[serde(rename = "cancel_resources")]
+    CancelResources,
 }
 
 impl WorkspaceOperation {
@@ -209,6 +339,11 @@ impl WorkspaceOperation {
             Self::Close => "close",
             Self::Compile => "compile",
             Self::Cancel => "cancel",
+            Self::ResourcesAnalyze => "resources.analyze",
+            Self::ResourcesPlan => "resources.plan",
+            Self::ResourcesList => "resources.list",
+            Self::ResourcesPrepareProject => "resources.prepare_project",
+            Self::CancelResources => "cancel_resources",
         }
     }
 }
@@ -231,6 +366,7 @@ impl McpServer {
                 allow_write,
                 allow_resource_download,
                 cancellation: Arc::new(AtomicBool::new(false)),
+                resource_progress: None,
             },
             bridge_directory: super::bridge::registry_directory(&app_data),
             tool_router: Self::tool_router(),
@@ -252,8 +388,12 @@ impl McpServer {
             })
         });
         let mut context = self.context.clone();
-        context.cancellation = cancellation;
-        let result = self.service.dispatch(command, args, context).await;
+        context.cancellation = cancellation.clone();
+        let result = cancel_operation_if_dropped(
+            cancellation.clone(),
+            self.service.dispatch(command, args, context),
+        )
+        .await;
         drop(watcher);
         envelope_result(result)
     }
@@ -261,6 +401,40 @@ impl McpServer {
     fn denied(command: &str, code: &'static str, message: &'static str) -> CallToolResult {
         let envelope = super::failure_for_cli(command, code.to_string(), message.to_string(), 2);
         envelope_result(envelope)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::cancel_operation_if_dropped;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
+    #[tokio::test]
+    async fn dropping_a_direct_mcp_operation_cancels_its_worker_context() {
+        let cancellation = Arc::new(AtomicBool::new(false));
+        let (started_sender, started_receiver) = tokio::sync::oneshot::channel();
+        let operation = tokio::spawn(cancel_operation_if_dropped(cancellation.clone(), async {
+            let _ = started_sender.send(());
+            std::future::pending::<()>().await
+        }));
+        started_receiver
+            .await
+            .expect("operation started before cancellation");
+
+        operation.abort();
+        let _ = operation.await;
+
+        assert!(cancellation.load(Ordering::Acquire));
+    }
+
+    #[tokio::test]
+    async fn completed_mcp_operation_does_not_mark_its_context_cancelled() {
+        let cancellation = Arc::new(AtomicBool::new(false));
+        let result = cancel_operation_if_dropped(cancellation.clone(), async { 7 }).await;
+
+        assert_eq!(result, 7);
+        assert!(!cancellation.load(Ordering::Acquire));
     }
 }
 
@@ -510,6 +684,77 @@ impl McpServer {
 
     #[tool(
         output_schema = rmcp::handler::server::tool::schema_for_type::<Envelope>(),
+        name = "sciencebatch_resources_analyze",
+        description = "Analyze a project resource snapshot without network access, cache writes, or compilation.",
+        annotations(title = "Analyze project resources", read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
+    )]
+    pub async fn resources_analyze(
+        &self,
+        params: Parameters<ResourceProjectInput>,
+        cancel: CancellationToken,
+    ) -> CallToolResult {
+        self.dispatch_tool("resources.analyze", resource_project_args(params.0), cancel)
+            .await
+    }
+
+    #[tool(
+        output_schema = rmcp::handler::server::tool::schema_for_type::<Envelope>(),
+        name = "sciencebatch_resources_plan",
+        description = "Validate an expected input digest and return a project resource plan without network access, cache writes, or compilation.",
+        annotations(title = "Plan project resources", read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
+    )]
+    pub async fn resources_plan(
+        &self,
+        params: Parameters<ResourceProjectInput>,
+        cancel: CancellationToken,
+    ) -> CallToolResult {
+        self.dispatch_tool("resources.plan", resource_project_args(params.0), cancel)
+            .await
+    }
+
+    #[tool(
+        output_schema = rmcp::handler::server::tool::schema_for_type::<Envelope>(),
+        name = "sciencebatch_resources_list",
+        description = "List one bounded page of project resource requirements for an expected plan digest.",
+        annotations(title = "List project resources", read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
+    )]
+    pub async fn resources_list(
+        &self,
+        params: Parameters<ResourceProjectInput>,
+        cancel: CancellationToken,
+    ) -> CallToolResult {
+        self.dispatch_tool("resources.list", resource_project_args(params.0), cancel)
+            .await
+    }
+
+    #[tool(
+        output_schema = rmcp::handler::server::tool::schema_for_type::<Envelope>(),
+        name = "sciencebatch_resources_prepare_project",
+        description = "Explicitly prepare the selected resources for a freshly analyzed project. Requires server --allow-resource-download; never compiles.",
+        annotations(title = "Prepare project resources", read_only_hint = false, destructive_hint = false, idempotent_hint = true, open_world_hint = true)
+    )]
+    pub async fn resources_prepare_project(
+        &self,
+        params: Parameters<ResourceProjectInput>,
+        cancel: CancellationToken,
+    ) -> CallToolResult {
+        if !self.context.allow_resource_download {
+            return Self::denied(
+                "resources.prepare_project",
+                "resources.download_denied",
+                "Project resource preparation requires server --allow-resource-download.",
+            );
+        }
+        self.dispatch_tool(
+            "resources.prepare_project",
+            resource_project_args(params.0),
+            cancel,
+        )
+        .await
+    }
+
+    #[tool(
+        output_schema = rmcp::handler::server::tool::schema_for_type::<Envelope>(),
         name = "sciencebatch_workspace_instances",
         description = "List running ScienceBatch workspace bridge instances. Authentication tokens are never returned.",
         annotations(
@@ -549,6 +794,13 @@ impl McpServer {
         cancellation: CancellationToken,
     ) -> CallToolResult {
         let call = params.0;
+        if call.operation == WorkspaceOperation::CancelResources {
+            return Self::denied(
+                "workspace",
+                "usage.invalid_argument",
+                "Project resource jobs are cancelled through cancellation of their active request.",
+            );
+        }
         if matches!(
             call.operation,
             WorkspaceOperation::Apply
@@ -565,12 +817,28 @@ impl McpServer {
                 "Workspace changes require server --allow-write.",
             );
         }
+        if call.operation == WorkspaceOperation::ResourcesPrepareProject
+            && !self.context.allow_resource_download
+        {
+            return Self::denied(
+                "workspace",
+                "resources.download_denied",
+                "Project resource preparation requires server --allow-resource-download.",
+            );
+        }
+        let mut cancellation_guard = (call.operation
+            == WorkspaceOperation::ResourcesPrepareProject)
+            .then(|| CancelOnDrop::new(cancellation.clone()));
         let args = workspace_arguments(&call);
         let allowed_roots = self.context.allowed_roots.clone();
         let operation = format!("workspace.{}", call.operation.as_str());
         let instance_id = call.instance_id.clone();
         let directory = self.bridge_directory.clone();
-        let job_id = if call.operation.as_str() == "compile" {
+        let cancel_resources = call.operation == WorkspaceOperation::ResourcesPrepareProject;
+        let job_id = if matches!(
+            call.operation,
+            WorkspaceOperation::Compile | WorkspaceOperation::ResourcesPrepareProject
+        ) {
             Some(call.job_id.clone().unwrap_or_else(|| {
                 format!(
                     "mcp-{}",
@@ -594,11 +862,16 @@ impl McpServer {
             tokio::spawn(async move {
                 cancellation.cancelled().await;
                 let args = json!({"jobId": job_id});
+                let cancel_operation = if cancel_resources {
+                    "workspace.cancel_resources"
+                } else {
+                    "workspace.cancel"
+                };
                 let _ = tokio::task::spawn_blocking(move || {
                     bridge_client::call_instance(
                         &directory,
                         &instance_id,
-                        "workspace.cancel",
+                        cancel_operation,
                         args,
                         &roots,
                     )
@@ -611,7 +884,14 @@ impl McpServer {
         })
         .await;
         if let Some(watch) = watch {
-            watch.abort();
+            if cancellation.is_cancelled() {
+                let _ = watch.await;
+            } else {
+                watch.abort();
+            }
+        }
+        if let Some(guard) = cancellation_guard.as_mut() {
+            guard.disarm();
         }
         match reply {
             Ok(Ok(envelope)) => envelope_result(envelope),
@@ -683,12 +963,45 @@ fn workspace_arguments(call: &WorkspaceCall) -> Value {
             call.output_path.as_ref().map(|value| json!(value)),
         ),
         ("overwrite", Some(json!(call.overwrite))),
+        ("engine", call.engine.map(|value| json!(value))),
+        (
+            "mainFile",
+            call.main_file.as_ref().map(|value| json!(value)),
+        ),
+        (
+            "selection",
+            (!call.selection.is_empty()).then(|| json!(call.selection)),
+        ),
+        (
+            "expectedInputDigest",
+            call.expected_input_digest
+                .as_ref()
+                .map(|value| json!(value)),
+        ),
+        (
+            "expectedPlanDigest",
+            call.expected_plan_digest.as_ref().map(|value| json!(value)),
+        ),
+        ("cursor", call.cursor.as_ref().map(|value| json!(value))),
+        ("limit", call.limit.map(|value| json!(value))),
+        (
+            "maxDownloadBytes",
+            call.max_download_bytes.map(|value| json!(value)),
+        ),
+        (
+            "maxStorageBytes",
+            call.max_storage_bytes.map(|value| json!(value)),
+        ),
     ] {
         if let Some(value) = value {
             args.insert(key.to_owned(), value);
         }
     }
     Value::Object(args)
+}
+
+fn resource_project_args(input: ResourceProjectInput) -> Value {
+    serde_json::to_value(input).unwrap_or(Value::Null)
 }
 
 fn envelope_result(envelope: Envelope) -> CallToolResult {

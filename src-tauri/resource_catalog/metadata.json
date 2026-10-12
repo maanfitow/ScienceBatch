@@ -1,0 +1,46 @@
+{
+  "bundle": {
+    "digest": "6ffe055852f8faf66c0acbe1a7fb27f87b869a90bad1204f3bf4d9683f597c7c",
+    "identity": "Tectonic indexed-tar bundle digest plus exact indexed path",
+    "index": {
+      "bytes": 5143485,
+      "compressedBytes": 1268112,
+      "compressedSha256": "508be5f42c2046f3dbaa2234d0f1832d79c0e0dd05a3dbc53190fe1709feb302",
+      "entries": 134980,
+      "file": "index.txt.gz",
+      "sha256": "0fb434b0fa5fdebea7f767ed9c31939c99a780d6f95cd3f540aae55910bb5697"
+    }
+  },
+  "provenance": {
+    "capture": "Automation resource preparation verification on 2026-10-08",
+    "kind": "locally captured QA cache",
+    "sourceCache": "temporary QA cache; no network access used by this builder",
+    "trust": "Hashes pin the captured bytes and detect later corruption; they are not independent upstream authentication."
+  },
+  "resources": {
+    "compressedBytes": 6401234,
+    "decompressedBytes": 13917185,
+    "encoding": "gzip UTF-8 TSV: path, offset, length, sha256",
+    "entries": 134980,
+    "file": "resources.tsv.gz",
+    "resourceBytes": 2777207554,
+    "sha256": "82c8b1f153432cf494ebd4b8779f142fd90f988649bb095d832a49672f844820"
+  },
+  "schema": 1,
+  "sourceMetadata": {
+    "files": {
+      "compressedBytes": 616005,
+      "entries": 13708,
+      "file": "source-files.tsv.gz",
+      "sha256": "df588542eb018f9e21b363c7962749e98ec92a0a43d64bf4b8485daf9f4e09a0"
+    },
+    "references": {
+      "compressedBytes": 161750,
+      "entries": 22269,
+      "file": "source-references.tsv.gz",
+      "sha256": "71f238f45dabcbd27275f4ce3ee01803e7d50b61e1192d000be97a8a891a8d42"
+    },
+    "scope": "Literal references from UTF-8 .sty/.cls/.tex sources; every indexed .fd and .map path is inventoried. This static scan does not resolve TeX semantics.",
+    "unresolved": "Macro-valued and otherwise non-literal arguments are retained as unresolved expressions."
+  }
+}
