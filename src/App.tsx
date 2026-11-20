@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useHotkeys } from 'react-hotkeys-hook';
-import { Toaster } from 'sonner';
+import { Toaster, toast } from 'sonner';
 import { invoke } from '@tauri-apps/api/core';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
 import { MenuBar } from './components/MenuBar';
 import { Toolbar } from './components/Toolbar';
@@ -11,15 +12,22 @@ import { WelcomeScreen } from './components/WelcomeScreen';
 import { NewProjectModal } from './components/NewProjectModal';
 import { CloneRepositoryModal } from './components/CloneRepositoryModal';
 import { WorkspaceTabs } from './components/WorkspaceTabs';
+import { ProjectResourcesDialog } from './components/ProjectResourcesDialog';
 import { SidebarActivityBar, SidebarContentPanels } from './components/sidebar';
 import { WritingRibbon } from './components/writing/WritingRibbon';
 
-import { useRecentProjects, useCompiler, useExport, useProject, useSidebar } from './hooks';
+import { useRecentProjects, useCompiler, useExport, useProject, useProjectResources, useSidebar } from './hooks';
 import { useGitOperation } from './hooks/useGitOperation';
+import { useWorkspaceAutomation } from './hooks/useWorkspaceAutomation';
 import { ViewMode } from './types';
-import { tabIsDirty } from './types/workspace';
+import { tabIsDirty, type WorkspaceTab } from './types/workspace';
+import type { ProjectResourceSnapshot } from './types/projectResources';
+import type { ProjectResourceOperation } from './types/projectResources';
 import type { WritingEditorBridge, WritingEditorState } from './types/writing';
 import { inspectPackageEligibility } from './editor/writing';
+import { validateWorkspaceEdit } from './editor/workspaceAutomationBridge';
+import { captureProjectSnapshot } from './editor/projectResourceSnapshot';
+import type { AutomationEditorBridge, WorkspaceAutomationReply, WorkspaceAutomationRequest } from './types/automation';
 import './App.css';
 
 const normalizeWorkspacePath = (path: string): string => {
@@ -41,6 +49,21 @@ const resolveMainFilePath = (projectRoot: string, mainFilePath: string): string 
   const path = mainFilePath.replace(/\\/g, '/');
   return path.startsWith('/') || /^[A-Za-z]:\//.test(path) ? path : `${projectRoot}/${path}`;
 };
+
+const waitForRenderTurn = () => new Promise<void>(resolve => {
+  let finished = false;
+  let frame = 0;
+  let timer = 0;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    window.cancelAnimationFrame(frame);
+    window.clearTimeout(timer);
+    resolve();
+  };
+  timer = window.setTimeout(finish, 50);
+  frame = window.requestAnimationFrame(finish);
+});
 
 export const App: React.FC = () => {
   // Navigation & Workspace UI State
@@ -73,6 +96,10 @@ export const App: React.FC = () => {
 
   const compiler = useCompiler();
   const exportService = useExport();
+  const compileWorkspaceDelegateRef = React.useRef<() => Promise<void>>(async () => undefined);
+  const compileForProject = useCallback(async () => {
+    await compileWorkspaceDelegateRef.current();
+  }, []);
 
   useEffect(() => {
     const preventNativeContextMenu = (event: MouseEvent) => {
@@ -84,12 +111,448 @@ export const App: React.FC = () => {
   }, []);
 
   const project = useProject({
-    compile: compiler.compile,
+    compile: compileForProject,
     clearCompilationAndDiagnostics: compiler.clearCompilationAndDiagnostics,
     recordRecentProject,
     removeRecentProject,
     onEnterEditorMode: () => setViewMode('editor'),
     onEnterWelcomeMode: () => setViewMode('welcome'),
+  });
+  const projectRef = React.useRef(project);
+  projectRef.current = project;
+  const compilerRef = React.useRef(compiler);
+  compilerRef.current = compiler;
+  const workspaceSnapshot = captureProjectSnapshot(project);
+  const workspaceSnapshotRef = React.useRef(workspaceSnapshot);
+  workspaceSnapshotRef.current = workspaceSnapshot;
+  const isWorkspaceSnapshotCurrent = useCallback((fingerprint: string) => workspaceSnapshotRef.current?.fingerprint === fingerprint, []);
+  const projectResources = useProjectResources(workspaceSnapshot, isWorkspaceSnapshotCurrent);
+  useEffect(() => {
+    projectResources.setSidebarVisible(Boolean(project.projectRoot && sidebar.state.isOpen
+      && (sidebar.state.activeTopTool === 'dependencies' || sidebar.state.activeBottomTool === 'dependencies')));
+  }, [project.projectRoot, projectResources.setSidebarVisible, sidebar.state.activeBottomTool, sidebar.state.activeTopTool, sidebar.state.isOpen]);
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: UnlistenFn | undefined;
+    void listen<{ id: string; jobId: string; operation: string; kind: string }>('workspace-automation-disconnected', event => {
+      const payload = event.payload;
+      if (payload.operation === 'workspace.resources.prepare_project' && payload.kind === 'resource-preparation') {
+        void projectResources.cancelJob(payload.jobId);
+      }
+    }).then(stop => {
+      if (disposed) stop(); else unlisten = stop;
+    }).catch(() => undefined);
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [projectResources.cancelJob]);
+  const compileLiveWorkspace = useCallback(async (providedSnapshot?: ProjectResourceSnapshot) => {
+    const current = projectRef.current;
+    const snapshot = providedSnapshot ?? captureProjectSnapshot(current);
+    if (!Object.keys(snapshot.overlays).length) {
+      toast.error('No source document is open', { description: 'Open or create a source document before compiling.' });
+      return;
+    }
+    const jobId = `desktop-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
+    const result = await compilerRef.current.compileWorkspace({
+      jobId,
+      engine: snapshot.engine,
+      projectRoot: snapshot.projectRoot,
+      mainFile: snapshot.mainFile,
+      overlays: snapshot.overlays,
+      allowedRoots: snapshot.allowedRoots,
+      workspaceIdentity: snapshot.workspaceIdentity,
+      templateAssets: snapshot.templateAssets,
+      timeoutSeconds: 120,
+    }, () => isWorkspaceSnapshotCurrent(snapshot.fingerprint));
+    if (!result || result.success || !isWorkspaceSnapshotCurrent(snapshot.fingerprint)) return;
+    const details = result.error?.details;
+    if (details && typeof details === 'object') {
+      const indexedMisses = (details as Record<string, unknown>).missingResources;
+      if (Array.isArray(indexedMisses)) projectResources.offerRecoveryPaths(indexedMisses, snapshot.fingerprint);
+    }
+    const possibleMissingResource = Boolean(result.error?.code.startsWith('resources.'))
+      || result.errors.some(item => /resource|file not found|not found|missing/i.test(item.message));
+    if (possibleMissingResource) {
+      toast.error('Compilation may need project resources', {
+        description: result.error?.message ?? result.errors[0]?.message ?? 'Review the missing resource and prepare it explicitly.',
+        action: { label: 'Project Resources…', onClick: projectResources.open },
+      });
+    }
+  }, [isWorkspaceSnapshotCurrent, projectResources.offerRecoveryPaths, projectResources.open]);
+  compileWorkspaceDelegateRef.current = () => compileLiveWorkspace();
+  const automationEditorBridgeRef = React.useRef<AutomationEditorBridge | null>(null);
+  const handleAutomationEditorBridgeChange = useCallback((bridge: AutomationEditorBridge | null) => {
+    automationEditorBridgeRef.current = bridge;
+  }, []);
+
+  const handleWorkspaceAutomationRequest = useCallback(async (request: WorkspaceAutomationRequest): Promise<WorkspaceAutomationReply> => {
+    const current = projectRef.current;
+    const args = request.args ?? {};
+    const respond = (data: unknown): WorkspaceAutomationReply => ({ schemaVersion: 1, id: request.id, ok: true, data });
+    const reject = (code: string, message: string, details?: unknown, diagnostics?: unknown[]): WorkspaceAutomationReply => ({ schemaVersion: 1, id: request.id, ok: false, error: { code, message, ...(details !== undefined ? { details } : {}), ...(diagnostics ? { diagnostics } : {}) } });
+    const stringArg = (key: string) => typeof args[key] === 'string' ? args[key] as string : null;
+    const numberArg = (key: string) => typeof args[key] === 'number' && Number.isInteger(args[key]) ? args[key] as number : null;
+    const allowedRoots = Array.isArray(args.allowedRoots) ? args.allowedRoots.filter((item): item is string => typeof item === 'string') : [];
+    const currentRoot = current.projectRoot;
+    const currentGeneration = current.getProjectGeneration();
+    const checkExpectedContext = () => {
+      if (!Object.prototype.hasOwnProperty.call(args, 'expectedProjectRoot') || args.expectedProjectRoot !== currentRoot
+        || numberArg('workspaceGeneration') !== currentGeneration) {
+        return reject('conflict.project', 'The workspace project changed since it was inspected.', { projectRoot: currentRoot, workspaceGeneration: currentGeneration });
+      }
+      if (current.getWorkspaceExportLeaseId() && ['workspace.openProject', 'workspace.openFile', 'workspace.activate', 'workspace.apply', 'workspace.save', 'workspace.close', 'workspace.compile', 'workspace.resources.analyze', 'workspace.resources.plan', 'workspace.resources.list', 'workspace.resources.prepare_project'].includes(request.operation)) {
+        return reject('workspace.busy', 'A PDF export is finalizing the current workspace snapshot.');
+      }
+      if (current.worktreeUpdateBusy) return reject('git.locked', 'A Git worktree update is in progress.');
+      return null;
+    };
+    const authorizeCurrentRoot = async (): Promise<string | null | WorkspaceAutomationReply> => {
+      if (!currentRoot) return null;
+      try { return await invoke<string>('workspace_validate_root', { projectRoot: currentRoot, allowedRoots }); }
+      catch (error) { return reject('path.outside_roots', String(error)); }
+    };
+    const contextStillCurrent = () => projectRef.current.projectRoot === currentRoot
+      && projectRef.current.getProjectGeneration() === currentGeneration;
+    const documentInfo = (tab: WorkspaceTab, includeContent = false) => ({
+      id: tab.id,
+      path: tab.path && currentRoot ? tab.path.replace(`${currentRoot}/`, '').replace(/\\/g, '/') : tab.path,
+      name: tab.name,
+      ...(includeContent ? { content: tab.content } : {}),
+      saved: tab.content === tab.savedContent,
+      revision: current.getDocumentRevision(tab.id),
+    });
+    try {
+      switch (request.operation) {
+        case 'workspace.inspect':
+          return respond({
+            instance: 'current',
+            projectRoot: currentRoot,
+            projectName: current.projectName,
+            engine: current.engine,
+            mainFile: current.mainFilePath,
+            workspaceGeneration: currentGeneration,
+            documents: current.tabs.filter(tab => tab.kind === 'source').map(tab => documentInfo(tab)),
+          });
+        case 'workspace.read': {
+          const conflict = checkExpectedContext();
+          if (conflict) return conflict;
+          const authorizedRoot = await authorizeCurrentRoot();
+          if (authorizedRoot && typeof authorizedRoot !== 'string') return authorizedRoot;
+          if (!contextStillCurrent()) return reject('conflict.project', 'The project changed while access was being checked.');
+          const id = stringArg('documentId');
+          const tab = id ? current.tabs.find(item => item.id === id && item.kind === 'source') : undefined;
+          if (tab) return contextStillCurrent() ? respond(documentInfo(tab, true)) : reject('conflict.project', 'The project changed while the document was being read.');
+          const path = stringArg('path');
+          if (!path || !authorizedRoot || typeof authorizedRoot !== 'string') return reject('document.unavailable', 'Select an open document or provide a project-relative path.');
+          const fullPath = path.startsWith(authorizedRoot) ? path : `${authorizedRoot}/${path}`;
+          const normalized = normalizeWorkspacePath(fullPath);
+          const normalizedRoot = normalizeWorkspacePath(authorizedRoot);
+          if (normalized !== normalizedRoot && !normalized.startsWith(`${normalizedRoot}/`)) return reject('path.outside_project', 'The requested file is outside the open project.');
+          const openDocument = current.tabs.find(item => item.kind === 'source' && item.path && normalizeWorkspacePath(item.path) === normalized);
+          if (openDocument) return respond(documentInfo(openDocument, true));
+          const relativeFile = normalized.slice(normalizedRoot.length + 1);
+          const result = await invoke<{ content: string }>('workspace_read_disk', { projectRoot: authorizedRoot, file: relativeFile, allowedRoots });
+          const content = result.content;
+          if (!contextStillCurrent()) return reject('conflict.project', 'The project changed while the file was being read.');
+          return respond({ path: relativeFile, content, saved: true, revision: null });
+        }
+        case 'workspace.openProject': {
+          const conflict = checkExpectedContext();
+          if (conflict) return conflict;
+          const path = stringArg('path');
+          if (!path) return reject('argument.invalid', 'A project path is required.');
+          let authorizedTarget: string;
+          try { authorizedTarget = await invoke<string>('workspace_validate_root', { projectRoot: path, allowedRoots }); }
+          catch (error) { return reject('path.outside_roots', String(error)); }
+          if (!contextStillCurrent()) return reject('conflict.project', 'The workspace changed while project access was being checked.');
+          if (current.tabs.some(tabIsDirty)) return reject('conflict.dirty', 'Unsaved documents must be saved before switching projects.');
+          const opened = await current.openFolder(authorizedTarget, true);
+          if (opened && projectRef.current.projectRoot !== authorizedTarget) return reject('conflict.project', 'The workspace changed while the project was opening.');
+          return opened ? respond({ projectRoot: projectRef.current.projectRoot, workspaceGeneration: projectRef.current.getProjectGeneration() }) : reject('project.open', 'The requested project could not be opened.');
+        }
+        case 'workspace.openFile': {
+          const conflict = checkExpectedContext();
+          if (conflict) return conflict;
+          const authorizedRoot = await authorizeCurrentRoot();
+          if (authorizedRoot && typeof authorizedRoot !== 'string') return authorizedRoot;
+          if (!authorizedRoot) return reject('project.unavailable', 'Open a project before opening a project file.');
+          if (!contextStillCurrent()) return reject('conflict.project', 'The project changed while access was being checked.');
+          const requestedPath = stringArg('path');
+          if (!requestedPath) return reject('argument.invalid', 'A project-relative file path is required.');
+          const fullPath = requestedPath.startsWith(authorizedRoot) ? requestedPath : `${authorizedRoot}/${requestedPath}`;
+          const normalized = normalizeWorkspacePath(fullPath);
+          const normalizedRoot = normalizeWorkspacePath(authorizedRoot);
+          if (normalized !== normalizedRoot && !normalized.startsWith(`${normalizedRoot}/`)) return reject('path.outside_project', 'The requested file is outside the open project.');
+          const relativeFile = fullPath.replace(/\\/g, '/').slice(normalizedRoot.length + 1);
+          const opened = await invoke<{ content: string }>('workspace_read_disk', { projectRoot: authorizedRoot, file: relativeFile, allowedRoots });
+          if (projectRef.current.projectRoot !== currentRoot || current.getProjectGeneration() !== currentGeneration) return reject('conflict.project', 'The project changed while the file was being opened.');
+          await current.selectFile(fullPath, true, opened.content);
+          if (projectRef.current.projectRoot !== currentRoot || projectRef.current.getProjectGeneration() !== currentGeneration) return reject('conflict.project', 'The project changed while the file was being opened.');
+          const tabId = `source:${fullPath}`;
+          let latest = projectRef.current;
+          for (let attempt = 0; attempt < 30 && !latest.tabs.some(item => item.id === tabId); attempt++) {
+            await waitForRenderTurn();
+            if (!contextStillCurrent()) return reject('conflict.project', 'The workspace changed while the file was opening.');
+            latest = projectRef.current;
+          }
+          if (!contextStillCurrent()) return reject('conflict.project', 'The workspace changed while the file was opening.');
+          const tab = latest.tabs.find(item => item.id === tabId);
+          return tab ? respond({ document: documentInfo(tab), activeDocumentId: projectRef.current.activeTabId }) : reject('file.open', 'The requested file could not be opened as a source document.');
+        }
+        case 'workspace.activate': {
+          const conflict = checkExpectedContext();
+          if (conflict) return conflict;
+          const id = stringArg('documentId');
+          if (!id || !current.tabs.some(tab => tab.id === id)) return reject('document.unavailable', 'The requested workspace document is not open.');
+          current.activateTab(id);
+          return respond({ documentId: id, active: true });
+        }
+        case 'workspace.apply': {
+          const conflict = checkExpectedContext();
+          if (conflict) return conflict;
+          const authorizedRoot = await authorizeCurrentRoot();
+          if (authorizedRoot && typeof authorizedRoot !== 'string') return authorizedRoot;
+          if (!contextStillCurrent()) return reject('conflict.project', 'The project changed while access was being checked.');
+          const documentId = stringArg('documentId');
+          const expectedRevision = numberArg('expectedRevision');
+          const start = numberArg('start');
+          const end = numberArg('end');
+          const text = stringArg('text');
+          if (!documentId || expectedRevision === null || start === null || end === null || text === null) return reject('argument.invalid', 'A document ID, expected revision, edit range, and replacement text are required.');
+          const tab = current.tabs.find(item => item.id === documentId && item.kind === 'source');
+          if (!tab) return reject('document.unavailable', 'The requested source document is not open.');
+          if (current.getDocumentRevision(documentId) !== expectedRevision) return reject('conflict.revision', 'The document changed since the requested revision.', { currentRevision: current.getDocumentRevision(documentId) });
+          current.activateTab(documentId);
+          let editor = automationEditorBridgeRef.current;
+          for (let attempt = 0; attempt < 30 && editor?.getDocumentId() !== documentId; attempt++) {
+            await waitForRenderTurn();
+            editor = automationEditorBridgeRef.current;
+          }
+          if (!editor || editor.getDocumentId() !== documentId) return reject('document.inactive', 'The requested document could not be activated in the editor.');
+          const latest = projectRef.current;
+          const liveTab = latest.tabs.find(item => item.id === documentId && item.kind === 'source');
+          if (!liveTab || latest.projectRoot !== currentRoot || latest.getProjectGeneration() !== currentGeneration
+            || latest.getDocumentRevision(documentId) !== expectedRevision) {
+            return reject('conflict.revision', 'The project or document changed while the edit was being prepared.', { currentRevision: latest.getDocumentRevision(documentId) });
+          }
+          const editError = validateWorkspaceEdit(liveTab.content, start, end, text);
+          if (editError === 'range.splits_surrogate') return reject('argument.invalid_range', 'Edit offsets must not split a Unicode character. Offsets use UTF-16 code units.');
+          if (editError === 'range.invalid') return reject('argument.invalid_range', 'The edit range is outside the current document.');
+          if (editError === 'text.invalid_unicode') return reject('argument.invalid_text', 'Replacement text contains an invalid Unicode surrogate.');
+          if (editError === 'document.too_large') return reject('limit.text_bytes', 'The edited document would exceed the 8 MiB text limit.');
+          const leaseId = `${request.id}:apply`;
+          try {
+            await invoke('acquire_workspace_repository_lock', { projectRoot: authorizedRoot, leaseId });
+            const beforeApply = projectRef.current;
+            if (beforeApply.projectRoot !== currentRoot || beforeApply.getProjectGeneration() !== currentGeneration
+              || beforeApply.getDocumentRevision(documentId) !== expectedRevision) {
+              return reject('conflict.revision', 'The project or document changed before the edit was applied.', { currentRevision: beforeApply.getDocumentRevision(documentId) });
+            }
+            let nextRevision: number | null = null;
+            for (let attempt = 0; attempt < 30 && nextRevision === null; attempt++) {
+              const latest = projectRef.current;
+              const latestTab = latest.tabs.find(item => item.id === documentId && item.kind === 'source');
+              if (!latestTab || latest.projectRoot !== currentRoot || latest.getProjectGeneration() !== currentGeneration
+                || latest.getDocumentRevision(documentId) !== expectedRevision) {
+                return reject('conflict.revision', 'The project or document changed while the edit was being applied.', { currentRevision: latest.getDocumentRevision(documentId) });
+              }
+              const currentEditor = automationEditorBridgeRef.current;
+              if (currentEditor?.getDocumentId() === documentId) {
+                nextRevision = currentEditor.apply({ documentId, expectedRevision, start, end, text });
+              }
+              if (nextRevision === null) await waitForRenderTurn();
+            }
+            if (nextRevision === null) return reject('conflict.revision', 'The editor changed while the edit was being applied.', { currentRevision: projectRef.current.getDocumentRevision(documentId) });
+            return respond({ documentId, revision: nextRevision, undoAvailable: true });
+          } catch (error) {
+            const message = String(error);
+            return reject(message.includes('git.locked') ? 'git.locked' : 'workspace.operation_failed', message);
+          } finally {
+            await invoke('release_workspace_repository_lock', { leaseId }).catch(() => undefined);
+          }
+        }
+        case 'workspace.save': {
+          const conflict = checkExpectedContext();
+          if (conflict) return conflict;
+          const authorizedRoot = await authorizeCurrentRoot();
+          if (authorizedRoot && typeof authorizedRoot !== 'string') return authorizedRoot;
+          if (!contextStillCurrent()) return reject('conflict.project', 'The project changed while access was being checked.');
+          const documentId = stringArg('documentId');
+          const expectedRevision = numberArg('expectedRevision');
+          if (!documentId || expectedRevision === null) return reject('argument.invalid', 'A document ID and expected revision are required.');
+          if (current.getDocumentRevision(documentId) !== expectedRevision) return reject('conflict.revision', 'The document changed since the requested revision.', { currentRevision: current.getDocumentRevision(documentId) });
+          const result = await current.saveDocument(documentId, expectedRevision, currentGeneration, allowedRoots);
+          if (!result.ok) return reject(result.code, result.message);
+          return respond(result);
+        }
+        case 'workspace.close': {
+          const conflict = checkExpectedContext();
+          if (conflict) return conflict;
+          const authorizedRoot = await authorizeCurrentRoot();
+          if (authorizedRoot && typeof authorizedRoot !== 'string') return authorizedRoot;
+          if (!contextStillCurrent()) return reject('conflict.project', 'The project changed while access was being checked.');
+          const documentId = stringArg('documentId');
+          if (documentId) {
+            const tab = current.tabs.find(item => item.id === documentId);
+            if (!tab) return reject('document.unavailable', 'The requested workspace document is not open.');
+            if (tabIsDirty(tab)) return reject('conflict.dirty', 'The document has unsaved changes. Save it before closing.');
+            await current.closeTabs(false, documentId);
+            let latest = projectRef.current;
+            for (let attempt = 0; attempt < 30 && latest.tabs.some(item => item.id === documentId); attempt++) {
+              await waitForRenderTurn();
+              if (!contextStillCurrent()) return reject('conflict.project', 'The workspace changed while the document was closing.');
+              latest = projectRef.current;
+            }
+            if (!contextStillCurrent() || latest.tabs.some(item => item.id === documentId)) return reject('conflict.project', 'The workspace changed while the document was closing.');
+          } else {
+            if (current.tabs.some(tabIsDirty)) return reject('conflict.dirty', 'The workspace has unsaved documents. Save them before closing the project.');
+            await current.closeProject(true);
+            let latest = projectRef.current;
+            for (let attempt = 0; attempt < 30 && latest.projectRoot !== null; attempt++) {
+              await waitForRenderTurn();
+              latest = projectRef.current;
+            }
+            if (projectRef.current.projectRoot !== null) return reject('conflict.project', 'The workspace changed while the project was closing.');
+          }
+          return respond({ closed: true, documentId: documentId ?? null });
+        }
+        case 'workspace.resources.analyze':
+        case 'workspace.resources.plan':
+        case 'workspace.resources.list':
+        case 'workspace.resources.prepare_project': {
+          const conflict = checkExpectedContext();
+          if (conflict) return conflict;
+          const authorizedRoot = await authorizeCurrentRoot();
+          if (authorizedRoot && typeof authorizedRoot !== 'string') return authorizedRoot;
+          const snapshot = captureProjectSnapshot(current);
+          if (!contextStillCurrent() || !isWorkspaceSnapshotCurrent(snapshot.fingerprint)) {
+            return reject('conflict.revision', 'The workspace changed while its resource snapshot was being captured.');
+          }
+          const operation = request.operation.slice('workspace.'.length) as ProjectResourceOperation;
+          const jobId = stringArg('jobId') ?? request.id;
+          const externalPrepare = operation === 'resources.prepare_project';
+          if (externalPrepare && !projectResources.adoptExternalJob(jobId, snapshot)) {
+            return reject('worker.busy', 'Another project resource preparation is already active.');
+          }
+          try {
+            const resourceRequest = {
+              operation,
+              jobId,
+              engine: snapshot.engine,
+              projectRoot: authorizedRoot,
+              mainFile: snapshot.mainFile,
+              overlays: snapshot.overlays,
+              allowedRoots,
+              workspaceIdentity: snapshot.workspaceIdentity,
+              templateAssets: snapshot.templateAssets,
+              ...(Array.isArray(args.selection) ? { selection: args.selection } : {}),
+              ...(stringArg('expectedInputDigest') ? { expectedInputDigest: stringArg('expectedInputDigest') } : {}),
+              ...(stringArg('expectedPlanDigest') ? { expectedPlanDigest: stringArg('expectedPlanDigest') } : {}),
+              ...(stringArg('cursor') ? { cursor: stringArg('cursor') } : {}),
+              ...(numberArg('limit') !== null ? { limit: numberArg('limit') } : {}),
+              ...(numberArg('maxDownloadBytes') !== null ? { maxDownloadBytes: numberArg('maxDownloadBytes') } : {}),
+              ...(numberArg('maxStorageBytes') !== null ? { maxStorageBytes: numberArg('maxStorageBytes') } : {}),
+            };
+            const data = await invoke<unknown>('resources_workspace_operation', { request: resourceRequest });
+            if (!contextStillCurrent() || !isWorkspaceSnapshotCurrent(snapshot.fingerprint)) {
+              return reject('conflict.revision', 'The workspace changed during the resource operation. Analyze it again before preparing.');
+            }
+            return respond(data);
+          } finally {
+            if (externalPrepare) projectResources.finishExternalJob(jobId);
+          }
+        }
+        case 'workspace.cancel_resources': {
+          const jobId = stringArg('jobId');
+          if (!jobId) return reject('argument.invalid', 'A project resource job ID is required.');
+          if (jobId !== projectResources.activeJobId) return reject('job.not_found', 'The requested resource preparation is not owned by this workspace session.');
+          const cancelled = await invoke<boolean>('cancel_project_resources', { jobId });
+          return respond({ jobId, cancelled });
+        }
+        case 'workspace.compile': {
+          const conflict = checkExpectedContext();
+          if (conflict) return conflict;
+          const authorizedRoot = await authorizeCurrentRoot();
+          if (authorizedRoot && typeof authorizedRoot !== 'string') return authorizedRoot;
+          if (!contextStillCurrent()) return reject('conflict.project', 'The project changed while access was being checked.');
+          const snapshot = captureProjectSnapshot(current);
+          const engine = snapshot.engine;
+          const relativeMain = snapshot.mainFile;
+          const overlays = snapshot.overlays;
+          if (!Object.keys(overlays).length) return reject('document.unavailable', 'There is no source document to compile.');
+          const isSnapshotCurrent = () => contextStillCurrent() && isWorkspaceSnapshotCurrent(snapshot.fingerprint);
+          const timeoutSeconds = numberArg('timeoutSeconds') ?? 120;
+          if (timeoutSeconds < 1 || timeoutSeconds > 900) return reject('argument.invalid', 'Compilation timeout must be between 1 and 900 seconds.');
+          const jobId = stringArg('jobId') ?? request.id;
+          const result = await compilerRef.current.compileWorkspace({
+            jobId, engine, projectRoot: authorizedRoot, mainFile: relativeMain, overlays,
+            timeoutSeconds, allowedRoots, workspaceIdentity: snapshot.workspaceIdentity,
+            templateAssets: snapshot.templateAssets,
+          }, isSnapshotCurrent);
+          if (!result || !isSnapshotCurrent()) {
+            return reject('conflict.stale_result', 'The workspace changed during compilation; the result was not applied to the preview.');
+          }
+          if (result.error) return reject(result.error.code, result.error.message, result.error.details, result.error.diagnostics);
+          if (!result.success) {
+            return reject('compile.document_failed', 'The workspace document failed to compile.', {
+              jobId,
+              errors: result.errors,
+              warnings: result.warnings,
+            });
+          }
+          const outputPath = stringArg('outputPath');
+          let pdfWritten = false;
+          if (outputPath && result.success) {
+            if (!isSnapshotCurrent()) {
+              return reject('conflict.stale_result', 'The workspace changed before the requested PDF could be exported.');
+            }
+            const leaseId = `${request.id}:pdf-export`;
+            const latestProject = projectRef.current;
+            if (!latestProject.acquireWorkspaceExportLease(leaseId)) return reject('workspace.busy', 'Another workspace operation is in progress.');
+            const activeEditor = automationEditorBridgeRef.current;
+            activeEditor?.setReadOnly(true);
+            try {
+              if (!isSnapshotCurrent()) return reject('conflict.stale_result', 'The workspace changed before the requested PDF could be exported.');
+              await invoke('workspace_export_pdf', {
+                outputPath,
+                pdfBytes: result.pdfBytes,
+                overwrite: args.overwrite === true,
+                allowedRoots,
+              });
+              if (!isSnapshotCurrent()) return reject('conflict.stale_result', 'The workspace changed during PDF export.');
+              pdfWritten = true;
+            } finally {
+              activeEditor?.setReadOnly(false);
+              projectRef.current.releaseWorkspaceExportLease(leaseId);
+            }
+          }
+          return respond({ jobId, success: result.success, errors: result.errors, warnings: result.warnings, outputPath: pdfWritten ? outputPath : null, pdfWritten });
+        }
+        case 'workspace.cancel': {
+          const conflict = checkExpectedContext();
+          if (conflict) return conflict;
+          const jobId = stringArg('jobId');
+          if (!jobId) return reject('argument.invalid', 'A workspace compilation job ID is required.');
+          await compilerRef.current.cancelWorkspaceCompilation(jobId);
+          return respond({ jobId, cancelled: true });
+        }
+        default:
+          return reject('operation.unsupported', `Unsupported workspace operation: ${request.operation}`);
+      }
+    } catch (error) {
+      const outer = error && typeof error === 'object' ? error as Record<string, unknown> : null;
+      const nested = outer?.error && typeof outer.error === 'object' ? outer.error as Record<string, unknown> : outer;
+      const rawMessage = typeof nested?.message === 'string' ? nested.message : error instanceof Error ? error.message : String(error);
+      const code = typeof nested?.code === 'string' ? nested.code : rawMessage.match(/^([a-z][a-z0-9_.-]+):/)?.[1] ?? 'workspace.operation_failed';
+      const details = nested?.details ?? outer?.details;
+      const diagnostics = Array.isArray(nested?.diagnostics) ? nested.diagnostics : Array.isArray(outer?.diagnostics) ? outer.diagnostics : undefined;
+      return reject(code, rawMessage, details, diagnostics);
+    }
+  }, []);
+  useWorkspaceAutomation(handleWorkspaceAutomationRequest, jobId => {
+    void compilerRef.current.cancelWorkspaceCompilation(jobId);
   });
   const cloneOperation = useGitOperation(null);
   const handleWritingBridgeChange = useCallback((bridge: WritingEditorBridge | null, state: WritingEditorState) => {
@@ -352,9 +815,7 @@ export const App: React.FC = () => {
     setTimeout(() => setJumpToLine(null), 150);
   };
 
-  const handleCompileCurrent = () => {
-    compiler.compile(project.sourceCode, project.engine, project.projectRoot, project.mainFilePath);
-  };
+  const handleCompileCurrent = () => { void compileLiveWorkspace(); };
 
   return (
     <div className="app-layout">
@@ -374,6 +835,7 @@ export const App: React.FC = () => {
         onExportHtml={() => exportService.exportHtml(project.projectRoot, project.projectName, project.sourceCode, project.engine, project.mainFilePath)}
         onCloseProject={project.closeProject}
         onCompile={handleCompileCurrent}
+        onOpenProjectResources={projectResources.open}
         onCancelCompile={compiler.cancelCompilation}
         isCompiling={compiler.isCompiling}
         activeTab={compiler.activeTab}
@@ -388,6 +850,8 @@ export const App: React.FC = () => {
         recentProjects={recentProjects}
         onOpenRecentProject={(path) => openProjectFolder(path)}
         hasOpenProject={viewMode === 'editor'}
+        onUndo={() => automationEditorBridgeRef.current?.undo()}
+        onRedo={() => automationEditorBridgeRef.current?.redo()}
       />
 
       {/* Main Workspace Toolbar (Shown only in editor mode) */}
@@ -480,6 +944,7 @@ export const App: React.FC = () => {
                     onBranchChanged={() => project.refreshAfterGitUpdate()}
                     onWorktreeUpdateBusyChange={project.setWorktreeUpdateBusy}
                     hasUnsavedChanges={project.tabs.some(tabIsDirty)}
+                    resources={projectResources}
                     onSetMainFile={project.setMainFile}
                     onCreateFile={project.createFile}
                     onCreateFolder={project.createFolder}
@@ -522,6 +987,8 @@ export const App: React.FC = () => {
                 isScratchpad={isScratchpad}
                 canAddPackages={canAddWritingPackages}
                 onWritingBridgeChange={handleWritingBridgeChange}
+                onAutomationBridgeChange={handleAutomationEditorBridgeChange}
+                getDocumentRevision={project.getDocumentRevision}
               />
             </Panel>
 
@@ -568,6 +1035,12 @@ export const App: React.FC = () => {
         onClose={() => { if (!cloneOperation.running) setIsCloneRepositoryModalOpen(false); }}
         onOpenExisting={path => project.openFolder(path)}
         onClone={cloneRepository}
+      />
+
+      <ProjectResourcesDialog
+        resources={projectResources}
+        projectName={projectResources.activeWorkspaceLabel?.projectName ?? project.projectName}
+        onClose={() => projectResources.setIsOpen(false)}
       />
 
       <Toaster position="bottom-right" richColors closeButton />

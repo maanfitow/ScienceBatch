@@ -1,25 +1,30 @@
-pub mod types;
-pub mod diagnostics;
+pub mod automation;
+pub mod commands;
 pub mod compiler;
+pub mod diagnostics;
 pub mod exporters;
 pub mod fs;
-pub mod commands;
+pub mod types;
 
-pub use compiler::run_compiler_worker;
 pub use commands::compile::CompilerManager;
+pub use compiler::run_compiler_worker;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .setup(|app| {
             use tauri::Manager;
+            let workspace_bridge =
+                crate::automation::bridge::WorkspaceBridge::start(app.handle().clone())
+                    .map_err(std::io::Error::other)?;
+            app.manage(workspace_bridge);
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_zoom(1.0);
                 #[cfg(target_os = "linux")]
                 {
-                    use webkit2gtk::WebViewExt;
                     use glib::prelude::ObjectExt;
                     use glib::ObjectType;
+                    use webkit2gtk::WebViewExt;
                     let _ = window.with_webview(|wv| {
                         let webview = wv.inner();
                         webview.set_zoom_level(1.0);
@@ -30,7 +35,9 @@ pub fn run() {
                         });
 
                         unsafe {
-                            if let Some(gesture) = webview.data::<glib::gobject_ffi::GObject>("wk-view-zoom-gesture") {
+                            if let Some(gesture) =
+                                webview.data::<glib::gobject_ffi::GObject>("wk-view-zoom-gesture")
+                            {
                                 glib::gobject_ffi::g_signal_handlers_block_matched(
                                     gesture.as_ptr().cast(),
                                     glib::gobject_ffi::G_SIGNAL_MATCH_DATA,
@@ -40,7 +47,9 @@ pub fn run() {
                                     std::ptr::null_mut(),
                                     webview.as_ptr().cast(),
                                 );
-                                glib::gobject_ffi::g_signal_handlers_destroy(gesture.as_ptr().cast());
+                                glib::gobject_ffi::g_signal_handlers_destroy(
+                                    gesture.as_ptr().cast(),
+                                );
                             }
                         }
                     });
@@ -49,6 +58,7 @@ pub fn run() {
             Ok(())
         })
         .manage(CompilerManager::new())
+        .manage(commands::workspace::WorkspaceCompileJobs::default())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -57,6 +67,18 @@ pub fn run() {
             commands::compile::compile_latex,
             commands::compile::cancel_compilation,
             commands::compile::save_pdf_to_file,
+            commands::workspace::workspace_automation_ready,
+            commands::workspace::workspace_automation_reply,
+            commands::workspace::workspace_validate_root,
+            commands::workspace::acquire_workspace_repository_lock,
+            commands::workspace::release_workspace_repository_lock,
+            commands::workspace::workspace_apply_disk,
+            commands::workspace::workspace_read_disk,
+            commands::workspace::workspace_export_pdf,
+            commands::workspace::compile_workspace_snapshot,
+            commands::workspace::cancel_workspace_compilation,
+            commands::resources::resources_workspace_operation,
+            commands::resources::cancel_project_resources,
             commands::files::list_project_files,
             commands::files::read_file_content,
             commands::files::existing_file_paths,
@@ -87,8 +109,31 @@ pub fn run() {
             commands::git::pull_git_remote,
             commands::git::push_git_remote,
         ])
-        .run(tauri::generate_context!())
-        .expect("error running tauri application");
+        .build(tauri::generate_context!())
+        .expect("failed to build ScienceBatch application");
+    app.run(|app_handle, event| {
+        if let tauri::RunEvent::ExitRequested { api, .. } = event {
+            use tauri::Manager;
+
+            let jobs = app_handle
+                .state::<commands::workspace::WorkspaceCompileJobs>()
+                .inner()
+                .clone();
+            let compiler = app_handle.state::<CompilerManager>().inner().clone();
+            if jobs.is_shutdown_complete() && compiler.is_shutdown_complete() {
+                return;
+            }
+            api.prevent_exit();
+            if jobs.start_shutdown() {
+                compiler.start_shutdown();
+                let app = app_handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    let _ = tokio::join!(jobs.cancel_all_and_wait(), compiler.cancel_and_wait());
+                    app.exit(0);
+                });
+            }
+        }
+    });
 }
 
 #[cfg(test)]

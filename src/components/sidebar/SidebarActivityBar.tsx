@@ -4,6 +4,7 @@ import {
   Search, 
   ListTree, 
   GitBranch,
+  PackageSearch,
   MoveUp, 
   MoveDown, 
   RotateCcw,
@@ -36,6 +37,11 @@ const TOOLS_CONFIG: Record<SidebarToolId, ToolMeta> = {
     label: 'Source Control (Git)',
     icon: GitBranch,
     shortcut: 'Ctrl+Shift+G',
+  },
+  dependencies: {
+    id: 'dependencies',
+    label: 'Dependencies',
+    icon: PackageSearch,
   },
   outline: {
     id: 'outline',

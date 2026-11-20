@@ -1,15 +1,34 @@
 use std::io::Read;
 use std::path::Path;
 
+use crate::compiler::embedded::get_embedded_package_file;
 use crate::compiler::latex::compile_latex_to_pdf;
 use crate::compiler::typst::compile_typst_to_pdf;
-use crate::compiler::embedded::get_embedded_package_file;
-use crate::diagnostics::suggestions::get_smart_suggestion;
 use crate::diagnostics::latex_parser::prepare_latex_source;
-use crate::exporters::markdown::{latex_to_markdown, typst_to_markdown, latex_to_markdown_with_dir, typst_to_markdown_with_dir};
-use crate::exporters::html::{latex_to_html, typst_to_html, latex_to_html_with_dir, typst_to_html_with_dir};
+use crate::diagnostics::suggestions::get_smart_suggestion;
+use crate::exporters::html::{
+    latex_to_html, latex_to_html_with_dir, typst_to_html, typst_to_html_with_dir,
+};
+use crate::exporters::markdown::{
+    latex_to_markdown, latex_to_markdown_with_dir, typst_to_markdown, typst_to_markdown_with_dir,
+};
 use crate::fs::archive::{export_project_to_zip, import_project_from_zip};
 use crate::fs::project::validate_recent_paths;
+
+fn add_explicit_latex_showcase_assets(root: &Path) {
+    let assets = root.join("assets");
+    std::fs::create_dir_all(&assets).unwrap();
+    std::fs::write(
+        assets.join("sample.png"),
+        include_bytes!("../embedded_packages/assets/sample.png"),
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("references.bib"),
+        b"@article{einstein1905, author={Albert Einstein}, title={On the Electrodynamics of Moving Bodies}, journal={Annalen der Physik}, year={1905}}\n",
+    )
+    .unwrap();
+}
 
 #[test]
 fn test_compile_typst_with_fonts() {
@@ -21,7 +40,11 @@ fn test_compile_typst_with_fonts() {
     $ E = m c^2 $
     "#;
     let resp = compile_typst_to_pdf(typst_code, None, None);
-    assert!(resp.success, "Typst compilation failed: {:?}", resp.errors.iter().map(|e| &e.message).collect::<Vec<_>>());
+    assert!(
+        resp.success,
+        "Typst compilation failed: {:?}",
+        resp.errors.iter().map(|e| &e.message).collect::<Vec<_>>()
+    );
     assert!(!resp.pdf_bytes.is_empty(), "PDF bytes should not be empty");
 }
 
@@ -33,7 +56,10 @@ fn test_unknown_font_diagnostic_suggestion() {
     "#;
     let resp = compile_typst_to_pdf(typst_code, None, None);
     if !resp.success {
-        let error = resp.errors.iter().find(|e| e.message.contains("unknown font family"));
+        let error = resp
+            .errors
+            .iter()
+            .find(|e| e.message.contains("unknown font family"));
         assert!(error.is_some());
         let err_item = error.unwrap();
         let suggestion = err_item.suggestion.as_ref().unwrap();
@@ -52,7 +78,10 @@ fn test_equation_numbering_diagnostic_suggestion() {
     "#;
     let resp = compile_typst_to_pdf(typst_code, None, None);
     assert!(!resp.success);
-    let error = resp.errors.iter().find(|e| e.message.contains("cannot reference equation without numbering"));
+    let error = resp.errors.iter().find(|e| {
+        e.message
+            .contains("cannot reference equation without numbering")
+    });
     assert!(error.is_some());
     let suggestion = error.unwrap().suggestion.as_ref().unwrap();
     assert!(suggestion.contains("set math.equation(numbering: \"(1)\")"));
@@ -60,7 +89,13 @@ fn test_equation_numbering_diagnostic_suggestion() {
 
 #[test]
 fn test_latex_bibtex_with_filesystem_root() {
-    let temp_dir = std::env::temp_dir().join(format!("test_latex_bib_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+    let temp_dir = std::env::temp_dir().join(format!(
+        "test_latex_bib_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
     let _ = std::fs::create_dir_all(&temp_dir);
 
     let bib_content = r#"@article{einstein1905,
@@ -82,13 +117,23 @@ Einstein's 1905 paper \cite{einstein1905}.
     let resp = compile_latex_to_pdf(latex_code, temp_dir.to_str(), Some("main.tex"));
     let _ = std::fs::remove_dir_all(&temp_dir);
 
-    assert!(resp.success, "LaTeX BibTeX compilation failed: {:?}", resp.errors.iter().map(|e| &e.message).collect::<Vec<_>>());
+    assert!(
+        resp.success,
+        "LaTeX BibTeX compilation failed: {:?}",
+        resp.errors.iter().map(|e| &e.message).collect::<Vec<_>>()
+    );
     assert!(!resp.pdf_bytes.is_empty(), "PDF bytes should not be empty");
 }
 
 #[test]
 fn test_typst_bibtex_multi_file() {
-    let temp_dir = std::env::temp_dir().join(format!("test_typst_bib_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+    let temp_dir = std::env::temp_dir().join(format!(
+        "test_typst_bib_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
     let _ = std::fs::create_dir_all(&temp_dir);
 
     let bib_content = r#"@article{einstein1905,
@@ -108,7 +153,11 @@ fn test_typst_bibtex_multi_file() {
     let resp = compile_typst_to_pdf(typst_code, temp_dir.to_str(), Some("main.typ"));
     let _ = std::fs::remove_dir_all(&temp_dir);
 
-    assert!(resp.success, "Typst BibTeX compilation failed: {:?}", resp.errors.iter().map(|e| &e.message).collect::<Vec<_>>());
+    assert!(
+        resp.success,
+        "Typst BibTeX compilation failed: {:?}",
+        resp.errors.iter().map(|e| &e.message).collect::<Vec<_>>()
+    );
     assert!(!resp.pdf_bytes.is_empty(), "PDF bytes should not be empty");
 }
 
@@ -259,7 +308,13 @@ fn test_import_project_from_zip() {
     if !Path::new(zip_path).exists() {
         return;
     }
-    let temp_parent = std::env::temp_dir().join(format!("test_zip_import_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+    let temp_parent = std::env::temp_dir().join(format!(
+        "test_zip_import_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
     let _ = std::fs::create_dir_all(&temp_parent);
 
     let res = import_project_from_zip(
@@ -271,8 +326,14 @@ fn test_import_project_from_zip() {
     assert!(res.is_ok(), "Import failed: {:?}", res.err());
     let imported_dir = res.unwrap();
     let path = Path::new(&imported_dir);
-    assert!(path.join("main.tex").exists(), "main.tex missing from imported project");
-    assert!(path.join(".sciencebatch.json").exists(), ".sciencebatch.json missing from imported project");
+    assert!(
+        path.join("main.tex").exists(),
+        "main.tex missing from imported project"
+    );
+    assert!(
+        path.join(".sciencebatch.json").exists(),
+        ".sciencebatch.json missing from imported project"
+    );
 
     let config_str = std::fs::read_to_string(path.join(".sciencebatch.json")).unwrap();
     assert!(config_str.contains("\"engine\": \"latex\""));
@@ -401,9 +462,21 @@ Refer to Section~\ref{sec:main} and Table~\ref{tab:bench}.
 "#;
     let md = latex_to_markdown(latex);
     // Verify label is not leaked into headings, captions, or math blocks
-    assert!(!md.contains("Main Sectionsec:main"), "Label leaked into heading:\n{}", md);
-    assert!(!md.contains("Results*tab:bench"), "Label leaked into caption:\n{}", md);
-    assert!(!md.contains("$$ eq:sample"), "Label leaked into math block:\n{}", md);
+    assert!(
+        !md.contains("Main Sectionsec:main"),
+        "Label leaked into heading:\n{}",
+        md
+    );
+    assert!(
+        !md.contains("Results*tab:bench"),
+        "Label leaked into caption:\n{}",
+        md
+    );
+    assert!(
+        !md.contains("$$ eq:sample"),
+        "Label leaked into math block:\n{}",
+        md
+    );
     assert!(!md.contains("\\label"));
     assert!(md.contains("Refer to Section [@sec:main] and Table [@tab:bench]."));
 
@@ -460,7 +533,13 @@ $ bold(v) = (dif bold(x)) / (dif t) $
 
 #[test]
 fn test_multi_file_latex_and_typst_export() {
-    let temp_dir = std::env::temp_dir().join(format!("test_multifile_exp_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+    let temp_dir = std::env::temp_dir().join(format!(
+        "test_multifile_exp_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
     let _ = std::fs::create_dir_all(&temp_dir);
 
     // LaTeX subfile
@@ -504,12 +583,20 @@ Content from Typst subfile.
     let _ = std::fs::remove_dir_all(&temp_dir);
 }
 
-
 #[test]
 fn test_export_project_to_zip() {
-    let temp_dir = std::env::temp_dir().join(format!("test_zip_export_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+    let temp_dir = std::env::temp_dir().join(format!(
+        "test_zip_export_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
     let _ = std::fs::create_dir_all(&temp_dir);
-    let _ = std::fs::write(temp_dir.join("main.tex"), "\\documentclass{article}\n\\begin{document}Hello\\end{document}");
+    let _ = std::fs::write(
+        temp_dir.join("main.tex"),
+        "\\documentclass{article}\n\\begin{document}Hello\\end{document}",
+    );
     let _ = std::fs::write(temp_dir.join(".sciencebatch.json"), "{\"name\":\"Test\"}");
 
     let dest_zip = temp_dir.join("export.zip");
@@ -531,7 +618,10 @@ fn test_export_project_to_zip() {
         file_names.push(archive.by_index(i).unwrap().name().to_string());
     }
     assert!(file_names.contains(&"main.tex".to_string()));
-    assert!(!file_names.contains(&".sciencebatch.json".to_string()), ".sciencebatch.json must never be included in exported ZIP");
+    assert!(
+        !file_names.contains(&".sciencebatch.json".to_string()),
+        ".sciencebatch.json must never be included in exported ZIP"
+    );
     // Ensure the zip file itself wasn't recursively included
     assert!(!file_names.contains(&"export.zip".to_string()));
 
@@ -550,7 +640,10 @@ fn test_usepackage_before_documentclass_suggestion() {
 
 #[test]
 fn test_validate_recent_paths() {
-    let current_dir = std::env::current_dir().unwrap().to_string_lossy().to_string();
+    let current_dir = std::env::current_dir()
+        .unwrap()
+        .to_string_lossy()
+        .to_string();
     let fake_dir = "/path/that/definitely/does/not/exist/99999".to_string();
     let valid = validate_recent_paths(vec![current_dir.clone(), fake_dir]);
     assert_eq!(valid, vec![current_dir]);
@@ -558,7 +651,13 @@ fn test_validate_recent_paths() {
 
 #[test]
 fn test_latex_multi_file_diagnostics_origin() {
-    let temp_dir = std::env::temp_dir().join(format!("test_multifile_diag_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+    let temp_dir = std::env::temp_dir().join(format!(
+        "test_multifile_diag_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
     let _ = std::fs::create_dir_all(&temp_dir);
 
     let sub_content = r#"Hello from subfile!
@@ -575,9 +674,21 @@ fn test_latex_multi_file_diagnostics_origin() {
     let _ = std::fs::remove_dir_all(&temp_dir);
 
     assert!(resp.success, "Compilation should succeed");
-    assert!(!resp.warnings.is_empty(), "Should have emitted the subfile warning");
-    let warn = resp.warnings.iter().find(|w| w.message.contains("This is a warning inside subfile")).unwrap();
-    assert_eq!(warn.file.as_deref(), Some("sub.tex"), "Warning file must be sub.tex, got: {:?}", warn.file);
+    assert!(
+        !resp.warnings.is_empty(),
+        "Should have emitted the subfile warning"
+    );
+    let warn = resp
+        .warnings
+        .iter()
+        .find(|w| w.message.contains("This is a warning inside subfile"))
+        .unwrap();
+    assert_eq!(
+        warn.file.as_deref(),
+        Some("sub.tex"),
+        "Warning file must be sub.tex, got: {:?}",
+        warn.file
+    );
 }
 
 #[test]
@@ -632,9 +743,15 @@ Speed & Fast & Instant \\
 \end{document}
 "#;
 
-    // Compile in RAM VFS without project dir
-    let resp = compile_latex_to_pdf(latex, None, None);
-    assert!(resp.success, "LaTeX showcase compilation failed: {:?}", resp.errors.iter().map(|e| &e.message).collect::<Vec<_>>());
+    // Compile in RAM VFS with the fixture's explicit project assets.
+    let project = tempfile::tempdir().unwrap();
+    add_explicit_latex_showcase_assets(project.path());
+    let resp = compile_latex_to_pdf(latex, project.path().to_str(), None);
+    assert!(
+        resp.success,
+        "LaTeX showcase compilation failed: {:?}",
+        resp.errors.iter().map(|e| &e.message).collect::<Vec<_>>()
+    );
     assert!(!resp.pdf_bytes.is_empty(), "PDF bytes should not be empty");
 
     // Export to Markdown
@@ -652,7 +769,9 @@ Speed & Fast & Instant \\
     assert!(html.contains("<!DOCTYPE html>"));
     assert!(html.contains("katex.min.js"));
     assert!(html.contains("<table class=\"latex-table\">"));
-    assert!(html.contains("<figure><img src=\"assets/sample.png\" alt=\"ScienceBatch Architecture\">"));
+    assert!(
+        html.contains("<figure><img src=\"assets/sample.png\" alt=\"ScienceBatch Architecture\">")
+    );
 }
 
 #[test]
@@ -706,7 +825,11 @@ $ mat(x'; y') = mat(cos theta, -sin theta; sin theta, cos theta) mat(x; y) $ <eq
 
     // Compile in RAM VFS without project dir
     let resp = compile_typst_to_pdf(typst, None, None);
-    assert!(resp.success, "Typst showcase compilation failed: {:?}", resp.errors.iter().map(|e| &e.message).collect::<Vec<_>>());
+    assert!(
+        resp.success,
+        "Typst showcase compilation failed: {:?}",
+        resp.errors.iter().map(|e| &e.message).collect::<Vec<_>>()
+    );
     assert!(!resp.pdf_bytes.is_empty(), "PDF bytes should not be empty");
 
     // Export to Markdown
@@ -724,8 +847,12 @@ $ mat(x'; y') = mat(cos theta, -sin theta; sin theta, cos theta) mat(x; y) $ <eq
     assert!(html.contains("<!DOCTYPE html>"));
     assert!(html.contains("katex.min.js"));
     assert!(html.contains("<table class=\"latex-table\">"));
-    assert!(html.contains("<figure><img src=\"assets/sample.png\" alt=\"ScienceBatch Architecture\">"));
-    assert!(html.contains("<figure><img src=\"assets/sample.gif\" alt=\"Dynamic Live Pulse Asset\">"));
+    assert!(
+        html.contains("<figure><img src=\"assets/sample.png\" alt=\"ScienceBatch Architecture\">")
+    );
+    assert!(
+        html.contains("<figure><img src=\"assets/sample.gif\" alt=\"Dynamic Live Pulse Asset\">")
+    );
 }
 
 #[test]
@@ -854,8 +981,16 @@ Cross-referencing ties the paper together: @sec:math formulates @eq:einstein, @s
 "##;
 
     let resp = compile_typst_to_pdf(typst_source, None, None);
-    assert!(resp.success, "Typst compilation failed: {:?}", resp.errors.iter().map(|e| &e.message).collect::<Vec<_>>());
-    assert!(resp.errors.is_empty(), "Expected 0 errors, got: {:?}", resp.errors);
+    assert!(
+        resp.success,
+        "Typst compilation failed: {:?}",
+        resp.errors.iter().map(|e| &e.message).collect::<Vec<_>>()
+    );
+    assert!(
+        resp.errors.is_empty(),
+        "Expected 0 errors, got: {:?}",
+        resp.errors
+    );
     assert!(!resp.pdf_bytes.is_empty(), "PDF bytes must not be empty");
 }
 
@@ -927,13 +1062,29 @@ References: Section~\ref{sec:intro}, Eq.~\eqref{eq:einstein}, Table~\ref{tab:ben
 \end{document}
 "#;
 
-    let resp = compile_latex_to_pdf(latex_source, None, None);
-    assert!(resp.success, "LaTeX compilation failed: {:?}", resp.errors.iter().map(|e| &e.message).collect::<Vec<_>>());
-    assert!(resp.errors.is_empty(), "Expected 0 errors, got: {:?}", resp.errors);
-    let undefined_refs: Vec<_> = resp.warnings.iter()
+    let project = tempfile::tempdir().unwrap();
+    add_explicit_latex_showcase_assets(project.path());
+    let resp = compile_latex_to_pdf(latex_source, project.path().to_str(), None);
+    assert!(
+        resp.success,
+        "LaTeX compilation failed: {:?}",
+        resp.errors.iter().map(|e| &e.message).collect::<Vec<_>>()
+    );
+    assert!(
+        resp.errors.is_empty(),
+        "Expected 0 errors, got: {:?}",
+        resp.errors
+    );
+    let undefined_refs: Vec<_> = resp
+        .warnings
+        .iter()
         .filter(|w| w.message.to_lowercase().contains("undefined"))
         .collect();
-    assert!(undefined_refs.is_empty(), "Expected no undefined reference warnings, got: {:?}", undefined_refs);
+    assert!(
+        undefined_refs.is_empty(),
+        "Expected no undefined reference warnings, got: {:?}",
+        undefined_refs
+    );
     assert!(!resp.pdf_bytes.is_empty(), "PDF bytes must not be empty");
 }
 
@@ -1030,31 +1181,37 @@ fn test_open_external_url_security_validation() {
 
 #[tokio::test]
 async fn test_compiler_manager_cancellation_and_generation_ids() {
-    use crate::commands::compile::{CompilerManager, wait_for_cancellation};
+    use crate::commands::compile::CompilerManager;
+    use std::sync::atomic::Ordering;
 
     let manager = CompilerManager::new();
-    let (id1, rx1) = manager.start_compilation();
+    let (id1, cancel1, guard1) = manager.start_compilation().await.unwrap();
     assert_eq!(id1, 1);
-    assert!(!*rx1.borrow());
+    assert!(!cancel1.load(Ordering::Acquire));
 
-    // Starting second compilation should cancel first and increment id
-    let (id2, rx2) = manager.start_compilation();
-    assert_eq!(id2, 2);
-    assert!(*rx1.borrow(), "Previous compilation must receive cancellation signal");
-    assert!(!*rx2.borrow(), "New compilation must not be cancelled");
-
-    // Test wait_for_cancellation helper finishes immediately for cancelled rx1
-    wait_for_cancellation(rx1).await;
-
-    // Explicit cancel_active on manager cancels second compilation
     manager.cancel_active();
-    assert!(*rx2.borrow(), "Second compilation must receive cancellation signal");
-    wait_for_cancellation(rx2).await;
+    assert!(cancel1.load(Ordering::Acquire));
+    drop(guard1);
+    manager.cancel_and_wait().await;
+
+    let (id2, cancel2, guard2) = manager.start_compilation().await.unwrap();
+    assert_eq!(id2, 2);
+    assert!(!cancel2.load(Ordering::Acquire));
+    manager.cancel_active();
+    assert!(cancel2.load(Ordering::Acquire));
+    drop(guard2);
+    manager.cancel_and_wait().await;
 }
 
 #[test]
 fn test_curve_cv_markdown_and_html_export() {
-    let temp_dir = std::env::temp_dir().join(format!("test_curve_cv_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+    let temp_dir = std::env::temp_dir().join(format!(
+        "test_curve_cv_{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
     let _ = std::fs::create_dir_all(&temp_dir);
 
     let edu_tex = r#"\begin{rubric}{Educación}
@@ -1160,7 +1317,11 @@ fn test_generate_and_save_overleaf_cv_deliverables() {
         let main_tex = std::fs::read_to_string(&main_tex_path).unwrap();
 
         let md = latex_to_markdown_with_dir(&main_tex, Some(&temp_dir));
-        let html = latex_to_html_with_dir(&main_tex, "Curriculum Vitae - Paulo Roberto Figueroa Torrez", Some(&temp_dir));
+        let html = latex_to_html_with_dir(
+            &main_tex,
+            "Curriculum Vitae - Paulo Roberto Figueroa Torrez",
+            Some(&temp_dir),
+        );
 
         assert!(md.contains("# Paulo Roberto Figueroa Torrez, Ph.D."));
         assert!(md.contains("## Educación"));
@@ -1191,7 +1352,10 @@ fn test_generate_and_save_overleaf_cv_deliverables() {
         assert!(extracted_paths.contains(&"1-2025_2.jpg".to_string()));
 
         // Verify that embed_local_images_as_base64_in_markdown produces standalone markdown with data URI
-        let standalone_md = crate::exporters::markdown::embed_local_images_as_base64_in_markdown(&md, Some(&temp_dir));
+        let standalone_md = crate::exporters::markdown::embed_local_images_as_base64_in_markdown(
+            &md,
+            Some(&temp_dir),
+        );
         assert!(standalone_md.contains("![Photo](data:image/jpeg;base64,"));
     }
     let _ = std::fs::remove_dir_all(&temp_dir);
@@ -1223,7 +1387,8 @@ async fn test_export_document_to_markdown_copies_referenced_images() {
         tex_source.to_string(),
         "latex".to_string(),
         Some(temp_src.to_string_lossy().to_string()),
-    ).await;
+    )
+    .await;
 
     assert!(result.is_ok());
     assert!(dest_md_path.is_file());
@@ -1232,8 +1397,3 @@ async fn test_export_document_to_markdown_copies_referenced_images() {
     let _ = std::fs::remove_dir_all(&temp_src);
     let _ = std::fs::remove_dir_all(&temp_dest);
 }
-
-
-
-
-

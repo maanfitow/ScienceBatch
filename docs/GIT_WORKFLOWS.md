@@ -1,5 +1,7 @@
 # Git Workflows
 
+The local Git workflow described here is integrated into `develop` through PR #1 (`84d9584`), merged before PR #2 (writing ribbon, `e052afc826b3f9d7c92f272e612b248e8512c46e`). This is integration provenance; provider-account integrations and the validation gaps tracked in [IDEA-009](../IDEAS.md#idea-009-local-git-actions) remain separate.
+
 ScienceBatch uses the system Git installation for local repositories and GitHub or GitLab remotes. Git operations start only when you choose an action. The Source Control toolbar shows the repository root, current upstream, and ahead/behind counts from the latest fetch. Those counts do not trigger automatic network requests.
 
 ## Repository settings and credentials

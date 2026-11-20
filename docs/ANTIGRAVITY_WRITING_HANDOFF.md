@@ -2,7 +2,9 @@
 
 Prepared on 2026-10-05. This is a continuation plan and a ready-to-use context packet. It does not certify a release or authorize implementation of every proposed delivery. The user has selected Antigravity as the intended recipient; this document has not been sent through an external agent service.
 
-This packet preserves its original 2026-10-05 context. The uncommitted-work and HEAD notes below describe that earlier handoff, not the present branch: the writing ribbon is now at `9d165da` (`feat: add LaTeX and Typst writing ribbon`). For current mitigation, verification, native evidence, and integration status, use [Writing Ribbon Final Review](WRITING_RIBBON_FINAL_REVIEW.md). In particular, the model-switch cause has since been identified and the regression/verification status is tracked there.
+**Historical integration note (updated 2026-10-06):** The old branch-creation, preservation, and delivery instructions below describe the original handoff only; do not treat them as active instructions. PR #1 (Git) merged into `develop` as `84d9584`, then PR #2 (writing ribbon) merged as `e052afc826b3f9d7c92f272e612b248e8512c46e`. The handoff was not sent via an external service. Native/release QA remains incomplete; see [Writing Ribbon Native Acceptance](WRITING_RIBBON_NATIVE_QA.md) for per-case status. Merge provenance is not native QA evidence.
+
+This packet preserves its original 2026-10-05 context. The uncommitted-work and HEAD notes below describe that earlier handoff; the cited `9d165da` commit is the historical writing-ribbon branch snapshot. The Git and writing-ribbon PRs have since merged into `develop` in that order. For current integration provenance, mitigation, verification, and native evidence, use [Writing Ribbon Final Review](WRITING_RIBBON_FINAL_REVIEW.md). The model-switch cause has since been identified and the regression/verification status is tracked there.
 
 ## Repository and working state
 

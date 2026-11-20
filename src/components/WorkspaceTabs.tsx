@@ -9,6 +9,7 @@ import { WorkspaceTab } from '../types/workspace';
 import { GitDiffResult } from '../types/git';
 import { ContextMenu, ContextMenuAction } from './ContextMenu';
 import type { WritingEditorBridge, WritingEditorState } from '../types/writing';
+import type { AutomationEditorBridge } from '../types/automation';
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -31,15 +32,18 @@ interface WorkspaceTabsProps {
   isScratchpad?: boolean;
   canAddPackages?: boolean;
   onWritingBridgeChange?: (bridge: WritingEditorBridge | null, state: WritingEditorState) => void;
+  onAutomationBridgeChange?: (bridge: AutomationEditorBridge | null) => void;
+  getDocumentRevision?: (documentId: string) => number;
 }
 
 export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
   tabs, activeTabId, projectRoot, sourceCode, engine, activeFilePath,
   onChange, onActivate, onPromote, onClose, onPin, errors, warnings, jumpToLine, readOnly,
-  isScratchpad, canAddPackages, onWritingBridgeChange,
+  isScratchpad, canAddPackages, onWritingBridgeChange, onAutomationBridgeChange, getDocumentRevision,
 }) => {
   const activeTab = tabs.find(tab => tab.id === activeTabId) ?? null;
   const tabIds = tabs.map(tab => tab.id).join('\u0000');
+  const openDocumentIds = useMemo(() => tabs.filter(tab => tab.kind === 'source').map(tab => tab.id), [tabIds]);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; tabId: string } | null>(null);
   const [hasHorizontalOverflow, setHasHorizontalOverflow] = useState(false);
   const selectedTab = contextMenu ? tabs.find(tab => tab.id === contextMenu.tabId) : null;
@@ -128,9 +132,9 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
         ))}
       </div>
       {contextMenu && selectedTab && <ContextMenu x={contextMenu.x} y={contextMenu.y} actions={closeActions} onClose={() => setContextMenu(null)} />}
-      <div className="workspace-tab-content" key={activeTab?.id || 'empty'}>
+      <div className="workspace-tab-content">
         {!activeTab ? <div className="workspace-empty">Open a source file or project asset to get started.</div> : activeTab.kind === 'source' ? (
-          <EditorView value={sourceCode} onChange={onChange} errors={errors} warnings={warnings} jumpToLine={jumpToLine} engine={engine} activeFilePath={activeFilePath} readOnly={readOnly} documentId={activeTab.id} isScratchpad={isScratchpad} canAddPackages={canAddPackages} onWritingBridgeChange={handleWritingBridgeChange} />
+          <EditorView value={sourceCode} onChange={onChange} errors={errors} warnings={warnings} jumpToLine={jumpToLine} engine={engine} activeFilePath={activeFilePath} readOnly={readOnly} documentId={activeTab.id} openDocumentIds={openDocumentIds} openDocumentIdsKey={tabIds} isScratchpad={isScratchpad} canAddPackages={canAddPackages} onWritingBridgeChange={handleWritingBridgeChange} onAutomationBridgeChange={onAutomationBridgeChange} getDocumentRevision={getDocumentRevision} />
         ) : activeTab.kind === 'diff' ? (
           <DiffTab path={activeTab.path || ''} projectRoot={projectRoot} repositoryRoot={activeTab.repositoryRoot || projectRoot} />
         ) : (

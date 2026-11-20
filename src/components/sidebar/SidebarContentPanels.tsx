@@ -6,6 +6,8 @@ import { FileTree } from '../FileTree';
 import { GlobalSearchView } from './GlobalSearchView';
 import { DocumentOutlineView } from './DocumentOutlineView';
 import { GitStatusView } from './GitStatusView';
+import { DependenciesPanel } from './DependenciesPanel';
+import type { useProjectResources } from '../../hooks/useProjectResources';
 
 interface SidebarContentPanelsProps {
   activeTopTool: SidebarToolId | null;
@@ -37,6 +39,7 @@ interface SidebarContentPanelsProps {
   onBranchChanged?: () => Promise<void | boolean> | void | boolean;
   onWorktreeUpdateBusyChange?: (busy: boolean) => void;
   hasUnsavedChanges?: boolean;
+  resources: ReturnType<typeof useProjectResources>;
 }
 
 export const SidebarContentPanels: React.FC<SidebarContentPanelsProps> = ({
@@ -65,6 +68,7 @@ export const SidebarContentPanels: React.FC<SidebarContentPanelsProps> = ({
   onBranchChanged,
   onWorktreeUpdateBusyChange,
   hasUnsavedChanges,
+  resources,
 }) => {
   const isSplit = Boolean(activeTopTool && activeBottomTool);
 
@@ -139,6 +143,9 @@ export const SidebarContentPanels: React.FC<SidebarContentPanelsProps> = ({
             />
           </div>
         );
+
+      case 'dependencies':
+        return <DependenciesPanel resources={resources} onClose={() => onCloseTool(slot)} />;
 
       default:
         return null;

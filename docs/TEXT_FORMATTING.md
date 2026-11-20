@@ -1,8 +1,10 @@
 # Basic Text Formatting
 
+**Integration provenance:** Bold/Italic for LaTeX and Typst is included in PR #2, merged into `develop` as `e052afc826b3f9d7c92f272e612b248e8512c46e` after PR #1 (Git, `84d9584`). Browser/compiler results below remain as recorded; native formatting interaction remains unverified.
+
 ## Scope and authorization
 
-On 2026-10-06 the user authorized a separate Bold/Italic delivery before final native writing-ribbon QA. This extends the earlier Monaco-mitigation assignment, which excluded formatting. Font controls remain separate. Changes stay on `feat/writing-ribbon`; existing modified and untracked work must be preserved. No commit, push, publication, or merge is assigned.
+On 2026-10-06 the user authorized a separate Bold/Italic delivery before final native writing-ribbon QA. This extends the earlier Monaco-mitigation assignment, which excluded formatting. Font controls remain separate. The original branch and work-preservation constraints applied to that completed delivery; it was included in PR #2 and is now integrated into `develop`. Native formatting acceptance remains open.
 
 ## Source contract
 

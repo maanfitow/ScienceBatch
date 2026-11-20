@@ -1,0 +1,4 @@
+interface:
+  display_name: "ScienceBatch Workspace"
+  short_description: "Work with live editor buffers safely"
+  default_prompt: "Use $sciencebatch-workspace to edit the active ScienceBatch workspace buffer."

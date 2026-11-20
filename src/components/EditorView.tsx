@@ -13,9 +13,13 @@ import { registerBibtexLanguage } from '../editor/bibtexLanguage';
 import { useTheme, registerMonacoCustomThemes } from '../themes/ThemeContext';
 import { DiagnosticItem } from '../types';
 import type { WritingEditorBridge, WritingEditorState, WritingLanguage } from '../types/writing';
+import type { AutomationEditorBridge } from '../types/automation';
 import { createWritingEditorBridge } from '../editor/writingBridge';
+import { createWorkspaceAutomationBridge } from '../editor/workspaceAutomationBridge';
 import { getWritingSymbolAdapter } from '../editor/writing/adapters';
 import { registerEditorClipboardCopy } from '../editor/editorClipboard';
+
+const LARGE_DOCUMENT_INTERACTIVE_LIMIT = 1024 * 1024;
 
 function eligibleWritingLanguage(engine: WritingLanguage, activeFilePath: string | null | undefined, isScratchpad: boolean): WritingLanguage | null {
   if (activeFilePath) {
@@ -37,6 +41,20 @@ function buildWritingEditorState({
   readOnly: boolean;
   hasMultipleSelections: boolean;
 }): WritingEditorState {
+  // The contextual lexer is intentionally synchronous because it gates ribbon
+  // insertions. Large documents remain editable, but skip this optional scan.
+  // This prevents every keystroke in a multi-megabyte source from rescanning it.
+  if (source.length > LARGE_DOCUMENT_INTERACTIVE_LIMIT) {
+    return {
+      language,
+      editable: eligibleLanguage !== null && !readOnly && !hasMultipleSelections,
+      available: false,
+      reason: 'Writing tools are unavailable for documents larger than 1 MiB.',
+      source: '',
+      cursorOffset: 0,
+      canAddPackages: false,
+    };
+  }
   const context = eligibleLanguage
     ? getWritingSymbolAdapter(eligibleLanguage).classifyContext(source, cursorOffset)
     : { context: 'blocked' as const, reason: 'Writing tools are available only in editable LaTeX or Typst source files.' };
@@ -63,9 +81,13 @@ interface EditorViewProps {
   activeFilePath?: string | null;
   readOnly?: boolean;
   documentId?: string;
+  openDocumentIds?: string[];
+  openDocumentIdsKey?: string;
   isScratchpad?: boolean;
   canAddPackages?: boolean;
   onWritingBridgeChange?: (bridge: WritingEditorBridge | null, state: WritingEditorState, releasedBridge?: WritingEditorBridge) => void;
+  onAutomationBridgeChange?: (bridge: AutomationEditorBridge | null) => void;
+  getDocumentRevision?: (documentId: string) => number;
 }
 
 export const EditorView: React.FC<EditorViewProps> = ({
@@ -78,14 +100,19 @@ export const EditorView: React.FC<EditorViewProps> = ({
   activeFilePath,
   readOnly = false,
   documentId = activeFilePath || 'scratchpad',
+  openDocumentIds = [documentId],
+  openDocumentIdsKey = openDocumentIds.join('\u0000'),
   isScratchpad = false,
   canAddPackages = false,
   onWritingBridgeChange,
+  onAutomationBridgeChange,
+  getDocumentRevision,
 }) => {
   const { monacoTheme } = useTheme();
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monacoType.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
+  const modelUrisRef = useRef<Map<string, monacoType.Uri>>(new Map());
   const lintTimerRef = useRef<number | null>(null);
   const previousValueRef = useRef(value);
   const latestValueRef = useRef(value);
@@ -94,14 +121,17 @@ export const EditorView: React.FC<EditorViewProps> = ({
   const frozenViewStateRef = useRef<monacoType.editor.ICodeEditorViewState | null>(null);
   const awaitingExternalContentRef = useRef(false);
   const readOnlyRef = useRef(readOnly);
+  const baseReadOnlyRef = useRef(readOnly);
+  const exportFreezeRef = useRef(false);
   const restoreFrameRef = useRef<number | null>(null);
   const clearViewStateFrameRef = useRef<number | null>(null);
   const viewStateListenersRef = useRef<monacoType.IDisposable[]>([]);
   const writingBridgeRef = useRef<WritingEditorBridge | null>(null);
+  const automationBridgeRef = useRef<AutomationEditorBridge | null>(null);
   const clipboardCommandRef = useRef<monacoType.IDisposable | null>(null);
   const writingListenersRef = useRef<monacoType.IDisposable[]>([]);
   const writingStateRef = useRef<WritingEditorState>({ language: engine, editable: false, available: false, reason: 'Writing tools are unavailable.', source: value, cursorOffset: 0, canAddPackages: false });
-  const writingPropsRef = useRef({ engine, activeFilePath, canAddPackages, onWritingBridgeChange, documentId, isScratchpad });
+  const writingPropsRef = useRef({ engine, activeFilePath, canAddPackages, onWritingBridgeChange, onAutomationBridgeChange, getDocumentRevision, documentId, isScratchpad });
   const writingContextKey = `${engine}\u0000${documentId}\u0000${activeFilePath ?? ''}\u0000${isScratchpad}\u0000${readOnly}`;
   const writingContextKeyRef = useRef(writingContextKey);
   const writingContextRevisionRef = useRef(0);
@@ -109,10 +139,12 @@ export const EditorView: React.FC<EditorViewProps> = ({
     writingContextKeyRef.current = writingContextKey;
     writingContextRevisionRef.current += 1;
   }
-  writingPropsRef.current = { engine, activeFilePath, canAddPackages, onWritingBridgeChange, documentId, isScratchpad };
-  readOnlyRef.current = readOnly;
+  writingPropsRef.current = { engine, activeFilePath, canAddPackages, onWritingBridgeChange, onAutomationBridgeChange, getDocumentRevision, documentId, isScratchpad };
+  baseReadOnlyRef.current = readOnly;
+  readOnlyRef.current = readOnly || exportFreezeRef.current;
   latestValueRef.current = value;
   const cloneViewState = (state: monacoType.editor.ICodeEditorViewState | null) => state ? structuredClone(state) : null;
+  const editorModelPath = activeFilePath || `inmemory://sciencebatch/document/${encodeURIComponent(documentId)}`;
 
   // Active section tracking (requires explicit click-to-activate)
   const [isEditorActive, setIsEditorActive] = useState<boolean>(false);
@@ -301,6 +333,13 @@ export const EditorView: React.FC<EditorViewProps> = ({
     clipboardCommandRef.current?.dispose();
     editorRef.current = editor;
     monacoRef.current = monaco;
+    modelUrisRef.current.set(documentId, monaco.Uri.parse(editorModelPath));
+    const openIds = new Set(openDocumentIds);
+    for (const [id, modelUri] of modelUrisRef.current) {
+      if (openIds.has(id)) continue;
+      monaco.editor.getModel(modelUri)?.dispose();
+      modelUrisRef.current.delete(id);
+    }
     clipboardCommandRef.current = registerEditorClipboardCopy(monaco, editor);
     const writingBridge = createWritingEditorBridge(editor, monaco, {
       documentId: writingPropsRef.current.documentId,
@@ -319,6 +358,19 @@ export const EditorView: React.FC<EditorViewProps> = ({
       },
     });
     writingBridgeRef.current = writingBridge;
+    const automationBridge = createWorkspaceAutomationBridge(editor, monaco, {
+      getDocumentId: () => writingPropsRef.current.documentId,
+      getRevision: () => writingPropsRef.current.getDocumentRevision?.(writingPropsRef.current.documentId) ?? 0,
+      getSource: () => latestValueRef.current,
+      isEditable: () => !readOnlyRef.current && editorRef.current === editor,
+      setReadOnly: frozen => {
+        exportFreezeRef.current = frozen;
+        readOnlyRef.current = baseReadOnlyRef.current || frozen;
+        editor.updateOptions({ readOnly: readOnlyRef.current });
+      },
+    });
+    automationBridgeRef.current = automationBridge;
+    writingPropsRef.current.onAutomationBridgeChange?.(automationBridge);
     const publishWritingState = () => {
       const model = editor.getModel();
       const position = editor.getPosition();
@@ -336,8 +388,16 @@ export const EditorView: React.FC<EditorViewProps> = ({
         readOnly: readOnlyRef.current,
         hasMultipleSelections,
       });
+      const previousState = writingStateRef.current;
+      const stateUnchanged = previousState.language === state.language
+        && previousState.editable === state.editable
+        && previousState.available === state.available
+        && previousState.reason === state.reason
+        && previousState.source === state.source
+        && previousState.cursorOffset === state.cursorOffset
+        && previousState.canAddPackages === state.canAddPackages;
       writingStateRef.current = state;
-      currentProps.onWritingBridgeChange?.(writingBridge, state);
+      if (!stateUnchanged) currentProps.onWritingBridgeChange?.(writingBridge, state);
     };
     writingListenersRef.current = [
       editor.onDidChangeCursorSelection(publishWritingState),
@@ -503,9 +563,29 @@ export const EditorView: React.FC<EditorViewProps> = ({
     const bridge = writingBridgeRef.current;
     if (bridge) writingPropsRef.current.onWritingBridgeChange?.(null, writingStateRef.current, bridge);
     writingBridgeRef.current = null;
+    writingPropsRef.current.onAutomationBridgeChange?.(null);
+    automationBridgeRef.current = null;
     if (restoreFrameRef.current !== null) cancelAnimationFrame(restoreFrameRef.current);
     if (clearViewStateFrameRef.current !== null) cancelAnimationFrame(clearViewStateFrameRef.current);
+    const monaco = monacoRef.current;
+    if (monaco) {
+      for (const uri of modelUrisRef.current.values()) monaco.editor.getModel(uri)?.dispose();
+    }
+    modelUrisRef.current.clear();
   }, []);
+
+  useEffect(() => {
+    const monaco = monacoRef.current;
+    if (!monaco) return;
+    const uri = monaco.Uri.parse(editorModelPath);
+    modelUrisRef.current.set(documentId, uri);
+    const openIds = new Set(openDocumentIds);
+    for (const [id, modelUri] of modelUrisRef.current) {
+      if (openIds.has(id)) continue;
+      monaco.editor.getModel(modelUri)?.dispose();
+      modelUrisRef.current.delete(id);
+    }
+  }, [documentId, editorModelPath, openDocumentIdsKey]);
 
   useEffect(() => () => {
     clipboardCommandRef.current?.dispose();
@@ -559,7 +639,8 @@ export const EditorView: React.FC<EditorViewProps> = ({
 
   useEffect(() => {
     if (!editorRef.current) return;
-    editorRef.current.updateOptions({ readOnly });
+    readOnlyRef.current = readOnly || exportFreezeRef.current;
+    editorRef.current.updateOptions({ readOnly: readOnlyRef.current });
   }, [readOnly]);
 
   // Throttled Ctrl+Wheel listener for bounded code font zoom (10px to 28px)
@@ -610,11 +691,12 @@ export const EditorView: React.FC<EditorViewProps> = ({
     <div ref={editorContainerRef} className="editor-container">
       <Editor
         height="100%"
-        path={activeFilePath || (engine === 'typst' ? 'main.typ' : 'main.tex')}
+        path={editorModelPath}
         defaultLanguage={editorLanguage}
         language={editorLanguage}
         theme={monacoTheme}
         value={value}
+        keepCurrentModel
         onChange={handleEditorChange}
         beforeMount={handleEditorBeforeMount}
         onMount={handleEditorDidMount}
@@ -632,7 +714,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
             sticky: true,
           },
           minimap: {
-            enabled: true,
+            enabled: value.length <= LARGE_DOCUMENT_INTERACTIVE_LIMIT,
             side: 'right',
             maxColumn: 80,
           },
@@ -642,15 +724,21 @@ export const EditorView: React.FC<EditorViewProps> = ({
           automaticLayout: true,
           tabSize: 2,
           insertSpaces: true,
-          wordWrap: 'on',
+          // A single multi-megabyte visual line is expensive to wrap and lay
+          // out. Keep normal documents wrapped while large sources stay usable.
+          wordWrap: value.length <= LARGE_DOCUMENT_INTERACTIVE_LIMIT ? 'on' : 'off',
+          largeFileOptimizations: true,
+          maxTokenizationLineLength: 20000,
+          stopRenderingLineAfter: 10000,
           bracketPairColorization: {
             enabled: true,
           },
           wordBasedSuggestions: 'off',
+          quickSuggestions: value.length <= LARGE_DOCUMENT_INTERACTIVE_LIMIT,
+          suggestOnTriggerCharacters: value.length <= LARGE_DOCUMENT_INTERACTIVE_LIMIT,
           // Monaco's WordHighlighter can reject pending work when its model is replaced.
           occurrencesHighlight: 'off',
           snippetSuggestions: 'inline',
-          suggestOnTriggerCharacters: true,
           acceptSuggestionOnEnter: 'on',
           tabCompletion: 'on',
           suggest: {

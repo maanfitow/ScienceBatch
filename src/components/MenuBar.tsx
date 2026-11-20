@@ -22,7 +22,8 @@ import {
   Archive,
   FileText,
   FileCode,
-  Globe
+  Globe,
+  Package
 } from 'lucide-react';
 import { useTheme } from '../themes/ThemeContext';
 import { RecentProject } from '../types';
@@ -38,6 +39,7 @@ interface MenuBarProps {
   onExportHtml: () => void;
   onCloseProject: () => void;
   onCompile: () => void;
+  onOpenProjectResources: () => void;
   onCancelCompile?: () => void;
   isCompiling: boolean;
   activeTab: 'preview' | 'diagnostics';
@@ -52,6 +54,8 @@ interface MenuBarProps {
   recentProjects: RecentProject[];
   onOpenRecentProject: (path: string) => void;
   hasOpenProject: boolean;
+  onUndo?: () => void;
+  onRedo?: () => void;
 }
 
 export const MenuBar: React.FC<MenuBarProps> = ({
@@ -65,6 +69,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   onExportHtml,
   onCloseProject,
   onCompile,
+  onOpenProjectResources,
   onCancelCompile,
   isCompiling,
   activeTab,
@@ -79,6 +84,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   recentProjects,
   onOpenRecentProject,
   hasOpenProject,
+  onUndo,
+  onRedo,
 }) => {
   const { theme, setTheme } = useTheme();
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
@@ -279,13 +286,13 @@ export const MenuBar: React.FC<MenuBarProps> = ({
 
         {activeMenu === 'edit' && (
           <div className="menu-dropdown">
-            <button className="menu-dropdown-item" onClick={closeMenu}>
+            <button className="menu-dropdown-item" aria-label="Undo" onClick={() => { onUndo?.(); closeMenu(); }}>
               <div className="menu-item-left">
                 <span>Undo</span>
               </div>
               <span className="menu-shortcut">Ctrl+Z</span>
             </button>
-            <button className="menu-dropdown-item" onClick={closeMenu}>
+            <button className="menu-dropdown-item" aria-label="Redo" onClick={() => { onRedo?.(); closeMenu(); }}>
               <div className="menu-item-left">
                 <span>Redo</span>
               </div>
@@ -402,6 +409,15 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   <span>Compile Document</span>
                 </div>
                 <span className="menu-shortcut">Ctrl+S</span>
+              </button>
+            )}
+
+            {hasOpenProject && (
+              <button className="menu-dropdown-item" onClick={() => { onOpenProjectResources(); closeMenu(); }}>
+                <div className="menu-item-left">
+                  <Package size={14} />
+                  <span>Project Resources…</span>
+                </div>
               </button>
             )}
 
