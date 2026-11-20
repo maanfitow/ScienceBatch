@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict';
-import { copyFile, cp, mkdtemp, mkdir, readFile, readdir, realpath, stat, symlink, unlink, utimes, writeFile } from 'node:fs/promises';
+import { copyFile, cp, mkdtemp, mkdir, readFile, readdir, realpath, rm, stat, symlink, unlink, utimes, writeFile } from 'node:fs/promises';
 import { spawn, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -336,13 +336,18 @@ async function runOfflineCacheScenarios(cliPath, base, project) {
     label: 'offline-stale-digest',
     env: { TECTONIC_CACHE_DIR: original.root },
     expectedExit: 3,
-    expectedError: 'cache.unavailable_offline',
+    expectedError: 'resources.bundle_identity_mismatch',
   });
+
+  const nonStarterProject = join(base, 'non-starter-offline-project');
+  await mkdir(nonStarterProject, { recursive: true });
+  await writeFile(join(nonStarterProject, 'main.tex'), '\\documentclass{article}\n\\usepackage{enumitem}\n\\begin{document}Offline cache check.\\end{document}\n');
 
   const missingIndex = await copiedTectonicCache(cliPath, base, 'tectonic-cache-missing-index');
   const digest = (await readFile(join(missingIndex.bundles, 'hashes', hashName), 'utf8')).trim();
   await unlink(join(missingIndex.bundles, 'data', `${digest}.index`));
-  await runStrace(cliPath, project, 'main.tex', join(base, 'offline-missing-index.pdf'), {
+  await rm(join(missingIndex.bundles, 'data', digest), { recursive: true, force: true });
+  await runStrace(cliPath, nonStarterProject, 'main.tex', join(base, 'offline-missing-index.pdf'), {
     label: 'offline-missing-index',
     env: { TECTONIC_CACHE_DIR: missingIndex.root },
     expectedExit: 3,
@@ -351,7 +356,8 @@ async function runOfflineCacheScenarios(cliPath, base, project) {
 
   const missingDigest = await copiedTectonicCache(cliPath, base, 'tectonic-cache-missing-digest');
   await unlink(join(missingDigest.bundles, 'hashes', hashName));
-  await runStrace(cliPath, project, 'main.tex', join(base, 'offline-missing-digest.pdf'), {
+  await rm(join(missingDigest.bundles, 'data', digest), { recursive: true, force: true });
+  await runStrace(cliPath, nonStarterProject, 'main.tex', join(base, 'offline-missing-digest.pdf'), {
     label: 'offline-missing-digest',
     env: { TECTONIC_CACHE_DIR: missingDigest.root },
     expectedExit: 3,
