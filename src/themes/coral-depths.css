@@ -1,0 +1,138 @@
+/* ==========================================================================
+   Coral Depths Theme (Deep Abyssal Indigo)
+   Grounded in ultra-dark abyssal tones (#060511 / #0c0a1d / #13112b)
+   with jewel-crisp Fishy House teal (#1ea598 / #3dd5c4) and Swiss Plum (#8c82eb).
+   ========================================================================== */
+
+[data-theme='coral-depths'] {
+  color-scheme: dark;
+
+  /* Core Surfaces (Darker Abyssal Depths) */
+  --bg: #060511;
+  --surface: #0c0a1d;
+  --surface-alt: #13112b;
+  --rule: #232048;
+  --control-border: #4a4585;
+
+  --bg-primary: var(--bg);
+  --bg-secondary: var(--surface);
+  --bg-tertiary: var(--surface-alt);
+  --bg-hover: #1b183d;
+
+  --border-color: var(--rule);
+  --border-subtle: #191738;
+  --border-focus: #3dd5c4;
+
+  /* Typography */
+  --text: #f2f1fa;
+  --text-primary: var(--text);
+  --text-secondary: #cbc8e4;
+  --text-muted: #8f8cb5;
+
+  /* Crisp Pills & Dropdown Hover */
+  --pill-bg: #f2f1fa;
+  --pill-fg: #060511;
+  --option-hover-bg: #252252;
+  --option-hover-fg: #f2f1fa;
+
+  /* Primary Interactive Accent (Fishy House Teal) */
+  --accent-primary: #2dd4bf;
+  --accent-hover: #4be3cf;
+  --accent-active: #1ea598;
+  --accent-contrast: #060511;
+  --accent-glow: rgba(45, 212, 191, 0.16);
+  --accent-border: #1ea598;
+
+  /* Primary Compile / Stop CTA */
+  --btn-compile-bg: #2dd4bf;
+  --btn-compile-hover: #4be3cf;
+  --btn-compile-active: #1ea598;
+  --btn-compile-fg: #060511;
+  --btn-compile-border: #2dd4bf;
+  --btn-stop-bg: #e56b8b;
+  --btn-stop-hover: #f083a0;
+  --btn-stop-fg: #060511;
+  --btn-stop-border: #e56b8b;
+  --kbd-bg: rgba(6, 5, 17, 0.16);
+  --kbd-border: rgba(6, 5, 17, 0.28);
+  --kbd-fg: #060511;
+
+  /* Action Tiles & Engine Badges (Crisp High-Contrast) */
+  --tile-latex-bg: #9f96f2;
+  --tile-latex-fg: #060511;
+  --tile-typst-bg: #3dd5c4;
+  --tile-typst-fg: #060511;
+  --tile-folder-bg: #f0ca6e;
+  --tile-folder-fg: #060511;
+  --tile-git-bg: #5fd4b3;
+  --tile-git-fg: #060511;
+
+  /* Inline Icon Accents */
+  --accent-latex: #a9a0f7;
+  --accent-latex-bg: #1e1a4a;
+  --accent-typst: #3dd5c4;
+  --accent-typst-bg: #0f292e;
+  --accent-folder: #f0ca6e;
+  --accent-folder-bg: #252014;
+  --accent-git: #5fd4b3;
+  --accent-git-bg: #102824;
+  --accent-archive: #eba08e;
+  --accent-archive-bg: #26181a;
+  --accent-info: #85a8f2;
+  --accent-info-bg: #141c3b;
+  --accent-rose: #eb84a2;
+  --accent-rose-bg: #281523;
+
+  /* Status Semantics */
+  --status-success: #3dd5c4;
+  --status-success-bg: #0c2629;
+  --status-success-border: #1ea598;
+
+  --status-warning: #f0ca6e;
+  --status-warning-bg: #221d12;
+  --status-warning-border: #7a6429;
+
+  --status-error: #f27994;
+  --status-error-bg: #28121d;
+  --status-error-border: #822e47;
+
+  --status-info: #a9a0f7;
+  --status-info-bg: #1b1842;
+  --status-info-border: #5950b8;
+
+  /* Diagnostics Cards & Log Viewer */
+  --diag-error-bg: #1b0f1b;
+  --diag-error-border: #6e2943;
+  --diag-error-fg: #f79ab0;
+  --diag-error-msg-bg: #0b0712;
+
+  --diag-warning-bg: #191614;
+  --diag-warning-border: #695626;
+  --diag-warning-fg: #f0ca6e;
+  --diag-warning-msg-bg: #0c0a0d;
+
+  --diag-tip-bg: #13112b;
+  --diag-tip-fg: #f2f1fa;
+  --diag-tip-accent: #a9a0f7;
+
+  --raw-log-bg: #05040d;
+  --raw-log-fg: #b2afd4;
+
+  /* Git Diff & File Type Accents */
+  --diff-added-bg: #0d2527;
+  --diff-added-fg: #3dd5c4;
+  --diff-removed-bg: #26121d;
+  --diff-removed-fg: #f79ab0;
+  --diff-hunk-bg: #1b1842;
+  --diff-hunk-fg: #a9a0f7;
+
+  /* Solid Crisp Surfaces & HUD */
+  --card-bg: #0c0a1d;
+  --viewer-bg: #080716;
+  --menu-bg: #0c0a1d;
+  --menu-border: #2a2757;
+  --hud-bg: #0c0a1d;
+  --hud-fg: #f2f1fa;
+  --hud-border: #4a4585;
+  --overlay-backdrop: rgba(4, 3, 12, 0.8);
+}

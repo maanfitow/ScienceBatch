@@ -19,6 +19,7 @@ import { WritingRibbon } from './components/writing/WritingRibbon';
 import { useRecentProjects, useCompiler, useExport, useProject, useProjectResources, useSidebar } from './hooks';
 import { useGitOperation } from './hooks/useGitOperation';
 import { useWorkspaceAutomation } from './hooks/useWorkspaceAutomation';
+import { useTheme } from './themes/ThemeContext';
 import { ViewMode } from './types';
 import { tabIsDirty, type WorkspaceTab } from './types/workspace';
 import type { ProjectResourceSnapshot } from './types/projectResources';
@@ -66,6 +67,7 @@ const waitForRenderTurn = () => new Promise<void>(resolve => {
 });
 
 export const App: React.FC = () => {
+  const { theme } = useTheme();
   // Navigation & Workspace UI State
   const [viewMode, setViewMode] = useState<ViewMode>('welcome');
   const sidebar = useSidebar();
@@ -1029,7 +1031,7 @@ export const App: React.FC = () => {
         onClose={() => projectResources.setIsOpen(false)}
       />
 
-      <Toaster position="bottom-right" richColors closeButton />
+      <Toaster position="bottom-right" closeButton theme={theme === 'light' ? 'light' : 'dark'} />
     </div>
   );
 };

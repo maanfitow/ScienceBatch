@@ -87,9 +87,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         {/* Brand Logo & Subtitle Badge */}
         <div className="app-logo">
           {engine === 'typst' ? (
-            <FileCode className="logo-icon text-cyan-400" size={20} />
+            <FileCode className="logo-icon icon-typst" size={20} />
           ) : (
-            <FileText className="logo-icon text-blue-500" size={20} />
+            <FileText className="logo-icon icon-latex" size={20} />
           )}
           <span className="logo-text">ScienceBatch</span>
           <span className="logo-badge">Studio</span>
@@ -103,12 +103,12 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         >
           {engine === 'typst' ? (
             <>
-              <FileCode size={13} className="text-cyan-400" />
+              <FileCode size={13} className="icon-typst" />
               <span>Engine: Typst</span>
             </>
           ) : (
             <>
-              <FileText size={13} className="text-blue-400" />
+              <FileText size={13} className="icon-latex" />
               <span>Engine: LaTeX</span>
             </>
           )}
@@ -123,7 +123,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             title="Cancel compilation (Stop)"
             aria-label="Stop compilation"
           >
-            <Square size={13} fill="currentColor" className="text-rose-300" />
+            <Square size={13} fill="currentColor" className="icon-stop" />
             <span>Stop</span>
           </button>
         ) : (
@@ -224,7 +224,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 title={hasPdf ? "Export compiled PDF document" : "Compile document first to export PDF"}
               >
                 <div className="toolbar-item-left">
-                  <FileText size={15} className="text-blue-400 shrink-0" />
+                  <FileText size={15} className="icon-latex shrink-0" />
                   <div className="toolbar-item-text">
                     <span className="toolbar-item-title">Download as PDF</span>
                     <span className="toolbar-item-desc">Formatted document (.pdf)</span>
@@ -241,7 +241,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                 title="Package all project source files and assets into a ZIP archive"
               >
                 <div className="toolbar-item-left">
-                  <Archive size={15} className="text-amber-400 shrink-0" />
+                  <Archive size={15} className="icon-archive shrink-0" />
                   <div className="toolbar-item-text">
                     <span className="toolbar-item-title">Download as Source</span>
                     <span className="toolbar-item-desc">Complete project archive (.zip)</span>

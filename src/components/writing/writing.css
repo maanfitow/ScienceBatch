@@ -55,11 +55,13 @@
 .writing-compact-menu button { padding: 8px 10px; border: 0; border-radius: 4px; background: transparent; color: var(--text-primary); text-align: left; font: inherit; font-size: 12px; cursor: pointer; }
 .writing-compact-menu button:hover { background: var(--bg-tertiary); }
 
-.writing-overlay { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgb(5 9 16 / 68%); backdrop-filter: blur(2px); }
+.writing-overlay { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 20px; background: var(--overlay-backdrop, rgb(5 9 16 / 74%)); }
 .writing-dialog { display: flex; flex-direction: column; width: min(820px, 100%); max-height: min(760px, calc(100vh - 40px)); overflow: hidden; border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-primary); color: var(--text-primary); color-scheme: dark; box-shadow: 0 24px 72px rgb(0 0 0 / 42%); }
 .writing-dialog { position: relative; min-height: 0; }
 [data-theme='light'] .writing-dialog { color-scheme: light; }
-[data-theme='monokai'] .writing-dialog { color-scheme: dark; }
+[data-theme='monokai'] .writing-dialog,
+[data-theme='obsidian-pastel'] .writing-dialog,
+[data-theme='coral-depths'] .writing-dialog { color-scheme: dark; }
 .writing-dialog-table, .writing-dialog-matrix { width: min(920px, calc(100vw - 40px)); }
 .writing-symbol-popover { position: absolute; top: calc(100% + 4px); left: 8px; z-index: 100; width: min(760px, calc(100vw - 24px)); max-height: min(600px, calc(100vh - 52px)); }
 @supports (height: 100dvh) { .writing-dialog { max-height: min(760px, calc(100dvh - 40px)); } .writing-symbol-popover { max-height: min(600px, calc(100dvh - 52px)); } }
@@ -109,8 +111,7 @@
 .writing-primary-button, .writing-secondary-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 32px; padding: 0 12px; border: 1px solid var(--border-color); border-radius: 6px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
 .writing-secondary-button { background: var(--bg-secondary); color: var(--text-secondary); }
 .writing-secondary-button:hover { background: var(--bg-tertiary); color: var(--text-primary); }
-.writing-primary-button { border-color: var(--accent-primary); background: var(--accent-primary); color: #fff; }
-[data-theme='monokai'] .writing-primary-button { color: #1e1f1c; }
+.writing-primary-button { border-color: var(--accent-primary); background: var(--accent-primary); color: var(--accent-contrast, #fff); }
 .writing-primary-button:hover:not(:disabled) { filter: brightness(1.08); }
 .writing-primary-button:disabled { opacity: .45; cursor: not-allowed; }
 

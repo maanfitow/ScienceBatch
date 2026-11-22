@@ -166,7 +166,7 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
             {isPdf ? (
               <FileText className="file-icon-pdf" size={20} />
             ) : (
-              <ImageIcon className="text-emerald-400" size={20} />
+              <ImageIcon className="icon-success" size={20} />
             )}
             <div>
               <h3>{fileName}</h3>
@@ -214,11 +214,11 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
 
             <div className="image-actions">
               <button className="btn btn-secondary btn-sm" onClick={handleCopyLatex}>
-                {copiedLatex ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                {copiedLatex ? <Check size={14} className="icon-success" /> : <Copy size={14} />}
                 <span>Copy LaTeX Snippet</span>
               </button>
               <button className="btn btn-secondary btn-sm" onClick={handleCopyTypst}>
-                {copiedTypst ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                {copiedTypst ? <Check size={14} className="icon-success" /> : <Copy size={14} />}
                 <span>Copy Typst Snippet</span>
               </button>
             </div>

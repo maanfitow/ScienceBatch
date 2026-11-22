@@ -605,7 +605,7 @@ export const GlobalSearchView: React.FC<GlobalSearchViewProps> = ({
               >
                 <div className="search-file-header-left">
                   {isCollapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
-                  <FileText size={14} className="search-file-icon text-blue-400" />
+                  <FileText size={14} className="search-file-icon icon-latex" />
                   <span className="search-file-name" title={fileResult.filePath}>
                     {fileResult.fileName}
                   </span>
