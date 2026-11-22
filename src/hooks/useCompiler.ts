@@ -2,11 +2,12 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { toast } from 'sonner';
-import { CompileResponse, DiagnosticItem, ProgressPayload, EngineType, CompilationStatus } from '../types';
+import { CompileResponse, DiagnosticItem, ProgressPayload, EngineType, CompilationStatus, PdfSourceMap } from '../types';
 import type { WorkspaceCompileRequest } from '../types/automation';
 
 export function useCompiler() {
   const [pdfBytes, setPdfBytes] = useState<Uint8Array | null>(null);
+  const [sourceMap, setSourceMap] = useState<PdfSourceMap | null>(null);
   const [isCompiling, setIsCompiling] = useState<boolean>(false);
   const [compilationStatus, setCompilationStatus] = useState<CompilationStatus>('idle');
   const [statusMessage, setStatusMessage] = useState<string>('');
@@ -116,6 +117,7 @@ export function useCompiler() {
       setRawLog(response.raw_log || '');
       if (response.success && response.pdf_bytes?.length) {
         setPdfBytes(new Uint8Array(response.pdf_bytes));
+        setSourceMap(response.source_map ?? null);
         setCompilationStatus('success');
         setStatusMessage('PDF generated');
         setActiveTab('preview');
@@ -196,6 +198,7 @@ export function useCompiler() {
   const clearCompilationAndDiagnostics = useCallback(() => {
     cancelCompilation();
     setPdfBytes(null);
+    setSourceMap(null);
     setErrors([]);
     setWarnings([]);
     setRawLog('');
@@ -260,6 +263,7 @@ export function useCompiler() {
       if (response.success && response.pdf_bytes && response.pdf_bytes.length > 0) {
         const uint8 = new Uint8Array(response.pdf_bytes);
         setPdfBytes(uint8);
+        setSourceMap(response.source_map ?? null);
         setCompilationStatus('success');
         setStatusMessage('PDF generated');
         setActiveTab('preview');
@@ -330,6 +334,7 @@ export function useCompiler() {
   return {
     pdfBytes,
     setPdfBytes,
+    sourceMap,
     isCompiling,
     compilationStatus,
     statusMessage,

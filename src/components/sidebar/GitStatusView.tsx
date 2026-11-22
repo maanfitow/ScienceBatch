@@ -199,7 +199,8 @@ export const GitStatusView: React.FC<GitStatusViewProps> = ({ projectRoot, proje
   ] : [];
   const currentBranch = branches?.currentBranch || status?.branch || '';
   const branchActions: ContextMenuAction[] = (branches?.branches || []).map(branch => ({
-    label: branch === currentBranch ? `✓  ${branch}` : branch,
+    label: branch,
+    checked: branch === currentBranch,
     onSelect: () => { if (branch !== currentBranch) void switchBranch(branch); },
     disabled: actionsBlocked || hasUnsavedChanges || branch === currentBranch,
   }));
@@ -221,21 +222,20 @@ export const GitStatusView: React.FC<GitStatusViewProps> = ({ projectRoot, proje
     </div>}
     {newBranch && <form className="git-new-branch" onSubmit={event => { event.preventDefault(); void switchBranch(branchName, true); }}><input autoFocus value={branchName} onChange={event => setBranchName(event.target.value)} placeholder="New branch name" aria-label="New branch name" /><button type="submit" disabled={actionsBlocked || !branchName.trim()}>Create</button><button type="button" onClick={() => { setNewBranch(false); setBranchName(''); }}>Cancel</button></form>}
     <div className="git-status-view-body">
-      {loading ? <div className="git-state-empty"><RotateCw size={20} className="animate-spin" /><p>Checking Git status…</p></div>
-        : !projectRoot ? <div className="git-state-empty"><p className="font-semibold">No Project Open</p><p>Open a folder to inspect Git status.</p></div>
-        : status?.error ? <div className="git-state-empty"><AlertCircle size={26} /><p>Git Status Error</p><p>{status.error}</p><button className="git-retry-btn" onClick={() => void refresh(true)}>Retry</button></div>
-        : status && !status.gitAvailable ? <div className="git-state-empty"><AlertCircle size={28} /><p>Git Is Not Installed</p><p>Install Git to manage local changes.</p><button className="git-initialize-btn" onClick={() => void openGitDownloads()}><Download size={14} />Get Git</button><button className="git-retry-btn" onClick={() => void refresh(true)}>Retry detection</button></div>
-        : status && !status.isGitRepo ? <div className="git-state-empty"><GitBranch size={28} /><p className="font-semibold">Not a Git Repository</p><p>The folder {projectName} is not tracked by Git.</p><p className="text-muted text-[11px] text-center">Git {status.gitVersion?.replace(/^git version /, '') || 'is ready'}. Initialize local history here. An online account is not needed.</p><button className="git-initialize-btn" disabled={working} onClick={() => void confirmInitialize()}><GitBranch size={14} />Initialize Git</button></div>
-        : !status ? null : <div className="git-changes-panel">
+      {loading ? <div className="git-state-empty"><RotateCw size={20} className="animate-spin" /><p className="git-state-desc">Checking Git status…</p></div>
+        : !projectRoot ? <div className="git-state-empty"><p className="git-state-title">No Project Open</p><p className="git-state-desc">Open a folder to inspect Git status.</p></div>
+        : status?.error ? <div className="git-state-empty"><AlertCircle size={26} /><p className="git-state-title">Git Status Error</p><p className="git-state-desc">{status.error}</p><div className="git-state-actions"><button type="button" className="git-retry-btn" onClick={() => void refresh(true)}>Retry</button></div>{error && <p className="git-onboarding-error" role="alert">{error}</p>}</div>
+        : status && !status.gitAvailable ? <div className="git-state-empty"><AlertCircle size={28} /><p className="git-state-title">Git Is Not Installed</p><p className="git-state-desc">Install Git to manage local changes.</p><div className="git-state-actions"><button type="button" className="git-initialize-btn" onClick={() => void openGitDownloads()}><Download size={14} />Get Git</button><button type="button" className="git-secondary-btn" onClick={() => void refresh(true)}>Retry detection</button></div>{error && <p className="git-onboarding-error" role="alert">{error}</p>}</div>
+        : status && !status.isGitRepo ? <div className="git-state-empty"><GitBranch size={28} /><p className="git-state-title">Not a Git Repository</p><p className="git-state-desc">The folder {projectName} is not tracked by Git.</p><p className="git-state-hint">Git {status.gitVersion?.replace(/^git version /, '') || 'is ready'}. Initialize local history here. An online account is not needed.</p><div className="git-state-actions"><button type="button" className="git-initialize-btn" disabled={working} onClick={() => void confirmInitialize()}><GitBranch size={14} />Initialize Git</button></div>{error && <p className="git-onboarding-error" role="alert">{error}</p>}</div>
+        : !status ? (error ? <div className="git-state-empty"><AlertCircle size={26} /><p className="git-state-title">Git Status Error</p><p className="git-onboarding-error" role="alert">{error}</p><div className="git-state-actions"><button type="button" className="git-secondary-btn" onClick={() => void refresh(true)}>Retry</button></div></div> : null) : <div className="git-changes-panel">
           {projectRoot && <GitWorkflowControls key={projectRoot} projectRoot={projectRoot} hasUnsavedChanges={hasUnsavedChanges} disabled={working} onRefresh={() => refresh(true)} onBranchChanged={onBranchChanged} onRepositoryRootChange={reportRepositoryRoot} onWorktreeUpdateBusyChange={onWorktreeUpdateBusyChange} onOperationBusyChange={setWorkflowBusy} />}
           {workspaceRefreshError && <p className="git-workflow-error" role="alert">The project could not refresh after the Git operation. Close and reopen it to reload its files.</p>}
           <div className="git-filter-wrapper"><Search size={13} className="git-filter-icon" /><input className="git-filter-input" value={query} onChange={event => setQuery(event.target.value)} placeholder="Filter changed files…" />{query && <button className="git-filter-clear" onClick={() => setQuery('')} title="Clear filter"><X size={12} /></button>}</div>
           <div className="git-changes-list">
-            {status.changes.length === 0 ? <div className="git-clean-state"><CheckCircle2 size={24} /><p>Working Tree Clean</p></div> : filtered.length === 0 ? <div className="git-no-matches">No files match “{query}”.</div> : <>{renderChanges(staged, 'staged')}{renderChanges(unstaged, 'changes')}</>}
+            {status.changes.length === 0 ? <div className="git-clean-state"><CheckCircle2 size={24} /><p className="git-state-title">Working Tree Clean</p></div> : filtered.length === 0 ? <div className="git-no-matches">No files match “{query}”.</div> : <>{renderChanges(staged, 'staged')}{renderChanges(unstaged, 'changes')}</>}
           </div>
           {error && <p className="git-onboarding-error" role="alert">{error}</p>}
         </div>}
-      {error && !status?.isGitRepo && <p className="git-onboarding-error" role="alert">{error}</p>}
     </div>
     {branchMenu && <ContextMenu x={branchMenu.x} y={branchMenu.y} actions={branchActions} triggerRef={branchTriggerRef} onClose={() => setBranchMenu(null)} />}
     {fileMenu && <ContextMenu x={fileMenu.x} y={fileMenu.y} actions={fileActions} onClose={() => setFileMenu(null)} />}

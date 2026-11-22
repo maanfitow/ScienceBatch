@@ -297,8 +297,8 @@ fn test_embedded_package_simpleicons_files() {
 
 #[test]
 fn test_import_project_from_zip() {
-    let zip_path = "/home/mauri/Desktop/overleaf example/RDMO.zip";
-    if !Path::new(zip_path).exists() {
+    let Ok(zip_path) = std::env::var("SCIENCEBATCH_TEST_ZIP_PATH") else { return; };
+    if !Path::new(&zip_path).exists() {
         return;
     }
     let temp_parent = std::env::temp_dir().join(format!(
@@ -311,7 +311,7 @@ fn test_import_project_from_zip() {
     let _ = std::fs::create_dir_all(&temp_parent);
 
     let res = import_project_from_zip(
-        zip_path,
+        &zip_path,
         temp_parent.to_str().unwrap(),
         Some("MyImportedTest"),
     );
@@ -832,4 +832,35 @@ async fn test_compiler_manager_cancellation_and_generation_ids() {
     assert!(cancel2.load(Ordering::Acquire));
     drop(guard2);
     manager.cancel_and_wait().await;
+}
+
+#[test]
+fn test_latex_compilation_produces_synctex_source_map() {
+    let latex_source = r#"\documentclass{article}
+\begin{document}
+Hello SyncTeX world.
+\end{document}
+"#;
+    let resp = compile_latex_to_pdf(latex_source, None, Some("main.tex"));
+    assert!(
+        resp.success,
+        "LaTeX compilation failed: {:?}",
+        resp.errors.iter().map(|e| &e.message).collect::<Vec<_>>()
+    );
+    let source_map = resp
+        .source_map
+        .expect("LaTeX compilation should produce a SyncTeX source map");
+    assert!(
+        source_map.files.iter().any(|f| f == "main.tex"),
+        "Expected source_map.files to contain 'main.tex', got: {:?}",
+        source_map.files
+    );
+    assert!(
+        !source_map.pages.is_empty(),
+        "Expected source_map.pages to be non-empty"
+    );
+    assert!(
+        !source_map.pages[0].boxes.is_empty(),
+        "Expected source_map.pages[0].boxes to be non-empty"
+    );
 }

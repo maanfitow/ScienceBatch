@@ -226,7 +226,55 @@ export const LATEX_COMMANDS: LatexSymbol[] = [
   { name: '\\faPhone', insertText: '\\faPhone', detail: 'FontAwesome telephone icon', documentation: 'Renders a phone receiver icon (fontawesome5).' },
   { name: '\\faGithub', insertText: '\\faGithub', detail: 'FontAwesome GitHub icon', documentation: 'Renders a GitHub brand icon (fontawesome5).' },
   { name: '\\faGlobe', insertText: '\\faGlobe', detail: 'FontAwesome globe icon', documentation: 'Renders a globe / web URL icon (fontawesome5).' },
+  { name: '\\faFilePdf', insertText: '\\faFilePdf', detail: 'FontAwesome PDF file icon', documentation: 'Renders a PDF document icon (fontawesome5).' },
   { name: '\\simpleicon', insertText: '\\simpleicon{${1:brand}}', detail: 'SimpleIcons brand logo', documentation: 'Renders a brand icon by name from the embedded SimpleIcons suite (e.g. \\simpleicon{x}, \\simpleicon{python}).' },
+
+  // Typography & Fonts (fontspec)
+  { name: '\\setmainfont', insertText: '\\setmainfont{${1:Font Name}}', detail: 'Set main serif font (fontspec)', documentation: 'Configures the primary document serif font for XeLaTeX/LuaLaTeX (fontspec package).' },
+  { name: '\\setsansfont', insertText: '\\setsansfont{${1:Font Name}}', detail: 'Set sans-serif font (fontspec)', documentation: 'Configures the document sans-serif font for XeLaTeX/LuaLaTeX (fontspec package).' },
+  { name: '\\setmonofont', insertText: '\\setmonofont{${1:Font Name}}', detail: 'Set monospace font (fontspec)', documentation: 'Configures the document monospace typewriter font for XeLaTeX/LuaLaTeX (fontspec package).' },
+  { name: '\\newfontfamily', insertText: '\\newfontfamily\\${1:cmd}{${2:Font Name}}', detail: 'Define custom font family (fontspec)', documentation: 'Defines a new font-switching command for a specific typeface (fontspec package).' },
+  { name: '\\defaultfontfeatures', insertText: '\\defaultfontfeatures{${1:Ligatures=TeX}}', detail: 'Set default font features (fontspec)', documentation: 'Applies default OpenType/AAT font options to subsequent font declarations (fontspec package).' },
+  { name: '\\addfontfeatures', insertText: '\\addfontfeatures{${1:Scale=1.0}}', detail: 'Add font features (fontspec)', documentation: 'Modifies OpenType/AAT features for the currently active font (fontspec package).' },
+
+  // Headers & Footers (fancyhdr)
+  { name: '\\pagestyle', insertText: '\\pagestyle{${1:fancy}}', detail: 'Set page header/footer style', documentation: 'Sets the active page style (plain, empty, headings, myheadings, or fancy).' },
+  { name: '\\fancyhf', insertText: '\\fancyhf{${1:}}', detail: 'Clear or set headers & footers', documentation: 'Clears or sets header and footer fields simultaneously (fancyhdr package).' },
+  { name: '\\fancyhead', insertText: '\\fancyhead[${1:L,C,R}]{${2:header}}', detail: 'Set page header field', documentation: 'Configures header content for specified page positions and odd/even pages (fancyhdr).' },
+  { name: '\\fancyfoot', insertText: '\\fancyfoot[${1:L,C,R}]{${2:footer}}', detail: 'Set page footer field', documentation: 'Configures footer content for specified page positions and odd/even pages (fancyhdr).' },
+  { name: '\\lhead', insertText: '\\lhead{${1:text}}', detail: 'Left header field', documentation: 'Sets the left-aligned header text (fancyhdr package).' },
+  { name: '\\chead', insertText: '\\chead{${1:text}}', detail: 'Center header field', documentation: 'Sets the centered header text (fancyhdr package).' },
+  { name: '\\rhead', insertText: '\\rhead{${1:text}}', detail: 'Right header field', documentation: 'Sets the right-aligned header text (fancyhdr package).' },
+  { name: '\\lfoot', insertText: '\\lfoot{${1:text}}', detail: 'Left footer field', documentation: 'Sets the left-aligned footer text (fancyhdr package).' },
+  { name: '\\cfoot', insertText: '\\cfoot{${1:text}}', detail: 'Center footer field', documentation: 'Sets the centered footer text (fancyhdr package).' },
+  { name: '\\rfoot', insertText: '\\rfoot{${1:text}}', detail: 'Right footer field', documentation: 'Sets the right-aligned footer text (fancyhdr package).' },
+  { name: '\\headrulewidth', insertText: '\\headrulewidth', detail: 'Header rule thickness', documentation: 'Length macro controlling the thickness of the horizontal rule below the header (fancyhdr).' },
+  { name: '\\footrulewidth', insertText: '\\footrulewidth', detail: 'Footer rule thickness', documentation: 'Length macro controlling the thickness of the horizontal rule above the footer (fancyhdr).' },
+  { name: '\\fancypagestyle', insertText: '\\fancypagestyle{${1:style}}{\n\t${2:\\fancyhf{}}\n}', detail: 'Define custom page style', documentation: 'Defines or redefines a named page style with custom fancyhdr settings.' },
+
+  // Section Formatting (titlesec)
+  { name: '\\titleformat', insertText: '\\titleformat{\\${1:section}}{${2:\\bfseries\\large}}{${3:}}{${4:0em}}{${5:}}', detail: 'Customize section heading format', documentation: 'Customizes typography, numbering, and layout of sectioning commands (titlesec package).' },
+  { name: '\\titlespacing', insertText: '\\titlespacing*{\\${1:section}}{${2:0pt}}{${3:1ex}}{${4:0.5ex}}', detail: 'Customize section heading spacing', documentation: 'Adjusts left margin, before-spacing, and after-spacing of section headings (titlesec).' },
+  { name: '\\titlerule', insertText: '\\titlerule[${1:0.4pt}]', detail: 'Horizontal rule in heading', documentation: 'Draws a horizontal rule spanning the text width inside a section title (titlesec package).' },
+  { name: '\\titlelabel', insertText: '\\titlelabel{${1:\\thetitle\\quad}}', detail: 'Customize section label format', documentation: 'Redefines the formatting of section numbers in headings (titlesec package).' },
+
+  // URLs, Tables & Column Helpers
+  { name: '\\urlstyle', insertText: '\\urlstyle{${1:same}}', detail: 'Set URL font style', documentation: 'Sets the font style used by \\url and \\href (tt, rm, sf, or same; url/hyperref).' },
+  { name: '\\newcolumntype', insertText: '\\newcolumntype{${1:L}}{>{\\${2:raggedright}\\arraybackslash}X}', detail: 'Define custom table column type', documentation: 'Registers a custom column specifier for tabular and tabularx environments (array package).' },
+  { name: '\\arraybackslash', insertText: '\\arraybackslash', detail: 'Restore tabular row break \\\\', documentation: 'Restores the meaning of \\\\ as a table row separator after \\raggedright or \\centering (array).' },
+  { name: '\\tabcolsep', insertText: '\\tabcolsep', detail: 'Table column horizontal padding', documentation: 'Half the horizontal spacing inserted between columns in tabular environments.' },
+
+  // Kernel Boxes, Counters, Lists & Text Formatting
+  { name: '\\raisebox', insertText: '\\raisebox{${1:0.2ex}}{${2:content}}', detail: 'Raise or lower inline box', documentation: 'Shifts content vertically relative to the baseline (accepts \\height, \\width, \\depth, \\totalheight).' },
+  { name: '\\height', insertText: '\\height', detail: 'Box natural height dimension', documentation: 'Natural height above the baseline of the box being measured inside \\raisebox or \\makebox.' },
+  { name: '\\width', insertText: '\\width', detail: 'Box natural width dimension', documentation: 'Natural horizontal width of the box being measured inside \\raisebox, \\makebox, or \\parbox.' },
+  { name: '\\depth', insertText: '\\depth', detail: 'Box natural depth dimension', documentation: 'Natural depth below the baseline of the box being measured inside \\raisebox or \\makebox.' },
+  { name: '\\totalheight', insertText: '\\totalheight', detail: 'Box total height (height + depth)', documentation: 'Sum of natural height and depth of the box being measured inside \\raisebox or \\makebox.' },
+  { name: '\\thepage', insertText: '\\thepage', detail: 'Current page number counter', documentation: 'Expands to the formatted representation of the current page counter.' },
+  { name: '\\labelitemi', insertText: '\\labelitemi', detail: 'First-level itemize bullet symbol', documentation: 'Macro controlling the bullet symbol used for top-level itemize lists.' },
+  { name: '\\color', insertText: '\\color{${1:black}}', detail: 'Switch active text color', documentation: 'Switches the current foreground text color for the active scope (xcolor package).' },
+  { name: '\\bfseries', insertText: '\\bfseries ', detail: 'Bold font weight switch', documentation: 'Switches the active font series to bold within the current group.' },
+  { name: '\\textbullet', insertText: '\\textbullet', detail: 'Bullet symbol (•)', documentation: 'Produces a solid bullet symbol in text mode.' },
 ];
 
 export const LATEX_ENVIRONMENTS: LatexEnvironment[] = [
@@ -271,6 +319,18 @@ export const LATEX_ENVIRONMENTS: LatexEnvironment[] = [
     detail: 'Tabular alignment grid',
     documentation: 'Table grid alignment with columns (l=left, c=center, r=right).',
     snippet: '\\begin{tabular}{${1:l c r}}\n\t\\hline\n\t${2:Col 1} & ${3:Col 2} & ${4:Col 3} \\\\\n\t\\hline\n\t${5:Val 1} & ${6:Val 2} & ${7:Val 3} \\\\\n\t\\hline\n\\end{tabular}',
+  },
+  {
+    name: 'tabularx',
+    detail: 'Fixed-width flexible tabular grid',
+    documentation: 'Table environment spanning a target width with auto-expanding X columns (tabularx package).',
+    snippet: '\\begin{tabularx}{${1:\\linewidth}}{${2:@{}X r@{}}}\n\t${3:Left content} & ${4:Right content} \\\\\n\\end{tabularx}',
+  },
+  {
+    name: 'longtable',
+    detail: 'Multi-page table',
+    documentation: 'Table environment that automatically breaks across multiple pages (longtable package).',
+    snippet: '\\begin{longtable}{${1:l c r}}\n\t\\hline\n\t${2:Col 1} & ${3:Col 2} & ${4:Col 3} \\\\\n\t\\hline\n\t\\endhead\n\t${5:Val 1} & ${6:Val 2} & ${7:Val 3} \\\\\n\t\\hline\n\\end{longtable}',
   },
   {
     name: 'itemize',

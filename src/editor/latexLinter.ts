@@ -6,8 +6,25 @@ import { getProjectCustomCommands } from './projectContext';
 const ALIGNMENT_ENVIRONMENTS = new Set([
   'align',
   'align*',
+  'alignat',
+  'alignat*',
+  'flalign',
+  'flalign*',
+  'gather',
+  'gather*',
+  'multline',
+  'multline*',
+  'split',
+  'eqnarray',
+  'eqnarray*',
   'tabular',
   'tabular*',
+  'tabularx',
+  'tabularx*',
+  'longtable',
+  'xltabular',
+  'tabulary',
+  'supertabular',
   'pmatrix',
   'bmatrix',
   'Bmatrix',
@@ -16,12 +33,6 @@ const ALIGNMENT_ENVIRONMENTS = new Set([
   'Vmatrix',
   'cases',
   'array',
-  'alignat',
-  'alignat*',
-  'gather',
-  'gather*',
-  'multline',
-  'multline*',
 ]);
 
 const MATH_ENVIRONMENTS = new Set([
@@ -234,6 +245,37 @@ const ADDITIONAL_COMMANDS = [
   'DefineBibliographyStrings', 'bibnamedelima', 'bibnamedelimi', 'defbibheading', 'defbibfilter',
   'AtBeginBibliography', 'AtEveryBibitem', 'DeclareFieldFormat', 'iffieldformatundef', 'iffieldundef', 'clearfield',
   'xpretofieldformat', 'xapptofieldformat',
+
+  // Fontspec (XeLaTeX / LuaLaTeX font configuration)
+  'fontspec', 'setmainfont', 'setsansfont', 'setmonofont', 'setmathfont', 'newfontfamily',
+  'defaultfontfeatures', 'addfontfeatures',
+
+  // Fancyhdr (custom page headers & footers)
+  'fancyhf', 'fancyhead', 'fancyfoot', 'lhead', 'chead', 'rhead', 'lfoot', 'cfoot', 'rfoot',
+  'headrulewidth', 'footrulewidth', 'fancyheadoffset', 'fancyfootoffset', 'fancypagestyle',
+  'headwidth', 'headrule', 'footrule',
+
+  // Titlesec (section heading styling & spacing)
+  'titleformat', 'titlespacing', 'titlerule', 'titlelabel', 'titleline', 'titleclass',
+
+  // Enumitem (list layout customization)
+  'setlist', 'setlistdepth', 'newlist', 'renewlist',
+
+  // Hyperref & URL styling
+  'urlstyle',
+
+  // Array, tabularx & table dimensions
+  'arraybackslash', 'PreserveBackslash', 'tabularxcolumn', 'tabcolsep', 'arraycolsep',
+  'arrayrulewidth', 'doublerulesep', 'extrarowheight', 'arraystretch',
+
+  // Kernel box measurement dimensions
+  'height', 'width', 'depth', 'totalheight',
+
+  // Built-in LaTeX counters & list label macros
+  'thepage', 'thesection', 'thesubsection', 'thesubsubsection', 'thechapter', 'thepart',
+  'thefigure', 'thetable', 'theequation', 'theenumi',
+  'labelitemi', 'labelitemii', 'labelitemiii', 'labelitemiv',
+  'labelenumi', 'labelenumii', 'labelenumiii', 'labelenumiv',
 
   // Common FontAwesome icons (for Quick Fix suggestions)
   'faEnvelope', 'faEnvelopeO', 'faLinkedin', 'faLinkedinIn', 'faPhone', 'faPhoneAlt', 'faGlobe', 'faGlobeAmericas', 'faLink', 'faBookmark',

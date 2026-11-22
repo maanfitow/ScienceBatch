@@ -24,6 +24,42 @@ interface UseProjectOptions {
   onEnterWelcomeMode?: () => void;
 }
 
+const replacePathPrefix = (candidate: string, fromPath: string, toPath: string): string | null => {
+  const normCandidate = candidate.replace(/[/\\]+$/, '');
+  const normFrom = fromPath.replace(/[/\\]+$/, '');
+  if (normCandidate === normFrom) return toPath;
+  if (normCandidate.startsWith(`${normFrom}/`) || normCandidate.startsWith(`${normFrom}\\`)) {
+    return `${toPath}${normCandidate.slice(normFrom.length)}`;
+  }
+  return null;
+};
+
+const pathMatchesOrInside = (candidate: string, target: string): boolean => {
+  const normCandidate = candidate.replace(/[/\\]+$/, '');
+  const normTarget = target.replace(/[/\\]+$/, '');
+  return normCandidate === normTarget
+    || normCandidate.startsWith(`${normTarget}/`)
+    || normCandidate.startsWith(`${normTarget}\\`);
+};
+
+const findSiblingNames = (items: FileItem[], parentDir: string, rootDir: string): Set<string> => {
+  const normParent = parentDir.replace(/[/\\]+$/, '');
+  const normRoot = rootDir.replace(/[/\\]+$/, '');
+  if (normParent === normRoot) {
+    return new Set(items.map(item => item.name));
+  }
+  for (const item of items) {
+    if (item.is_dir && item.path.replace(/[/\\]+$/, '') === normParent) {
+      return new Set((item.children || []).map(child => child.name));
+    }
+    if (item.is_dir && item.children) {
+      const found = findSiblingNames(item.children, parentDir, rootDir);
+      if (found.size > 0) return found;
+    }
+  }
+  return new Set();
+};
+
 const flattenFilePaths = (items: FileItem[], base: string): string[] => {
   const result: string[] = [];
   for (const item of items) {
@@ -430,7 +466,7 @@ export function useProject({
         : `${currentRoot}/${currentMain}`;
     }
 
-    // Overleaf behavior: If editing a secondary file, compile main entrypoint
+    // Compile the configured main entrypoint when editing a secondary file
     if (currentActive && fullMainPath && currentActive !== fullMainPath) {
       try {
         const mainContent = await invoke<string>('read_file_content', { path: fullMainPath });
@@ -443,9 +479,11 @@ export function useProject({
     }
   }, [mainFilePath, projectRoot, sourceCode, engine, compile, refreshProjectFiles, setTabs]);
 
-  // Import files into current project folder
-  const importFiles = useCallback(async () => {
-    if (!projectRoot || workspaceOperationBusy()) return;
+  // Import files into current project folder or target subfolder
+  const importFiles = useCallback(async (targetDir?: string) => {
+    const root = projectRootRef.current || projectRoot;
+    if (!root || workspaceOperationBusy()) return;
+    const destDir = typeof targetDir === 'string' && targetDir.trim() ? targetDir : root;
     try {
       const selected = await open({
         multiple: true,
@@ -467,15 +505,16 @@ export function useProject({
         if (workspaceOperationBusy()) return;
         await invoke('import_file_to_project', {
           srcPath: src,
-          destDir: projectRoot,
+          destDir,
         });
       }
 
-      await refreshProjectFiles(projectRoot);
+      await refreshProjectFiles(root);
       toast.success(`Imported ${paths.length} file(s) into project`);
     } catch (e) {
       console.error('Import failed:', e);
-      toast.error('Failed to import files into project');
+      const message = typeof e === 'string' ? e : e instanceof Error ? e.message : String(e);
+      toast.error('Failed to import files into project', { description: message });
     }
   }, [projectRoot, refreshProjectFiles]);
 
@@ -803,38 +842,384 @@ export function useProject({
   }, [projectRoot, projectName, engine]);
 
   const createFile = useCallback(async (parentDir: string, name: string) => {
-    if (workspaceOperationBusy()) return;
+    const root = projectRootRef.current || projectRoot;
+    if (!root || workspaceOperationBusy()) return;
+    const cleanParent = (parentDir || root).replace(/[/\\]+$/, '');
+    const cleanName = name.trim().replace(/^[/\\]+|[/\\]+$/g, '');
+    if (!cleanName) return;
+    const fullPath = `${cleanParent}/${cleanName}`;
     try {
-      const fullPath = `${parentDir}/${name}`;
       if (workspaceOperationBusy()) return;
-      await invoke('write_file_content', { path: fullPath, content: '' });
-      if (projectRoot) await refreshProjectFiles(projectRoot);
+      await invoke('create_project_file', { projectRoot: root, path: fullPath });
+      await refreshProjectFiles(root);
       selectFile(fullPath);
-      toast.success(`Created file ${name}`);
+      toast.success(`Created file ${cleanName}`);
     } catch (e) {
-      toast.error('Failed to create file');
+      const message = typeof e === 'string' ? e : e instanceof Error ? e.message : String(e);
+      toast.error('Failed to create file', { description: message });
       console.error(e);
     }
   }, [projectRoot, refreshProjectFiles, selectFile]);
 
   const createFolder = useCallback(async (parentDir: string, name: string) => {
-    if (workspaceOperationBusy()) return;
+    const root = projectRootRef.current || projectRoot;
+    if (!root || workspaceOperationBusy()) return;
+    const cleanParent = (parentDir || root).replace(/[/\\]+$/, '');
+    const cleanName = name.trim().replace(/^[/\\]+|[/\\]+$/g, '');
+    if (!cleanName) return;
+    const fullPath = `${cleanParent}/${cleanName}`;
     try {
-      const fullPath = `${parentDir}/${name}`;
       if (workspaceOperationBusy()) return;
-      await invoke('write_file_content', { path: `${fullPath}/.gitkeep`, content: '' });
-      if (projectRoot) await refreshProjectFiles(projectRoot);
-      toast.success(`Created folder ${name}`);
+      await invoke('create_project_directory', { projectRoot: root, path: fullPath });
+      await refreshProjectFiles(root);
+      toast.success(`Created folder ${cleanName}`);
     } catch (e) {
-      toast.error('Failed to create folder');
+      const message = typeof e === 'string' ? e : e instanceof Error ? e.message : String(e);
+      toast.error('Failed to create folder', { description: message });
       console.error(e);
     }
   }, [projectRoot, refreshProjectFiles]);
 
-  const deleteFile = useCallback(async (_path: string) => {
-    if (workspaceOperationBusy()) return;
-    toast.info('File deletion: please remove file via system file explorer for safety.');
+  const relocateProjectPath = useCallback(async (
+    root: string,
+    normalizedOld: string,
+    newPath: string,
+    successMessage: string,
+    errorTitle: string,
+  ): Promise<boolean> => {
+    try {
+      await invoke('rename_project_path', { projectRoot: root, oldPath: normalizedOld, newPath });
+
+      const normalizedRoot = root.replace(/[/\\]+$/, '');
+      const toRel = (abs: string) => {
+        const norm = abs.replace(/\\/g, '/');
+        const normRoot = normalizedRoot.replace(/\\/g, '/');
+        return norm.startsWith(`${normRoot}/`) ? norm.slice(normRoot.length + 1) : norm;
+      };
+      const relOld = toRel(normalizedOld);
+      const relNew = toRel(newPath);
+
+      const idRemap = new Map<string, string>();
+      const nextTabs = tabsRef.current.map(tab => {
+        if (!tab.path) return tab;
+        if (tab.kind === 'diff') {
+          const remappedRel = replacePathPrefix(tab.path, relOld, relNew)
+            ?? replacePathPrefix(tab.path, normalizedOld, newPath);
+          if (!remappedRel) return tab;
+          const repoRoot = tab.repositoryRoot || root;
+          const nextId = `diff:${repoRoot}:${remappedRel}`;
+          idRemap.set(tab.id, nextId);
+          const oldRev = documentRevisionsRef.current.get(tab.id);
+          if (oldRev !== undefined) {
+            documentRevisionsRef.current.delete(tab.id);
+            documentRevisionsRef.current.set(nextId, oldRev);
+          }
+          return {
+            ...tab,
+            id: nextId,
+            path: remappedRel,
+            name: remappedRel.split(/[/\\]/).pop() || remappedRel,
+          };
+        }
+        const remappedPath = replacePathPrefix(tab.path, normalizedOld, newPath);
+        if (!remappedPath) return tab;
+        const nextId = `${tab.kind}:${remappedPath}`;
+        idRemap.set(tab.id, nextId);
+        const oldRev = documentRevisionsRef.current.get(tab.id);
+        if (oldRev !== undefined) {
+          documentRevisionsRef.current.delete(tab.id);
+          documentRevisionsRef.current.set(nextId, oldRev);
+        }
+        return {
+          ...tab,
+          id: nextId,
+          path: remappedPath,
+          name: remappedPath.split(/[/\\]/).pop() || remappedPath,
+        };
+      });
+
+      setTabs(nextTabs);
+      if (activeTabRef.current && idRemap.has(activeTabRef.current)) {
+        const nextActiveId = idRemap.get(activeTabRef.current)!;
+        activeTabRef.current = nextActiveId;
+        setActiveTabId(nextActiveId);
+      }
+      if (activeSourceTabRef.current && idRemap.has(activeSourceTabRef.current)) {
+        activeSourceTabRef.current = idRemap.get(activeSourceTabRef.current)!;
+      }
+      if (activeFilePathRef.current) {
+        const remappedActive = replacePathPrefix(activeFilePathRef.current, normalizedOld, newPath);
+        if (remappedActive) {
+          activeFilePathRef.current = remappedActive;
+          setActiveFilePath(remappedActive);
+        }
+      }
+
+      const currentMain = mainFilePathRef.current || mainFilePath;
+      if (currentMain) {
+        const nextMain = replacePathPrefix(currentMain, relOld, relNew)
+          ?? replacePathPrefix(currentMain, normalizedOld, newPath);
+        if (nextMain) {
+          setMainFilePath(nextMain);
+          mainFilePathRef.current = nextMain;
+          try {
+            const configPath = `${normalizedRoot}/.sciencebatch.json`;
+            let baseConfig: Record<string, unknown> = { name: projectName, engine };
+            try {
+              const existingRaw = await invoke<string>('read_file_content', { path: configPath });
+              const parsed = JSON.parse(existingRaw);
+              if (parsed && typeof parsed === 'object') baseConfig = parsed as Record<string, unknown>;
+            } catch {}
+            const rawConfig = JSON.stringify({
+              ...baseConfig,
+              mainFile: nextMain,
+              updatedAt: new Date().toISOString(),
+            }, null, 2);
+            await invoke('write_file_content', { path: configPath, content: rawConfig });
+            projectConfigRawRef.current = rawConfig;
+          } catch (cfgErr) {
+            console.error('Failed to update project config after path relocation:', cfgErr);
+          }
+        }
+      }
+
+      await refreshProjectFiles(root);
+      toast.success(successMessage);
+      return true;
+    } catch (e) {
+      const message = typeof e === 'string' ? e : e instanceof Error ? e.message : String(e);
+      toast.error(errorTitle, { description: message });
+      console.error(e);
+      return false;
+    }
+  }, [engine, mainFilePath, projectName, refreshProjectFiles, setTabs]);
+
+  const renamePath = useCallback(async (oldPath: string, newName: string): Promise<boolean> => {
+    const root = projectRootRef.current || projectRoot;
+    if (!root || workspaceOperationBusy()) return false;
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === '.' || trimmed === '..' || /[/\\]/.test(trimmed)) {
+      toast.error('Invalid name', {
+        description: 'Name cannot be empty, ".", "..", or contain path separators.',
+      });
+      return false;
+    }
+
+    const normalizedOld = oldPath.replace(/[/\\]+$/, '');
+    const lastSlash = Math.max(normalizedOld.lastIndexOf('/'), normalizedOld.lastIndexOf('\\'));
+    const parentDir = lastSlash >= 0 ? normalizedOld.slice(0, lastSlash) : '';
+    const sep = lastSlash >= 0 ? normalizedOld[lastSlash] : '/';
+    const newPath = parentDir ? `${parentDir}${sep}${trimmed}` : trimmed;
+    if (newPath === normalizedOld) return true;
+
+    return relocateProjectPath(root, normalizedOld, newPath, `Renamed to ${trimmed}`, 'Failed to rename');
+  }, [projectRoot, relocateProjectPath]);
+
+  const movePath = useCallback(async (srcPath: string, targetDir: string): Promise<boolean> => {
+    const root = projectRootRef.current || projectRoot;
+    if (!root || workspaceOperationBusy()) return false;
+
+    const normalizedSrc = srcPath.replace(/[/\\]+$/, '');
+    const cleanTargetDir = targetDir.replace(/[/\\]+$/, '');
+    const normalizedRoot = root.replace(/[/\\]+$/, '');
+
+    if (!normalizedSrc || !cleanTargetDir) return false;
+    if (normalizedSrc === normalizedRoot) return false;
+    if (pathMatchesOrInside(cleanTargetDir, normalizedSrc)) return false;
+
+    const lastSlash = Math.max(normalizedSrc.lastIndexOf('/'), normalizedSrc.lastIndexOf('\\'));
+    const parentDir = lastSlash >= 0 ? normalizedSrc.slice(0, lastSlash) : '';
+    const sep = lastSlash >= 0 ? normalizedSrc[lastSlash] : '/';
+    const baseName = lastSlash >= 0 ? normalizedSrc.slice(lastSlash + 1) : normalizedSrc;
+    if (!baseName || parentDir === cleanTargetDir) return false;
+
+    const newPath = `${cleanTargetDir}${sep}${baseName}`;
+    const normTargetSlash = cleanTargetDir.replace(/\\/g, '/');
+    const normRootSlash = normalizedRoot.replace(/\\/g, '/');
+    const targetLabel = cleanTargetDir === normalizedRoot
+      ? (projectName || normalizedRoot.split(/[/\\]/).pop() || 'project root')
+      : (normTargetSlash.startsWith(`${normRootSlash}/`)
+        ? normTargetSlash.slice(normRootSlash.length + 1)
+        : normTargetSlash);
+
+    return relocateProjectPath(root, normalizedSrc, newPath, `Moved "${baseName}" to ${targetLabel}`, 'Failed to move');
+  }, [projectName, projectRoot, relocateProjectPath]);
+
+  const deletePath = useCallback(async (path: string, isDir = false): Promise<boolean> => {
+    const root = projectRootRef.current || projectRoot;
+    if (!root || workspaceOperationBusy()) return false;
+    const normalizedPath = path.replace(/[/\\]+$/, '');
+    const itemName = normalizedPath.split(/[/\\]/).pop() || normalizedPath;
+
+    const resolveTabPath = (tab: WorkspaceTab) => {
+      if (!tab.path) return null;
+      if (tab.kind === 'diff' && !tab.path.startsWith('/') && !/^[A-Za-z]:[/\\]/.test(tab.path)) {
+        return `${(tab.repositoryRoot || root).replace(/[/\\]+$/, '')}/${tab.path}`;
+      }
+      return tab.path;
+    };
+
+    const hasDirtyAffected = tabsRef.current.some(tab => {
+      if (!tabIsDirty(tab)) return false;
+      const resolved = resolveTabPath(tab);
+      return Boolean(resolved && pathMatchesOrInside(resolved, normalizedPath));
+    });
+
+    const basePrompt = isDir
+      ? `Move folder "${itemName}" and its contents to Trash? You can restore it from your system Trash.`
+      : `Move "${itemName}" to Trash? You can restore it from your system Trash.`;
+    const message = hasDirtyAffected
+      ? `${basePrompt}\n\nUnsaved changes in open editor tabs for this ${isDir ? 'folder' : 'file'} will be discarded.`
+      : basePrompt;
+
+    const confirmed = await ask(message, {
+      title: isDir ? 'Move Folder to Trash' : 'Move File to Trash',
+      kind: hasDirtyAffected ? 'warning' : 'info',
+      okLabel: 'Move to Trash',
+      cancelLabel: 'Cancel',
+    });
+    if (!confirmed || workspaceOperationBusy()) return false;
+
+    try {
+      await invoke('delete_project_path', { projectRoot: root, path: normalizedPath });
+
+      const affectedIds = new Set(
+        tabsRef.current
+          .filter(tab => {
+            const resolved = resolveTabPath(tab);
+            return Boolean(resolved && pathMatchesOrInside(resolved, normalizedPath));
+          })
+          .map(tab => tab.id)
+      );
+
+      for (const affectedId of affectedIds) {
+        documentRevisionsRef.current.delete(affectedId);
+      }
+
+      const remaining = tabsRef.current.filter(tab => !affectedIds.has(tab.id));
+      setTabs(remaining);
+
+      if (activeSourceTabRef.current && affectedIds.has(activeSourceTabRef.current)) {
+        const nextSource = [...remaining].reverse().find(tab => tab.kind === 'source') || null;
+        activeSourceTabRef.current = nextSource?.id || null;
+        activeFilePathRef.current = nextSource?.path || null;
+        setActiveFilePath(nextSource?.path || null);
+        setSourceCodeState(nextSource?.content || '');
+        if (nextSource?.path?.endsWith('.typ')) setEngine('typst');
+        else if (nextSource?.path?.endsWith('.tex')) setEngine('latex');
+      }
+
+      if (activeTabRef.current && affectedIds.has(activeTabRef.current)) {
+        activeTabRef.current = null;
+        setActiveTabId(null);
+        if (remaining.length) {
+          activateTab(remaining[remaining.length - 1].id);
+        } else {
+          activeFilePathRef.current = null;
+          setActiveFilePath(null);
+        }
+      } else if (activeFilePathRef.current && pathMatchesOrInside(activeFilePathRef.current, normalizedPath)) {
+        activeFilePathRef.current = null;
+        setActiveFilePath(null);
+      }
+
+      const currentMain = mainFilePathRef.current || mainFilePath;
+      if (currentMain) {
+        const normalizedRoot = root.replace(/[/\\]+$/, '');
+        const isAbsoluteMain = currentMain === normalizedRoot
+          || currentMain.startsWith(`${normalizedRoot}/`)
+          || currentMain.startsWith(`${normalizedRoot}\\`);
+        const resolvedMain = isAbsoluteMain ? currentMain : `${normalizedRoot}/${currentMain}`;
+        if (pathMatchesOrInside(resolvedMain, normalizedPath)) {
+          setMainFilePath(null);
+          mainFilePathRef.current = null;
+        }
+      }
+
+      await refreshProjectFiles(root);
+      toast.success(`Moved "${itemName}" to Trash`);
+      return true;
+    } catch (e) {
+      const errMsg = typeof e === 'string' ? e : e instanceof Error ? e.message : String(e);
+      toast.error('Failed to move to Trash', { description: errMsg });
+      console.error(e);
+      return false;
+    }
+  }, [activateTab, mainFilePath, projectRoot, refreshProjectFiles, setTabs]);
+
+  const deleteFile = useCallback((path: string) => deletePath(path, false), [deletePath]);
+
+  const duplicatePath = useCallback(async (path: string, isDir = false): Promise<string | null> => {
+    const root = projectRootRef.current || projectRoot;
+    if (!root || workspaceOperationBusy()) return null;
+
+    const normalized = path.replace(/[/\\]+$/, '');
+    const lastSlash = Math.max(normalized.lastIndexOf('/'), normalized.lastIndexOf('\\'));
+    const parentDir = lastSlash >= 0 ? normalized.slice(0, lastSlash) : '';
+    const sep = lastSlash >= 0 ? normalized[lastSlash] : '/';
+    const baseName = lastSlash >= 0 ? normalized.slice(lastSlash + 1) : normalized;
+
+    const dotIdx = isDir ? -1 : baseName.lastIndexOf('.');
+    const stem = dotIdx > 0 ? baseName.slice(0, dotIdx) : baseName;
+    const ext = dotIdx > 0 ? baseName.slice(dotIdx) : '';
+
+    const siblingNames = findSiblingNames(projectFiles, parentDir || root, root);
+    let candidate = `${stem} copy${ext}`;
+    let counter = 2;
+    let destPath = parentDir ? `${parentDir}${sep}${candidate}` : candidate;
+
+    for (let attempt = 0; attempt < 1000; attempt += 1) {
+      if (!siblingNames.has(candidate)) {
+        if (isDir) break;
+        try {
+          const existing = await invoke<string[]>('existing_file_paths', { paths: [destPath] });
+          if (existing.length === 0) break;
+        } catch {
+          break;
+        }
+      }
+      candidate = `${stem} copy ${counter}${ext}`;
+      destPath = parentDir ? `${parentDir}${sep}${candidate}` : candidate;
+      counter += 1;
+    }
+
+    if (workspaceOperationBusy()) return null;
+
+    try {
+      await invoke('duplicate_project_path', {
+        projectRoot: root,
+        srcPath: normalized,
+        destPath,
+      });
+      await refreshProjectFiles(root);
+      if (!isDir) {
+        await selectFile(destPath);
+      }
+      toast.success(`Duplicated as ${destPath.split(/[/\\]/).pop() || candidate}`);
+      return destPath;
+    } catch (e) {
+      const message = typeof e === 'string' ? e : e instanceof Error ? e.message : String(e);
+      toast.error('Failed to duplicate', { description: message });
+      console.error(e);
+      return null;
+    }
+  }, [projectFiles, projectRoot, refreshProjectFiles, selectFile]);
+
+  const revealInFileManager = useCallback(async (path: string): Promise<void> => {
+    try {
+      await invoke('reveal_in_file_manager', { path });
+    } catch (e) {
+      const message = typeof e === 'string' ? e : e instanceof Error ? e.message : String(e);
+      toast.error('Failed to reveal in file manager', { description: message });
+      console.error(e);
+    }
   }, []);
+
+  const refreshFiles = useCallback(async (): Promise<void> => {
+    const root = projectRootRef.current || projectRoot;
+    if (!root) return;
+    await refreshProjectFiles(root);
+  }, [projectRoot, refreshProjectFiles]);
 
   const saveDocument = useCallback(async (documentId: string, expectedRevision: number, expectedGeneration: number, allowedRoots: string[]) => {
     if (workspaceOperationBusy()) return { ok: false as const, code: 'git.locked', message: 'A Git worktree update is in progress.' };
@@ -909,7 +1294,13 @@ export function useProject({
     setMainFile,
     createFile,
     createFolder,
+    renamePath,
+    movePath,
+    deletePath,
     deleteFile,
+    duplicatePath,
+    revealInFileManager,
+    refreshFiles,
     refreshProjectFiles,
     refreshAfterGitUpdate,
     setWorktreeUpdateBusy,

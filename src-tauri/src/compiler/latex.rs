@@ -4,7 +4,10 @@ use tectonic::status::NoopStatusBackend;
 use tectonic_bundles::Bundle;
 
 use super::embedded::EmbeddedPackageBundle;
-use crate::diagnostics::latex_parser::{parse_latex_log, prepare_latex_source};
+use super::synctex::parse_synctex_gz;
+use crate::diagnostics::latex_parser::{
+    parse_latex_log, prepare_latex_source, source_lines_before_t1_insertion,
+};
 use crate::types::{CompileResponse, DiagnosticItem};
 
 /// Executes in-memory compilation using Tectonic's ProcessingSessionBuilder for LaTeX.
@@ -14,6 +17,8 @@ pub fn compile_latex_to_pdf(
     main_file: Option<&str>,
 ) -> CompileResponse {
     let (processed_latex, prepended_lines, inserted_lines) = prepare_latex_source(latex);
+    let insertion_after_lines =
+        (inserted_lines > 0).then(|| source_lines_before_t1_insertion(latex));
     let total_injected = prepended_lines + inserted_lines;
     let mut status = NoopStatusBackend::default();
 
@@ -32,6 +37,7 @@ pub fn compile_latex_to_pdf(
                 }],
                 warnings: Vec::new(),
                 raw_log: format!("Config error: {e}"),
+                source_map: None,
             };
         }
     };
@@ -51,6 +57,7 @@ pub fn compile_latex_to_pdf(
                 }],
                 warnings: Vec::new(),
                 raw_log: format!("Bundle error: {e}"),
+                source_map: None,
             };
         }
     };
@@ -70,6 +77,7 @@ pub fn compile_latex_to_pdf(
                 }],
                 warnings: Vec::new(),
                 raw_log: format!("Format cache error: {e}"),
+                source_map: None,
             };
         }
     };
@@ -83,6 +91,7 @@ pub fn compile_latex_to_pdf(
         .keep_logs(true)
         .keep_intermediates(false)
         .print_stdout(false)
+        .synctex(true)
         .output_format(tectonic::driver::OutputFormat::Pdf)
         .do_not_write_output_files();
 
@@ -108,6 +117,7 @@ pub fn compile_latex_to_pdf(
                 }],
                 warnings: Vec::new(),
                 raw_log: format!("Session init error: {e}"),
+                source_map: None,
             };
         }
     };
@@ -127,12 +137,25 @@ pub fn compile_latex_to_pdf(
 
     if result.is_ok() {
         if let Some(pdf) = files.remove("texput.pdf") {
+            let source_map = files.remove("texput.synctex.gz").and_then(|synctex_file| {
+                parse_synctex_gz(
+                    &synctex_file.data,
+                    root_file,
+                    "texput.tex",
+                    project_dir,
+                    None,
+                    prepended_lines,
+                    inserted_lines,
+                    insertion_after_lines,
+                )
+            });
             return CompileResponse {
                 pdf_bytes: pdf.data,
                 success: true,
                 errors,
                 warnings,
                 raw_log,
+                source_map,
             };
         }
     }
@@ -153,5 +176,6 @@ pub fn compile_latex_to_pdf(
         errors,
         warnings,
         raw_log,
+        source_map: None,
     }
 }

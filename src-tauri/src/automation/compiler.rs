@@ -2,6 +2,8 @@ use super::{
     as_error, canonical_allowed_destination, AutomationError, OperationContext, ProjectSnapshot,
     PublicDiagnostic, MAX_LOG_BYTES, MAX_PDF_BYTES,
 };
+use crate::compiler::synctex::parse_synctex_gz;
+use crate::diagnostics::latex_parser::{map_prepared_main_line, source_lines_before_t1_insertion};
 use crate::types::{CompileResponse, DiagnosticItem};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -564,6 +566,58 @@ mod tests {
         );
         assert_eq!(map_prepared_main_line(3, 1, 0, None), Some(2));
     }
+
+    #[test]
+    fn compile_in_memory_snapshot_produces_synctex_source_map_for_main_and_input_files() {
+        let main_tex = b"\\documentclass{article}\n\\begin{document}\nMain line.\n\n\\input{sections/intro.tex}\n\\end{document}\n".to_vec();
+        let intro_tex = b"Intro section line.\n\nSecond intro paragraph.\n".to_vec();
+        let mut files = BTreeMap::new();
+        files.insert(
+            "main.tex".to_owned(),
+            super::super::SnapshotFile {
+                bytes: main_tex.clone(),
+                kind: super::super::SnapshotFileKind::Text,
+            },
+        );
+        files.insert(
+            "sections/intro.tex".to_owned(),
+            super::super::SnapshotFile {
+                bytes: intro_tex.clone(),
+                kind: super::super::SnapshotFileKind::Text,
+            },
+        );
+        let snapshot = ProjectSnapshot {
+            engine: "latex".to_owned(),
+            root: PathBuf::from("."),
+            main_file: "main.tex".to_owned(),
+            total_bytes: main_tex.len() + intro_tex.len(),
+            files,
+        };
+
+        let resp = compile_in_memory(&snapshot).expect("in-memory LaTeX compile should not error");
+        assert!(
+            resp.success,
+            "In-memory LaTeX compilation failed: {:?}",
+            resp.errors.iter().map(|e| &e.message).collect::<Vec<_>>()
+        );
+        let source_map = resp
+            .source_map
+            .expect("In-memory LaTeX compilation should produce a SyncTeX source map");
+        assert!(
+            source_map.files.iter().any(|f| f == "main.tex"),
+            "Expected source_map.files to contain 'main.tex', got: {:?}",
+            source_map.files
+        );
+        assert!(
+            source_map.files.iter().any(|f| f == "sections/intro.tex"),
+            "Expected source_map.files to contain 'sections/intro.tex', got: {:?}",
+            source_map.files
+        );
+        assert!(
+            !source_map.pages.is_empty() && !source_map.pages[0].boxes.is_empty(),
+            "Expected non-empty pages[0].boxes"
+        );
+    }
 }
 
 pub(crate) fn compile_in_memory(
@@ -593,6 +647,7 @@ fn failure_response(message: &str, file: Option<String>) -> CompileResponse {
         }],
         warnings: vec![],
         raw_log: message.to_owned(),
+        source_map: None,
     }
 }
 
@@ -789,7 +844,7 @@ fn compile_latex(snapshot: &ProjectSnapshot) -> Result<CompileResponse, Automati
         denied: Arc<AtomicBool>,
     }
     impl SnapshotIo {
-        fn lookup(&mut self, name: &str) -> OpenResult<InputHandle> {
+        fn lookup(&mut self, name: &str) -> OpenResult<(InputHandle, String)> {
             let normalized = match super::project::normalize_project_path(name) {
                 Ok(p) => p,
                 Err(_) => {
@@ -802,7 +857,12 @@ fn compile_latex(snapshot: &ProjectSnapshot) -> Result<CompileResponse, Automati
             };
             self.files
                 .get(&normalized)
-                .map(|b| InputHandle::new(name, Cursor::new(b.clone()), InputOrigin::Other))
+                .map(|b| {
+                    (
+                        InputHandle::new(name, Cursor::new(b.clone()), InputOrigin::Other),
+                        normalized,
+                    )
+                })
                 .map(OpenResult::Ok)
                 .unwrap_or(OpenResult::NotAvailable)
         }
@@ -813,7 +873,11 @@ fn compile_latex(snapshot: &ProjectSnapshot) -> Result<CompileResponse, Automati
             name: &str,
             _: &mut dyn StatusBackend,
         ) -> OpenResult<InputHandle> {
-            self.lookup(name)
+            match self.lookup(name) {
+                OpenResult::Ok((h, _)) => OpenResult::Ok(h),
+                OpenResult::Err(e) => OpenResult::Err(e),
+                OpenResult::NotAvailable => OpenResult::NotAvailable,
+            }
         }
         fn input_open_name_with_abspath(
             &mut self,
@@ -821,7 +885,9 @@ fn compile_latex(snapshot: &ProjectSnapshot) -> Result<CompileResponse, Automati
             _: &mut dyn StatusBackend,
         ) -> OpenResult<(InputHandle, Option<PathBuf>)> {
             match self.lookup(name) {
-                OpenResult::Ok(h) => OpenResult::Ok((h, None)),
+                OpenResult::Ok((h, normalized)) => {
+                    OpenResult::Ok((h, Some(PathBuf::from(normalized))))
+                }
                 OpenResult::Err(e) => OpenResult::Err(e),
                 OpenResult::NotAvailable => OpenResult::NotAvailable,
             }
@@ -841,6 +907,10 @@ fn compile_latex(snapshot: &ProjectSnapshot) -> Result<CompileResponse, Automati
         .into_owned();
     let pdf_name = std::path::Path::new(tex_input_name)
         .with_extension("pdf")
+        .to_string_lossy()
+        .into_owned();
+    let synctex_name = std::path::Path::new(tex_input_name)
+        .with_extension("synctex.gz")
         .to_string_lossy()
         .into_owned();
     let mut status = NoopStatusBackend::default();
@@ -881,6 +951,7 @@ fn compile_latex(snapshot: &ProjectSnapshot) -> Result<CompileResponse, Automati
         .keep_logs(true)
         .keep_intermediates(false)
         .print_stdout(false)
+        .synctex(true)
         .output_format(OutputFormat::Pdf)
         .do_not_write_output_files();
     let mut session = match builder.create(&mut status) {
@@ -986,6 +1057,7 @@ fn compile_latex(snapshot: &ProjectSnapshot) -> Result<CompileResponse, Automati
             errors: errors.clone(),
             warnings: warnings.clone(),
             raw_log: raw_log.clone(),
+            source_map: None,
         };
         error.diagnostics = public_diagnostics(snapshot, &partial);
         return Err(error);
@@ -999,6 +1071,7 @@ fn compile_latex(snapshot: &ProjectSnapshot) -> Result<CompileResponse, Automati
             errors: errors.clone(),
             warnings: warnings.clone(),
             raw_log: raw_log.clone(),
+            source_map: None,
         };
         return Err(indexed_misses_error(
             &missing_snapshot,
@@ -1006,12 +1079,32 @@ fn compile_latex(snapshot: &ProjectSnapshot) -> Result<CompileResponse, Automati
         ));
     }
     if let Some(pdf_bytes) = pdf.filter(|_| valid_pdf && errors.is_empty()) {
+        let synctex_file = files.remove(&synctex_name).or_else(|| {
+            files
+                .keys()
+                .find(|k| k.ends_with(".synctex.gz"))
+                .cloned()
+                .and_then(|k| files.remove(&k))
+        });
+        let source_map = synctex_file.and_then(|file| {
+            parse_synctex_gz(
+                &file.data,
+                &snapshot.main_file,
+                tex_input_name,
+                None,
+                Some(&snapshot_paths),
+                prepend,
+                inserted,
+                insertion_after_source_lines,
+            )
+        });
         return Ok(CompileResponse {
             pdf_bytes,
             success: true,
             errors,
             warnings,
             raw_log,
+            source_map,
         });
     }
     if offline_cache_error {
@@ -1021,6 +1114,7 @@ fn compile_latex(snapshot: &ProjectSnapshot) -> Result<CompileResponse, Automati
             errors: errors.clone(),
             warnings: warnings.clone(),
             raw_log: raw_log.clone(),
+            source_map: None,
         };
         return Err(AutomationError::new(
             "cache.unavailable_offline",
@@ -1038,13 +1132,13 @@ fn compile_latex(snapshot: &ProjectSnapshot) -> Result<CompileResponse, Automati
             suggestion: None,
         });
     }
-    let _ = prepend;
     Ok(CompileResponse {
         pdf_bytes: vec![],
         success: false,
         errors,
         warnings,
         raw_log,
+        source_map: None,
     })
 }
 
@@ -1055,44 +1149,6 @@ fn is_structurally_valid_pdf(bytes: &[u8]) -> bool {
             .rev()
             .take(4096)
             .any(|window| window == b"%%EOF")
-}
-
-fn source_lines_before_t1_insertion(source: &str) -> usize {
-    let Some(class_start) = source.find("\\documentclass") else {
-        return 0;
-    };
-    let Some(newline) = source[class_start..].find('\n') else {
-        return 0;
-    };
-    let insertion_byte = class_start + newline + 1;
-    source[..insertion_byte]
-        .bytes()
-        .filter(|byte| *byte == b'\n')
-        .count()
-}
-
-fn map_prepared_main_line(
-    prepared_line: usize,
-    prepended_lines: usize,
-    inserted_lines: usize,
-    insertion_after_lines: Option<usize>,
-) -> Option<usize> {
-    if prepared_line <= prepended_lines {
-        return None;
-    }
-    let mut source_line = prepared_line.checked_sub(prepended_lines)?;
-    if inserted_lines == 0 {
-        return Some(source_line);
-    }
-    let insertion_after = insertion_after_lines?;
-    if source_line <= insertion_after {
-        Some(source_line)
-    } else if source_line <= insertion_after + inserted_lines {
-        None
-    } else {
-        source_line = source_line.checked_sub(inserted_lines)?;
-        Some(source_line)
-    }
 }
 
 fn cache_error(message: String) -> AutomationError {
@@ -1138,9 +1194,8 @@ fn compile_typst(snapshot: &ProjectSnapshot) -> Result<CompileResponse, Automati
             ))
         }
     };
-    match typst_embed::render_pdf(&project, &env) {
-        Ok(artifact) => {
-            let bytes = artifact.bytes().to_vec();
+    match crate::compiler::typst_sourcemap::compile_and_extract_typst(&project, &env) {
+        Ok((bytes, source_map)) => {
             if bytes.len() > MAX_PDF_BYTES {
                 return Err(AutomationError::new(
                     "resource.limit_exceeded",
@@ -1154,6 +1209,7 @@ fn compile_typst(snapshot: &ProjectSnapshot) -> Result<CompileResponse, Automati
                 errors: vec![],
                 warnings: vec![],
                 raw_log: "Typst compilation completed with an in-memory project snapshot.".into(),
+                source_map: Some(source_map),
             })
         }
         Err(typst_embed::RenderError::Diagnostics(items)) => {
@@ -1197,6 +1253,7 @@ fn compile_typst(snapshot: &ProjectSnapshot) -> Result<CompileResponse, Automati
                 errors,
                 warnings: vec![],
                 raw_log: raw,
+                source_map: None,
             })
         }
         Err(e) => Ok(failure_response(

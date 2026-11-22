@@ -5,7 +5,7 @@ import { Toaster, toast } from 'sonner';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
-import { MenuBar } from './components/MenuBar';
+import { MenuBar, type EditorMenuAction } from './components/MenuBar';
 import { Toolbar } from './components/Toolbar';
 import { PdfView } from './components/PdfView';
 import { WelcomeScreen } from './components/WelcomeScreen';
@@ -75,9 +75,24 @@ export const App: React.FC = () => {
   const [newProjectModalInitialTab, setNewProjectModalInitialTab] = useState<'create' | 'import'>('create');
   const [isCloneRepositoryModalOpen, setIsCloneRepositoryModalOpen] = useState(false);
   const cloneInProgressRef = React.useRef(false);
+  const [wordWrap, setWordWrap] = useState<boolean>(() => {
+    const saved = localStorage.getItem('sciencebatch:editor-word-wrap');
+    return saved === null ? true : saved === 'true';
+  });
 
-  // Diagnostics Line Navigation
-  const [jumpToLine, setJumpToLine] = useState<number | null>(null);
+  const handleToggleWordWrap = useCallback(() => {
+    setWordWrap((prev) => {
+      const next = !prev;
+      localStorage.setItem('sciencebatch:editor-word-wrap', String(next));
+      window.dispatchEvent(new CustomEvent('sciencebatch:word-wrap-changed', { detail: { wordWrap: next } }));
+      return next;
+    });
+  }, []);
+
+  // Diagnostics & Inverse Search Line Navigation
+  const jumpSeqRef = React.useRef(0);
+  const [jumpRequest, setJumpRequest] = useState<{ line: number; column?: number; seq: number } | null>(null);
+  const [cursorLocation, setCursorLocation] = useState<{ line: number; filePath: string | null } | null>(null);
   const [writingBridge, setWritingBridge] = useState<WritingEditorBridge | null>(null);
   const [writingEditorState, setWritingEditorState] = useState<WritingEditorState>({
     language: 'latex',
@@ -110,6 +125,22 @@ export const App: React.FC = () => {
     };
     window.addEventListener('contextmenu', preventNativeContextMenu, true);
     return () => window.removeEventListener('contextmenu', preventNativeContextMenu, true);
+  }, []);
+
+  useEffect(() => {
+    const handleCursorLineChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{ line?: number; filePath?: string | null }>).detail;
+      if (typeof detail?.line !== 'number' || !Number.isFinite(detail.line)) return;
+      const nextLine = detail.line;
+      const nextFilePath = detail.filePath ?? null;
+      setCursorLocation((prev) =>
+        prev && prev.line === nextLine && prev.filePath === nextFilePath
+          ? prev
+          : { line: nextLine, filePath: nextFilePath }
+      );
+    };
+    window.addEventListener('sciencebatch:cursor-line-changed', handleCursorLineChanged);
+    return () => window.removeEventListener('sciencebatch:cursor-line-changed', handleCursorLineChanged);
   }, []);
 
   const project = useProject({
@@ -790,22 +821,32 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  const handleSelectLine = async (line: number, file?: string | null) => {
-    if (file && project.projectRoot) {
-      const cleanRel = file.replace(/^\.\//, '');
-      const fullPath = file.startsWith('/') ? file : `${project.projectRoot}/${cleanRel}`;
-      if (fullPath !== project.activeFilePath) {
-        await project.selectFile(fullPath);
-        setTimeout(() => {
-          setJumpToLine(line);
-          setTimeout(() => setJumpToLine(null), 150);
-        }, 80);
+  const handleSelectLine = useCallback(async (line: number, file?: string | null, column?: number) => {
+    const currentProject = projectRef.current;
+    const dispatchJump = () => {
+      const seq = ++jumpSeqRef.current;
+      setJumpRequest({ line, ...(column && column > 0 ? { column } : {}), seq });
+    };
+
+    if (file && currentProject.projectRoot) {
+      const normalizedRoot = normalizeWorkspacePath(currentProject.projectRoot);
+      const cleanFile = file.replace(/\\/g, '/').replace(/^\.\//, '');
+      const isAbsolute = cleanFile.startsWith('/') || /^[A-Za-z]:\//.test(cleanFile);
+      const fullPath = normalizeWorkspacePath(isAbsolute ? cleanFile : `${normalizedRoot}/${cleanFile}`);
+      const activeNormalized = currentProject.activeFilePath
+        ? normalizeWorkspacePath(currentProject.activeFilePath)
+        : null;
+      const activeTab = currentProject.tabs.find((tab) => tab.id === currentProject.activeTabId);
+
+      if (fullPath !== activeNormalized || activeTab?.kind !== 'source') {
+        await currentProject.selectFile(fullPath);
+        window.setTimeout(dispatchJump, 80);
         return;
       }
     }
-    setJumpToLine(line);
-    setTimeout(() => setJumpToLine(null), 150);
-  };
+
+    dispatchJump();
+  }, []);
 
   const handleCompileCurrent = () => { void compileLiveWorkspace(); };
 
@@ -820,9 +861,15 @@ export const App: React.FC = () => {
         }}
         onOpenFolder={() => { void openProjectFolder(); }}
         onImportZip={() => { if (!cloneInProgressRef.current) void project.importZip(); }}
+        onCloneRepository={() => {
+          if (!cloneInProgressRef.current) setIsCloneRepositoryModalOpen(true);
+        }}
         onSaveFile={project.saveFile}
+        onImportFiles={() => { void project.importFiles(); }}
         onExportPdf={() => exportService.downloadPdf(compiler.pdfBytes, project.projectName, project.projectRoot)}
         onExportZip={() => exportService.exportZip(project.projectRoot, project.projectName, project.sourceCode, project.engine)}
+        onCloseTab={() => { void project.closeTabs(false); }}
+        onCloseUnpinnedTabs={() => { void project.closeTabs(true); }}
         onCloseProject={project.closeProject}
         onCompile={handleCompileCurrent}
         onOpenProjectResources={projectResources.open}
@@ -832,16 +879,28 @@ export const App: React.FC = () => {
         onTabChange={compiler.setActiveTab}
         sidebarOpen={sidebar.state.isOpen}
         onToggleSidebar={sidebar.toggleSidebar}
+        onToggleSearch={() => sidebar.toggleTool('search')}
+        onToggleOutline={() => sidebar.toggleTool('outline')}
         engine={project.engine}
         onSwitchEngine={project.switchEngine}
         onZoomIn={compiler.handleZoomIn}
         onZoomOut={compiler.handleZoomOut}
         onZoomReset={compiler.handleZoomReset}
+        onFitWidth={compiler.handleFitWidth}
+        wordWrap={wordWrap}
+        onToggleWordWrap={handleToggleWordWrap}
         recentProjects={recentProjects}
         onOpenRecentProject={(path) => openProjectFolder(path)}
         hasOpenProject={viewMode === 'editor'}
+        hasProjectFolder={project.projectRoot !== null}
+        hasPdf={compiler.pdfBytes !== null && compiler.pdfBytes.length > 0}
+        hasActiveSourceEditor={viewMode === 'editor' && activeWorkspaceTab?.kind === 'source'}
         onUndo={() => automationEditorBridgeRef.current?.undo()}
         onRedo={() => automationEditorBridgeRef.current?.redo()}
+        onFindReplace={() => window.dispatchEvent(new CustomEvent('sciencebatch:open-find-replace'))}
+        onEditorAction={(action: EditorMenuAction) => {
+          window.dispatchEvent(new CustomEvent('sciencebatch:editor-action', { detail: { action } }));
+        }}
       />
 
       {/* Main Workspace Toolbar (Shown only in editor mode) */}
@@ -894,7 +953,7 @@ export const App: React.FC = () => {
         />
       ) : (
         <main className="workspace-container">
-          {/* JetBrains Left Activity Icon Bar */}
+          {/* Workspace Left Activity Icon Bar */}
           {project.projectRoot && (
             <SidebarActivityBar
               topTools={sidebar.state.topTools}
@@ -937,12 +996,27 @@ export const App: React.FC = () => {
                     onCreateFile={project.createFile}
                     onCreateFolder={project.createFolder}
                     onDeleteFile={project.deleteFile}
+                    onRenamePath={project.renamePath}
+                    onMovePath={project.movePath}
+                    onDeletePath={project.deletePath}
+                    onDuplicatePath={project.duplicatePath}
+                    onRevealInFileManager={project.revealInFileManager}
+                    onRefreshFiles={project.refreshFiles}
                     onViewImage={(path) => project.selectFile(path)}
                     onImportFiles={project.importFiles}
                     projectRoot={project.projectRoot}
                     projectName={project.projectName}
                     engine={project.engine}
                     sourceCode={project.sourceCode}
+                    activeCursorLine={
+                      cursorLocation && (
+                        cursorLocation.filePath && project.activeFilePath
+                          ? normalizeWorkspacePath(cursorLocation.filePath) === normalizeWorkspacePath(project.activeFilePath)
+                          : (cursorLocation.filePath ?? null) === (project.activeFilePath ?? null)
+                      )
+                        ? cursorLocation.line
+                        : null
+                    }
                     onUpdateSourceCode={project.setSourceCode}
                     onSelectLine={handleSelectLine}
                   />
@@ -968,7 +1042,7 @@ export const App: React.FC = () => {
                 onPin={project.togglePin}
                 errors={compiler.errors}
                 warnings={compiler.warnings}
-                jumpToLine={jumpToLine}
+                jumpRequest={jumpRequest}
                 engine={project.engine}
                 activeFilePath={project.activeFilePath}
                 readOnly={project.worktreeUpdateBusy}
@@ -989,8 +1063,13 @@ export const App: React.FC = () => {
             >
               <PdfView
                 pdfBytes={compiler.pdfBytes}
+                sourceMap={compiler.sourceMap}
                 zoom={compiler.zoom}
                 onZoomChange={compiler.setZoom}
+                onZoomIn={compiler.handleZoomIn}
+                onZoomOut={compiler.handleZoomOut}
+                onZoomReset={compiler.handleZoomReset}
+                onFitWidth={compiler.handleFitWidth}
                 isCompiling={compiler.isCompiling}
                 errors={compiler.errors}
                 warnings={compiler.warnings}
@@ -1028,10 +1107,13 @@ export const App: React.FC = () => {
       <ProjectResourcesDialog
         resources={projectResources}
         projectName={projectResources.activeWorkspaceLabel?.projectName ?? project.projectName}
+        engine={project.engine}
         onClose={() => projectResources.setIsOpen(false)}
+        onRecompile={handleCompileCurrent}
+        onSelectLine={handleSelectLine}
       />
 
-      <Toaster position="bottom-right" closeButton theme={theme === 'light' ? 'light' : 'dark'} />
+      <Toaster position="bottom-center" closeButton theme={theme === 'light' ? 'light' : 'dark'} />
     </div>
   );
 };

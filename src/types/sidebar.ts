@@ -18,6 +18,9 @@ export interface OutlineItem {
   filePath: string;
   fileName: string;
   rawCommand?: string;
+  kindLabel?: string;
+  label?: string;
+  starred?: boolean;
 }
 
 export interface SearchMatchItem {

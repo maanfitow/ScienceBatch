@@ -1,7 +1,9 @@
 pub mod embedded;
 pub mod latex;
 pub mod starter;
+pub mod synctex;
 pub mod typst;
+pub mod typst_sourcemap;
 pub mod worker;
 
 pub use latex::compile_latex_to_pdf;

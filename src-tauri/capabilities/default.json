@@ -9,6 +9,7 @@
     "dialog:default",
     "dialog:allow-ask",
     "clipboard-manager:allow-write-text",
+    "clipboard-manager:allow-write-image",
     "fs:default"
   ]
 }
