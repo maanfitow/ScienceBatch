@@ -5,9 +5,12 @@ use tectonic_io_base::{
 };
 use tectonic_status_base::StatusBackend;
 
-const SIMPLEICONS_STY: &[u8] = include_bytes!("../../embedded_packages/simpleicons/simpleicons.sty");
-const SIMPLEICONS_GLYPHS: &[u8] = include_bytes!("../../embedded_packages/simpleicons/simpleiconsglyphs-xeluatex.tex");
-const SIMPLEICONS_OTF: &[u8] = include_bytes!("../../embedded_packages/simpleicons/SimpleIcons.otf");
+const SIMPLEICONS_STY: &[u8] =
+    include_bytes!("../../embedded_packages/simpleicons/simpleicons.sty");
+const SIMPLEICONS_GLYPHS: &[u8] =
+    include_bytes!("../../embedded_packages/simpleicons/simpleiconsglyphs-xeluatex.tex");
+const SIMPLEICONS_OTF: &[u8] =
+    include_bytes!("../../embedded_packages/simpleicons/SimpleIcons.otf");
 pub const SAMPLE_PNG: &[u8] = include_bytes!("../../embedded_packages/assets/sample.png");
 pub const SAMPLE_GIF: &[u8] = include_bytes!("../../embedded_packages/assets/sample.gif");
 pub const SAMPLE_BIB: &[u8] = br#"@article{einstein1905,
@@ -38,12 +41,6 @@ pub fn get_embedded_package_file(name: &str) -> Option<&'static [u8]> {
         || clean.eq_ignore_ascii_case("simpleicons")
     {
         Some(SIMPLEICONS_OTF)
-    } else if clean.eq_ignore_ascii_case("sample.png") {
-        Some(SAMPLE_PNG)
-    } else if clean.eq_ignore_ascii_case("sample.gif") {
-        Some(SAMPLE_GIF)
-    } else if clean.eq_ignore_ascii_case("references.bib") || clean.eq_ignore_ascii_case("references") {
-        Some(SAMPLE_BIB)
     } else {
         None
     }
@@ -135,5 +132,19 @@ impl Bundle for EmbeddedPackageBundle {
         files.push("simpleiconsglyphs-xeluatex.tex".to_string());
         files.push("SimpleIcons.otf".to_string());
         files
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::get_embedded_package_file;
+
+    #[test]
+    fn only_icon_suite_files_remain_global_embedded_fallbacks() {
+        assert!(get_embedded_package_file("simpleicons.sty").is_some());
+        assert!(get_embedded_package_file("SimpleIcons.otf").is_some());
+        assert!(get_embedded_package_file("assets/sample.png").is_none());
+        assert!(get_embedded_package_file("assets/sample.gif").is_none());
+        assert!(get_embedded_package_file("references.bib").is_none());
     }
 }

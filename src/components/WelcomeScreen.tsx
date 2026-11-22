@@ -2,6 +2,7 @@ import React from 'react';
 import { 
   FolderPlus, 
   FolderOpen, 
+  GitBranch,
   RotateCcw, 
   FileCode, 
   FileText, 
@@ -16,6 +17,7 @@ export type { RecentProject };
 interface WelcomeScreenProps {
   onNewProject: () => void;
   onOpenFolder: () => void;
+  onCloneRepository: () => void;
   onImportZip: () => void;
   onQuickScratchpad: (engine: 'latex' | 'typst') => void;
   recentProjects: RecentProject[];
@@ -26,6 +28,7 @@ interface WelcomeScreenProps {
 export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   onNewProject,
   onOpenFolder,
+  onCloneRepository,
   onQuickScratchpad,
   recentProjects,
   onOpenRecentProject,
@@ -35,8 +38,12 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
     <div className="welcome-screen">
       <div className="welcome-hero">
         <div className="welcome-logo-badge">
-          <FileText size={32} className="text-blue-500" />
-          <FileCode size={32} className="text-cyan-400" />
+          <span className="welcome-logo-chip welcome-logo-latex">
+            <FileText size={26} />
+          </span>
+          <span className="welcome-logo-chip welcome-logo-typst">
+            <FileCode size={26} />
+          </span>
         </div>
         <h1 className="welcome-title">ScienceBatch Studio</h1>
         <p className="welcome-subtitle">
@@ -51,7 +58,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
 
           <div className="welcome-action-buttons">
             <button className="btn-welcome-action btn-welcome-primary" onClick={onNewProject}>
-              <div className="action-icon-circle bg-blue-600/20 text-blue-400">
+              <div className="action-icon-circle action-icon-latex">
                 <FolderPlus size={20} />
               </div>
               <div className="action-text-group">
@@ -62,12 +69,23 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
             </button>
 
             <button className="btn-welcome-action" onClick={onOpenFolder}>
-              <div className="action-icon-circle bg-amber-600/20 text-amber-400">
+              <div className="action-icon-circle action-icon-folder">
                 <FolderOpen size={20} />
               </div>
               <div className="action-text-group">
                 <span className="action-title">Open Project Folder</span>
                 <span className="action-desc">Open any folder containing .tex or .typ files</span>
+              </div>
+              <ChevronRight size={16} className="action-arrow" />
+            </button>
+
+            <button className="btn-welcome-action" onClick={onCloneRepository}>
+              <div className="action-icon-circle action-icon-git">
+                <GitBranch size={20} />
+              </div>
+              <div className="action-text-group">
+                <span className="action-title">Clone Repository</span>
+                <span className="action-desc">Clone a GitHub or GitLab project to your computer</span>
               </div>
               <ChevronRight size={16} className="action-arrow" />
             </button>
@@ -81,7 +99,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
                   onClick={() => onQuickScratchpad('latex')}
                   title="Launch instant in-memory LaTeX draft"
                 >
-                  <FileText size={14} className="text-blue-400" />
+                  <FileText size={14} className="icon-latex" />
                   <span>Quick LaTeX</span>
                 </button>
                 <button 
@@ -89,7 +107,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
                   onClick={() => onQuickScratchpad('typst')}
                   title="Launch instant in-memory Typst draft"
                 >
-                  <FileCode size={14} className="text-cyan-400" />
+                  <FileCode size={14} className="icon-typst" />
                   <span>Quick Typst</span>
                 </button>
               </div>
@@ -146,7 +164,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
               ))
             ) : (
               <div className="recent-empty-state">
-                <BookOpen size={28} className="text-slate-500 mb-2" />
+                <BookOpen size={28} className="recent-empty-icon" />
                 <p>No recent projects found</p>
                 <span>Create or open a folder to see it listed here</span>
               </div>

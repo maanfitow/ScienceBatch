@@ -6,6 +6,9 @@ import { SidebarActivityBar } from './SidebarActivityBar';
 import { FileTree } from '../FileTree';
 import { GlobalSearchView } from './GlobalSearchView';
 import { DocumentOutlineView } from './DocumentOutlineView';
+import { GitStatusView } from './GitStatusView';
+import { DependenciesPanel } from './DependenciesPanel';
+import type { useProjectResources } from '../../hooks/useProjectResources';
 
 interface JetBrainsSidebarProps {
   // FileTree Props
@@ -27,6 +30,10 @@ interface JetBrainsSidebarProps {
   sourceCode: string;
   onUpdateSourceCode: (code: string) => void;
   onSelectLine: (line: number, file?: string | null) => void;
+  onOpenDiff?: (path: string, repositoryRoot: string) => void;
+  onBranchChanged?: () => Promise<void | boolean> | void | boolean;
+  onWorktreeUpdateBusyChange?: (busy: boolean) => void;
+  hasUnsavedChanges?: boolean;
 
   // Sidebar State & Actions
   topTools: SidebarToolId[];
@@ -40,6 +47,7 @@ interface JetBrainsSidebarProps {
   onCloseTool: (slot: 'top' | 'bottom') => void;
   onResetToDefaults: () => void;
   onSplitRatioChange: (ratio: number) => void;
+  resources?: ReturnType<typeof useProjectResources>;
 }
 
 export const JetBrainsSidebar: React.FC<JetBrainsSidebarProps> = ({
@@ -59,6 +67,10 @@ export const JetBrainsSidebar: React.FC<JetBrainsSidebarProps> = ({
   sourceCode,
   onUpdateSourceCode,
   onSelectLine,
+  onOpenDiff,
+  onBranchChanged,
+  onWorktreeUpdateBusyChange,
+  hasUnsavedChanges,
   topTools,
   bottomTools,
   activeTopTool,
@@ -70,6 +82,7 @@ export const JetBrainsSidebar: React.FC<JetBrainsSidebarProps> = ({
   onCloseTool,
   onResetToDefaults,
   onSplitRatioChange,
+  resources,
 }) => {
   const isSplit = Boolean(isOpen && activeTopTool && activeBottomTool);
   const hasActivePanel = Boolean(isOpen && (activeTopTool || activeBottomTool));
@@ -129,6 +142,27 @@ export const JetBrainsSidebar: React.FC<JetBrainsSidebarProps> = ({
             />
           </div>
         );
+
+      case 'git':
+        return (
+          <div className="sidebar-tool-panel-content">
+            <GitStatusView
+              projectRoot={projectRoot}
+              projectName={projectName}
+              onSelectFile={onSelectFile}
+              onOpenDiff={onOpenDiff}
+              onBranchChanged={onBranchChanged}
+              onWorktreeUpdateBusyChange={onWorktreeUpdateBusyChange}
+              hasUnsavedChanges={hasUnsavedChanges}
+              onClose={() => onCloseTool(slot)}
+            />
+          </div>
+        );
+
+      case 'dependencies':
+        return resources
+          ? <DependenciesPanel resources={resources} onClose={() => onCloseTool(slot)} />
+          : <div className="sidebar-tool-panel-content">Open a project to view dependencies.</div>;
 
       default:
         return null;

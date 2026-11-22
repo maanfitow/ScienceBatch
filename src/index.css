@@ -1,5 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import './themes/tokens.css';
+@import './themes/obsidian-pastel.css';
+@import './themes/coral-depths.css';
 @import './themes/dark.css';
 @import './themes/light.css';
 @import './themes/monokai.css';

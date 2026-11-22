@@ -113,7 +113,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
         <div className="modal-header">
           <div className="modal-title-group">
             {activeTab === 'import' ? (
-              <Archive size={18} className="modal-title-icon text-purple-400" />
+              <Archive size={18} className="modal-title-icon icon-archive" />
             ) : (
               <Sparkles size={18} className="modal-title-icon" />
             )}
@@ -163,7 +163,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
                   className="btn btn-secondary btn-browse-folder"
                   onClick={handleSelectZip}
                 >
-                  <Archive size={15} className="text-purple-400" />
+                  <Archive size={15} className="icon-archive" />
                   <span>Browse ZIP...</span>
                 </button>
               </div>
@@ -181,7 +181,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
                   onClick={() => setEngine('typst')}
                 >
                   <div className="engine-card-header">
-                    <FileCode size={22} className="text-cyan-400" />
+                    <FileCode size={22} className="icon-typst" />
                     <span className="engine-card-title">Typst</span>
                     {engine === 'typst' && <Check size={16} className="engine-card-check" />}
                   </div>
@@ -195,7 +195,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
                   onClick={() => setEngine('latex')}
                 >
                   <div className="engine-card-header">
-                    <FileText size={22} className="text-blue-400" />
+                    <FileText size={22} className="icon-latex" />
                     <span className="engine-card-title">LaTeX</span>
                     {engine === 'latex' && <Check size={16} className="engine-card-check" />}
                   </div>

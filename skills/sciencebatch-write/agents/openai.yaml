@@ -1,0 +1,4 @@
+interface:
+  display_name: "ScienceBatch Write"
+  short_description: "Write and edit LaTeX or Typst source"
+  default_prompt: "Use $sciencebatch-write to make a requested source edit."

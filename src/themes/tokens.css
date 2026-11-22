@@ -1,8 +1,26 @@
 /* ==========================================================================
-   Semantic Theme Token Definitions & Typography
+   Design System Primitive & Shared Editorial Tokens
+   Layer 1: Raw primitives and shared editorial pastel/ink values.
    ========================================================================== */
 
 :root {
+  /* Typography */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+
+  /* Editorial Pastel Primitives */
+  --pastel-mint: #74eec8;
+  --pastel-lilac: #dec2ff;
+  --pastel-butter: #fde068;
+  --pastel-peach: #f6b89e;
+  --pastel-rose: #f3a6b8;
+  --pastel-sky: #a5d8ff;
+  --pastel-sage: #a7e3c5;
+
+  /* Shared Ink & Callout Primitives */
+  --ink-dark: #111214;
+  --ink-dark-muted: #26292e;
+  --ink-dark-hover: #343840;
+  --callout-error-bg: #ffffff;
+  --callout-error-fg: #991b1b;
 }

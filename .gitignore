@@ -14,6 +14,7 @@ Cargo.lock
 
 # Tauri build artifacts
 src-tauri/gen/
+src-tauri/binaries/sciencebatch-cli-*
 
 # LaTeX temporary files (in case any are generated)
 *.aux
@@ -58,6 +59,10 @@ CONTRIBUTING.md
 BUGS.md
 IDEAS.md
 SPECS.md
+/.codex/
+/docs/codex/
+/docs/CODEX_SETUP.md
+/docs/AGENT_WORKFLOW.md
 
 # Graphify Local Intelligence
 graphify-out/

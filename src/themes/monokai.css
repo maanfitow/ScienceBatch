@@ -1,31 +1,125 @@
 /* ==========================================================================
-   Monokai Theme
+   Monokai Noir Theme (Deep Charcoal-Black & Muted Classic Accents)
    ========================================================================== */
 
 [data-theme='monokai'] {
-  --bg-primary: #272822;
-  --bg-secondary: #1e1f1c;
-  --bg-tertiary: #383830;
-  --bg-hover: #49483e;
-  
-  --border-color: #49483e;
-  --border-focus: #a6e22e;
-  
-  --text-primary: #f8f8f2;
-  --text-secondary: #cfcfc2;
-  --text-muted: #75715e;
+  color-scheme: dark;
 
-  --accent-primary: #a6e22e;
-  --accent-hover: #b8f33d;
-  --accent-active: #8ac023;
-  --accent-glow: rgba(166, 226, 46, 0.2);
+  --bg: #121211;
+  --surface: #181816;
+  --surface-alt: #21211e;
+  --rule: #2c2c28;
+  --control-border: #56544d;
 
-  --status-success: #a6e22e;
-  --status-warning: #fd971f;
-  --status-error: #f92672;
+  --bg-primary: var(--bg);
+  --bg-secondary: var(--surface);
+  --bg-tertiary: var(--surface-alt);
+  --bg-hover: #2c2c28;
 
-  --card-bg: rgba(39, 40, 34, 0.95);
-  --viewer-bg: #1e1f1c;
-  --menu-bg: #1e1f1c;
-  --menu-border: #49483e;
+  --border-color: var(--rule);
+  --border-subtle: #232320;
+  --border-focus: #e5c76b;
+
+  --text: #f3f2ec;
+  --text-primary: var(--text);
+  --text-secondary: #c9c7bd;
+  --text-muted: #928f84;
+
+  --pill-bg: #f3f2ec;
+  --pill-fg: #121211;
+  --option-hover-bg: #32312c;
+  --option-hover-fg: #f3f2ec;
+
+  --accent-primary: #e5c76b;
+  --accent-hover: #eed484;
+  --accent-active: #cbb059;
+  --accent-contrast: #121211;
+  --accent-glow: rgba(229, 199, 107, 0.14);
+  --accent-border: #87753e;
+
+  --btn-compile-bg: #e5c76b;
+  --btn-compile-hover: #eed484;
+  --btn-compile-active: #cbb059;
+  --btn-compile-fg: #121211;
+  --btn-compile-border: #e5c76b;
+  --btn-stop-bg: #e06c88;
+  --btn-stop-hover: #ea859d;
+  --btn-stop-fg: #121211;
+  --btn-stop-border: #e06c88;
+  --kbd-bg: rgba(18, 18, 17, 0.16);
+  --kbd-border: rgba(18, 18, 17, 0.28);
+  --kbd-fg: #121211;
+
+  --tile-latex-bg: #21211e;
+  --tile-latex-fg: #78b7c4;
+  --tile-typst-bg: #21211e;
+  --tile-typst-fg: #8ab868;
+  --tile-folder-bg: #21211e;
+  --tile-folder-fg: #e5c76b;
+  --tile-git-bg: #21211e;
+  --tile-git-fg: #8ab868;
+
+  --accent-latex: #78b7c4;
+  --accent-latex-bg: #1c2426;
+  --accent-typst: #8ab868;
+  --accent-typst-bg: #1e241b;
+  --accent-folder: #e5c76b;
+  --accent-folder-bg: #262319;
+  --accent-git: #8ab868;
+  --accent-git-bg: #1e241b;
+  --accent-archive: #df965b;
+  --accent-archive-bg: #261e18;
+  --accent-info: #a794d6;
+  --accent-info-bg: #211e29;
+  --accent-rose: #e06c88;
+  --accent-rose-bg: #26191d;
+
+  --status-success: #8ab868;
+  --status-success-bg: #1b2118;
+  --status-success-border: #485e38;
+
+  --status-warning: #e5a55c;
+  --status-warning-bg: #241e16;
+  --status-warning-border: #6e502c;
+
+  --status-error: #e06c88;
+  --status-error-bg: #24171b;
+  --status-error-border: #6e3543;
+
+  --status-info: #78b7c4;
+  --status-info-bg: #182124;
+  --status-info-border: #3a5961;
+
+  --diag-error-bg: #1d1517;
+  --diag-error-border: #63303d;
+  --diag-error-fg: #ea8da3;
+  --diag-error-msg-bg: #121211;
+
+  --diag-warning-bg: #1e1a14;
+  --diag-warning-border: #634929;
+  --diag-warning-fg: #e5a55c;
+  --diag-warning-msg-bg: #121211;
+
+  --diag-tip-bg: #1b1b19;
+  --diag-tip-fg: #f3f2ec;
+  --diag-tip-accent: #78b7c4;
+
+  --raw-log-bg: #0c0c0b;
+  --raw-log-fg: #c9c7bd;
+
+  --diff-added-bg: #1a2117;
+  --diff-added-fg: #8ab868;
+  --diff-removed-bg: #24161a;
+  --diff-removed-fg: #ea8da3;
+  --diff-hunk-bg: #182124;
+  --diff-hunk-fg: #78b7c4;
+
+  --card-bg: #181816;
+  --viewer-bg: #0e0e0d;
+  --menu-bg: #181816;
+  --menu-border: #35342f;
+  --hud-bg: #181816;
+  --hud-fg: #f3f2ec;
+  --hud-border: #56544d;
+  --overlay-backdrop: rgba(10, 10, 9, 0.78);
 }

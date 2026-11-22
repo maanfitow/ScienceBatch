@@ -1,7 +1,7 @@
-use std::path::Path;
-use crate::types::{CompileResponse, DiagnosticItem};
+use crate::compiler::embedded::{SAMPLE_BIB, SAMPLE_GIF, SAMPLE_PNG};
 use crate::diagnostics::typst_parser::parse_typst_diagnostics;
-use crate::compiler::embedded::{SAMPLE_PNG, SAMPLE_GIF, SAMPLE_BIB};
+use crate::types::{CompileResponse, DiagnosticItem};
+use std::path::Path;
 
 static SYSTEM_FONTS: std::sync::OnceLock<typst_embed::FontSet> = std::sync::OnceLock::new();
 

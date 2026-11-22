@@ -1,5 +1,6 @@
 pub mod embedded;
 pub mod latex;
+pub mod starter;
 pub mod typst;
 pub mod worker;
 

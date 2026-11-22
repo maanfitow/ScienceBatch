@@ -3,6 +3,8 @@ import {
   FolderTree, 
   Search, 
   ListTree, 
+  GitBranch,
+  PackageSearch,
   MoveUp, 
   MoveDown, 
   RotateCcw,
@@ -29,6 +31,17 @@ const TOOLS_CONFIG: Record<SidebarToolId, ToolMeta> = {
     label: 'Search in Files',
     icon: Search,
     shortcut: 'Ctrl+Shift+F',
+  },
+  git: {
+    id: 'git',
+    label: 'Source Control (Git)',
+    icon: GitBranch,
+    shortcut: 'Ctrl+Shift+G',
+  },
+  dependencies: {
+    id: 'dependencies',
+    label: 'Dependencies',
+    icon: PackageSearch,
   },
   outline: {
     id: 'outline',
@@ -82,8 +95,15 @@ export const SidebarActivityBar: React.FC<SidebarActivityBarProps> = ({
         setContextMenu(null);
       }
     };
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setContextMenu(null);
+    };
     window.addEventListener('mousedown', handleClickOutside);
-    return () => window.removeEventListener('mousedown', handleClickOutside);
+    window.addEventListener('keydown', handleEscape);
+    return () => {
+      window.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('keydown', handleEscape);
+    };
   }, []);
 
   // Drag & Drop handlers
@@ -206,14 +226,16 @@ export const SidebarActivityBar: React.FC<SidebarActivityBarProps> = ({
         <div 
           ref={contextMenuRef}
           className="activity-bar-context-menu"
+          role="menu"
           style={{ 
-            top: Math.min(contextMenu.y, window.innerHeight - 120), 
-            left: contextMenu.x + 8 
+            top: Math.max(8, Math.min(contextMenu.y, window.innerHeight - 84)),
+            left: Math.max(8, Math.min(contextMenu.x + 8, window.innerWidth - 220)),
           }}
         >
           {contextMenu.currentGroup === 'top' ? (
             <button 
               className="context-menu-item"
+              role="menuitem"
               onClick={() => {
                 onMoveTool(contextMenu.toolId, 'bottom');
                 setContextMenu(null);
@@ -225,6 +247,7 @@ export const SidebarActivityBar: React.FC<SidebarActivityBarProps> = ({
           ) : (
             <button 
               className="context-menu-item"
+              role="menuitem"
               onClick={() => {
                 onMoveTool(contextMenu.toolId, 'top');
                 setContextMenu(null);
@@ -239,6 +262,7 @@ export const SidebarActivityBar: React.FC<SidebarActivityBarProps> = ({
 
           <button 
             className="context-menu-item"
+            role="menuitem"
             onClick={() => {
               onResetToDefaults();
               setContextMenu(null);

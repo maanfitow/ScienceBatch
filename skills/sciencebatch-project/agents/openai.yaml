@@ -1,0 +1,4 @@
+interface:
+  display_name: "ScienceBatch Project"
+  short_description: "Inspect and create projects"
+  default_prompt: "Use $sciencebatch-project to inspect or create a ScienceBatch project."

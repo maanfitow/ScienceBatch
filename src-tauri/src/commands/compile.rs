@@ -1,54 +1,156 @@
-use std::path::Path;
-use std::process::Stdio;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Mutex;
+use std::collections::BTreeMap;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tauri::{command, AppHandle, Emitter, State};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::process::Command;
 use tokio::sync::watch;
 
-use crate::types::{CompileResponse, DiagnosticItem, ProgressPayload, WorkerRequest};
+use crate::automation::{capture_snapshot, capture_virtual_snapshot, AutomationService};
+use crate::types::{CompileResponse, ProgressPayload};
 
-#[derive(Default)]
+#[derive(Clone)]
 pub struct CompilerManager {
-    next_id: AtomicU64,
-    active_cancel_tx: Mutex<Option<watch::Sender<bool>>>,
+    next_id: Arc<AtomicU64>,
+    active: Arc<Mutex<Option<ActiveCompile>>>,
+    start_lock: Arc<tokio::sync::Mutex<()>>,
+    shutting_down: Arc<AtomicBool>,
+    shutdown_complete: Arc<AtomicBool>,
+}
+
+impl Default for CompilerManager {
+    fn default() -> Self {
+        Self {
+            next_id: Arc::new(AtomicU64::new(1)),
+            active: Arc::new(Mutex::new(None)),
+            start_lock: Arc::new(tokio::sync::Mutex::new(())),
+            shutting_down: Arc::new(AtomicBool::new(false)),
+            shutdown_complete: Arc::new(AtomicBool::new(false)),
+        }
+    }
+}
+
+struct ActiveCompile {
+    id: u64,
+    cancellation: Arc<AtomicBool>,
+    completion: watch::Sender<bool>,
+}
+
+pub(crate) struct CompileJobGuard {
+    manager: CompilerManager,
+    id: u64,
+}
+
+impl Drop for CompileJobGuard {
+    fn drop(&mut self) {
+        if let Ok(mut active) = self.manager.active.lock() {
+            if active.as_ref().is_some_and(|job| job.id == self.id) {
+                if let Some(job) = active.take() {
+                    job.cancellation.store(true, Ordering::Release);
+                    let _ = job.completion.send(true);
+                }
+            }
+        }
+    }
 }
 
 impl CompilerManager {
     pub fn new() -> Self {
-        Self {
-            next_id: AtomicU64::new(1),
-            active_cancel_tx: Mutex::new(None),
+        Self::default()
+    }
+
+    pub(crate) async fn start_compilation(
+        &self,
+    ) -> Result<(u64, Arc<AtomicBool>, CompileJobGuard), String> {
+        if self.shutting_down.load(Ordering::Acquire) {
+            return Err("operation.shutting_down: The application is shutting down".into());
         }
+        let _start_guard = self.start_lock.lock().await;
+        if self.shutting_down.load(Ordering::Acquire) {
+            return Err("operation.shutting_down: The application is shutting down".into());
+        }
+        let previous_completion = {
+            let active = self
+                .active
+                .lock()
+                .map_err(|_| "Compiler job registry is unavailable".to_string())?;
+            active.as_ref().map(|job| {
+                job.cancellation.store(true, Ordering::Release);
+                job.completion.subscribe()
+            })
+        };
+        if let Some(mut receiver) = previous_completion {
+            wait_for_completion(&mut receiver).await;
+            crate::automation::AutomationService::new()
+                .wait_for_workers_idle()
+                .await;
+        }
+        let id = self.next_id.fetch_add(1, Ordering::SeqCst);
+        let cancellation = Arc::new(AtomicBool::new(false));
+        let (completion, _) = watch::channel(false);
+        let mut active = self
+            .active
+            .lock()
+            .map_err(|_| "Compiler job registry is unavailable".to_string())?;
+        *active = Some(ActiveCompile {
+            id,
+            cancellation: cancellation.clone(),
+            completion,
+        });
+        Ok((
+            id,
+            cancellation,
+            CompileJobGuard {
+                manager: self.clone(),
+                id,
+            },
+        ))
     }
 
     pub fn cancel_active(&self) {
-        if let Ok(mut lock) = self.active_cancel_tx.lock() {
-            if let Some(tx) = lock.take() {
-                let _ = tx.send(true);
+        if let Ok(active) = self.active.lock() {
+            if let Some(job) = active.as_ref() {
+                job.cancellation.store(true, Ordering::Release);
             }
         }
     }
 
-    pub fn start_compilation(&self) -> (u64, watch::Receiver<bool>) {
+    pub(crate) fn start_shutdown(&self) {
+        self.shutting_down.store(true, Ordering::Release);
         self.cancel_active();
-        let id = self.next_id.fetch_add(1, Ordering::SeqCst);
-        let (tx, rx) = watch::channel(false);
-        if let Ok(mut lock) = self.active_cancel_tx.lock() {
-            *lock = Some(tx);
+    }
+
+    pub(crate) fn is_shutdown_complete(&self) -> bool {
+        self.shutdown_complete.load(Ordering::Acquire)
+    }
+
+    pub(crate) async fn cancel_and_wait(&self) {
+        let mut completion = {
+            let active = match self.active.lock() {
+                Ok(active) => active,
+                Err(_) => return,
+            };
+            active.as_ref().map(|job| {
+                job.cancellation.store(true, Ordering::Release);
+                job.completion.subscribe()
+            })
+        };
+        if let Some(receiver) = completion.as_mut() {
+            wait_for_completion(receiver).await;
         }
-        (id, rx)
+        crate::automation::AutomationService::new()
+            .wait_for_workers_idle()
+            .await;
+        self.shutdown_complete.store(true, Ordering::Release);
     }
 }
 
-pub async fn wait_for_cancellation(mut rx: watch::Receiver<bool>) {
+async fn wait_for_completion(receiver: &mut watch::Receiver<bool>) {
     loop {
-        let is_cancelled = *rx.borrow_and_update();
-        if is_cancelled {
+        if *receiver.borrow_and_update() {
             return;
         }
-        if rx.changed().await.is_err() {
+        if receiver.changed().await.is_err() {
             return;
         }
     }
@@ -69,7 +171,10 @@ pub async fn compile_document(
         active_engine, project_dir, main_file
     );
 
-    let (compile_id, cancel_rx) = state.start_compilation();
+    let (compile_id, cancellation, _job_guard) = state
+        .start_compilation()
+        .await
+        .map_err(|error| format!("worker.busy: {error}"))?;
 
     let _ = app_handle.emit(
         "compilation-progress",
@@ -79,160 +184,81 @@ pub async fn compile_document(
         },
     );
 
-    let exe = std::env::current_exe()
-        .map_err(|e| format!("Failed to locate binary path: {e}"))?;
-
     let _ = app_handle.emit(
         "compilation-progress",
         ProgressPayload {
             status: "Compiling".into(),
-            message: format!("Compiling {active_engine} document in RAM..."),
+            message: format!("Compiling {active_engine} document in RAM (job {compile_id})..."),
         },
     );
 
-    let mut cmd = Command::new(&exe);
-    cmd.arg("--compile-worker")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true);
-
-    if let Some(ref dir) = project_dir {
-        let p = Path::new(dir);
-        if p.is_dir() {
-            cmd.current_dir(p);
-        }
-    }
-
-    let mut child = cmd
-        .spawn()
-        .map_err(|e| format!("Failed to spawn compiler worker: {e}"))?;
-
-    let req = WorkerRequest {
-        engine: active_engine,
-        source,
-        project_dir,
-        main_file,
-    };
-    let req_json = serde_json::to_string(&req)
-        .map_err(|e| format!("Failed to serialize worker request: {e}"))?;
-
-    if let Some(mut stdin) = child.stdin.take() {
-        let cancel_rx_stdin = cancel_rx.clone();
-        tokio::select! {
-            write_res = async {
-                stdin.write_all(req_json.as_bytes()).await?;
-                stdin.flush().await?;
-                drop(stdin);
-                Ok::<(), std::io::Error>(())
-            } => {
-                if let Err(e) = write_res {
-                    let _ = child.kill().await;
-                    let _ = child.wait().await;
-                    return Err(format!("Failed to write to compiler worker: {e}"));
-                }
-            }
-            _ = wait_for_cancellation(cancel_rx_stdin) => {
-                let _ = child.kill().await;
-                let _ = child.wait().await;
-                println!("[compile_document] Compilation #{} aborted during stdin write", compile_id);
-                return Err("Compilation cancelled".into());
-            }
-        }
-    }
-
-    let mut stdout = child.stdout.take().ok_or_else(|| "Failed to capture worker stdout".to_string())?;
-    let mut stderr = child.stderr.take().ok_or_else(|| "Failed to capture worker stderr".to_string())?;
-    let mut stdout_bytes = Vec::new();
-    let mut stderr_bytes = Vec::new();
-
-    let exit_status = tokio::select! {
-        status_res = async {
-            let (out_res, err_res, wait_res) = tokio::join!(
-                stdout.read_to_end(&mut stdout_bytes),
-                stderr.read_to_end(&mut stderr_bytes),
-                child.wait()
-            );
-            out_res?;
-            err_res?;
-            wait_res
-        } => {
-            match status_res {
-                Ok(status) => status,
-                Err(e) => {
-                    let _ = child.kill().await;
-                    let _ = child.wait().await;
-                    return Err(format!("Worker execution error: {e}"));
-                }
-            }
-        }
-        _ = wait_for_cancellation(cancel_rx) => {
-            let _ = child.kill().await;
-            let _ = child.wait().await;
-            println!("[compile_document] Compilation #{} actively aborted and killed", compile_id);
-            let _ = app_handle.emit(
-                "compilation-progress",
-                ProgressPayload {
-                    status: "Cancelled".into(),
-                    message: "Compilation cancelled.".into(),
-                },
-            );
-            return Err("Compilation cancelled".into());
-        }
-    };
-
-    if exit_status.success() {
-        let resp: CompileResponse = serde_json::from_slice(&stdout_bytes)
-            .map_err(|e| format!("Failed to deserialize compiler response: {e}"))?;
-
-        if resp.success {
-            let _ = app_handle.emit(
-                "compilation-progress",
-                ProgressPayload {
-                    status: "Completed".into(),
-                    message: "PDF generated successfully.".into(),
-                },
-            );
+    let engine_name = active_engine.clone();
+    let requested_engine = engine_name.clone();
+    let main_name = main_file.unwrap_or_else(|| {
+        if engine_name.eq_ignore_ascii_case("typst") {
+            "main.typ".into()
         } else {
+            "main.tex".into()
+        }
+    });
+    let overlay = BTreeMap::from([(main_name.clone(), source.into_bytes())]);
+    let snapshot = tokio::task::spawn_blocking(move || {
+        let snapshot = if let Some(root) = project_dir {
+            capture_snapshot(PathBuf::from(root).as_path(), &main_name, &overlay)
+        } else {
+            capture_virtual_snapshot(&engine_name, &main_name, &overlay)
+        }?;
+        if !snapshot.engine.eq_ignore_ascii_case(&requested_engine) {
+            return Err(crate::automation::AutomationError::new(
+                "project.main_engine_mismatch",
+                "The selected engine does not match the workspace main file.",
+                2,
+            ));
+        }
+        Ok::<_, crate::automation::AutomationError>(snapshot)
+    })
+    .await
+    .map_err(|error| format!("worker.capture_failed: {error}"))?
+    .map_err(|error| format!("{}: {}", error.code, error.message))?;
+
+    if cancellation.load(Ordering::Acquire) {
+        return Err("operation.interrupted: Compilation was cancelled".into());
+    }
+    let result = AutomationService::new()
+        .compile_snapshot(&snapshot, Duration::from_secs(120), cancellation)
+        .await
+        .map_err(|error| format!("{}: {}", error.code, error.message));
+    match result {
+        Ok(response) => {
+            let (status, message) = if response.success {
+                ("Completed", "PDF generated successfully.")
+            } else {
+                ("Error", "Compilation reported errors.")
+            };
             let _ = app_handle.emit(
                 "compilation-progress",
                 ProgressPayload {
-                    status: "Error".into(),
-                    message: "Compilation reported errors.".into(),
+                    status: status.into(),
+                    message: message.into(),
                 },
             );
+            Ok(response)
         }
-
-        Ok(resp)
-    } else {
-        let stderr_msg = String::from_utf8_lossy(&stderr_bytes).trim().to_string();
-        let err_msg = if stderr_msg.is_empty() {
-            "Compiler worker process exited unexpectedly.".to_string()
-        } else {
-            stderr_msg
-        };
-
-        let _ = app_handle.emit(
-            "compilation-progress",
-            ProgressPayload {
-                status: "Error".into(),
-                message: err_msg.clone(),
-            },
-        );
-
-        Ok(CompileResponse {
-            pdf_bytes: Vec::new(),
-            success: false,
-            errors: vec![DiagnosticItem {
-                severity: "error".into(),
-                message: err_msg,
-                line: None,
-                file: None,
-                suggestion: Some("Check document structure or recompile.".into()),
-            }],
-            warnings: Vec::new(),
-            raw_log: String::new(),
-        })
+        Err(error) => {
+            let status = if error.starts_with("operation.interrupted:") {
+                "Cancelled"
+            } else {
+                "Error"
+            };
+            let _ = app_handle.emit(
+                "compilation-progress",
+                ProgressPayload {
+                    status: status.into(),
+                    message: error.clone(),
+                },
+            );
+            Err(error)
+        }
     }
 }
 
@@ -242,7 +268,7 @@ pub async fn cancel_compilation(
     state: State<'_, CompilerManager>,
 ) -> Result<(), String> {
     println!("[IPC cancel_compilation] Aborting active compilation");
-    state.cancel_active();
+    state.cancel_and_wait().await;
     let _ = app_handle.emit(
         "compilation-progress",
         ProgressPayload {
@@ -268,4 +294,34 @@ pub async fn save_pdf_to_file(path: String, bytes: Vec<u8>) -> Result<(), String
     tokio::fs::write(&path, &bytes)
         .await
         .map_err(|e| format!("Failed to save PDF to '{path}': {e}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CompilerManager;
+    use std::sync::atomic::Ordering;
+
+    #[tokio::test]
+    async fn cancellation_waits_for_compile_job_and_shutdown_rejects_new_jobs() {
+        let manager = CompilerManager::new();
+        let (_, cancellation, guard) = manager.start_compilation().await.unwrap();
+        let cancel_manager = manager.clone();
+        let cancel_task = tokio::spawn(async move {
+            cancel_manager.cancel_and_wait().await;
+        });
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            while !cancellation.load(Ordering::Acquire) {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("cancel request should reach the active compile");
+        drop(guard);
+        cancel_task.await.unwrap();
+
+        manager.start_shutdown();
+        assert!(manager.start_compilation().await.is_err());
+        manager.cancel_and_wait().await;
+        assert!(manager.is_shutdown_complete());
+    }
 }

@@ -1,0 +1,4 @@
+interface:
+  display_name: "ScienceBatch Bibliography"
+  short_description: "Maintain local citations and bibliography"
+  default_prompt: "Use $sciencebatch-bibliography to maintain local bibliography entries."
