@@ -52,14 +52,15 @@ export function getProjectCustomCommands(): Set<string> {
 
 /**
  * Extracts macro names from LaTeX class (.cls), style (.sty), or source files.
- * Recognizes \newcommand, \renewcommand, \providecommand, \DeclareRobustCommand,
- * LaTeX3 \(New|Renew|Provide|Declare)DocumentCommand, \def, and \let definitions.
+ * Recognizes \newcommand, \renewcommand, \providecommand, \DeclareMathOperator,
+ * \DeclareRobustCommand, LaTeX3 \(New|Renew|Provide|Declare)DocumentCommand,
+ * \def, \let, \newif, \newcounter, and \newlength definitions.
  */
 export function extractMacrosFromSource(source: string): string[] {
   const discovered = new Set<string>();
 
-  // 1. \newcommand{\foo}, \DeclareRobustCommand{\foo}, \NewDocumentCommand{\foo}
-  const bracketRegex = /\\(?:(?:re|provide)?newcommand|DeclareRobustCommand|(?:New|Renew|Provide|Declare)DocumentCommand)\*?\s*\{?\\([a-zA-Z]+)\}?/g;
+  // 1. \newcommand{\foo}, \DeclareMathOperator{\foo}, \DeclareRobustCommand{\foo}, \NewDocumentCommand{\foo}
+  const bracketRegex = /\\(?:(?:re|provide)?newcommand|DeclareMathOperator|DeclareRobustCommand|(?:New|Renew|Provide|Declare)DocumentCommand)\*?\s*\{?\\([a-zA-Z]+)\}?/g;
   let match: RegExpExecArray | null;
   while ((match = bracketRegex.exec(source)) !== null) {
     if (match[1]) discovered.add(match[1]);
@@ -78,6 +79,23 @@ export function extractMacrosFromSource(source: string): string[] {
       discovered.add(`if${match[1]}`);
       discovered.add(`${match[1]}true`);
       discovered.add(`${match[1]}false`);
+    }
+  }
+
+  // 4. \newcounter{name} -> defines \name and \thename
+  const counterRegex = /\\newcounter\s*\{([a-zA-Z]+)\}/g;
+  while ((match = counterRegex.exec(source)) !== null) {
+    if (match[1]) {
+      discovered.add(match[1]);
+      discovered.add(`the${match[1]}`);
+    }
+  }
+
+  // 5. \newlength{\name} -> defines \name
+  const lengthRegex = /\\newlength\s*\{?\\([a-zA-Z]+)\}?/g;
+  while ((match = lengthRegex.exec(source)) !== null) {
+    if (match[1]) {
+      discovered.add(match[1]);
     }
   }
 
