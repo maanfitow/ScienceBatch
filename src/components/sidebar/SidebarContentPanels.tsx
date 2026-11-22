@@ -20,13 +20,19 @@ interface SidebarContentPanelsProps {
   files: FileItem[];
   activeFilePath: string | null;
   mainFilePath: string | null;
-  onSelectFile: (path: string) => Promise<void> | void;
+  onSelectFile: (path: string, permanent?: boolean) => Promise<void> | void;
   onSetMainFile: (path: string) => void;
   onCreateFile: (parentDir: string, name: string) => void;
   onCreateFolder: (parentDir: string, name: string) => void;
   onDeleteFile: (path: string) => void;
   onViewImage?: (path: string, name: string) => void;
-  onImportFiles?: () => void;
+  onImportFiles?: (targetDir?: string) => void;
+  onRenamePath?: (oldPath: string, newName: string) => Promise<boolean> | boolean;
+  onMovePath?: (srcPath: string, destDir: string) => Promise<boolean> | boolean;
+  onDeletePath?: (path: string, isDir?: boolean) => Promise<boolean> | boolean;
+  onDuplicatePath?: (path: string, isDir?: boolean) => Promise<string | null> | void;
+  onRevealInFileManager?: (path: string) => Promise<void> | void;
+  onRefreshFiles?: () => Promise<void> | void;
   projectRoot: string | null;
   projectName: string;
   engine: 'latex' | 'typst';
@@ -58,6 +64,12 @@ export const SidebarContentPanels: React.FC<SidebarContentPanelsProps> = ({
   onDeleteFile,
   onViewImage,
   onImportFiles,
+  onRenamePath,
+  onMovePath,
+  onDeletePath,
+  onDuplicatePath,
+  onRevealInFileManager,
+  onRefreshFiles,
   projectRoot,
   projectName,
   engine,
@@ -88,6 +100,12 @@ export const SidebarContentPanels: React.FC<SidebarContentPanelsProps> = ({
               onDeleteFile={onDeleteFile}
               onViewImage={onViewImage}
               onImportFiles={onImportFiles}
+              onRenamePath={onRenamePath}
+              onMovePath={onMovePath}
+              onDeletePath={onDeletePath}
+              onDuplicatePath={onDuplicatePath}
+              onRevealInFileManager={onRevealInFileManager}
+              onRefreshFiles={onRefreshFiles}
               projectRoot={projectRoot || ''}
               projectName={projectName}
               engine={engine}

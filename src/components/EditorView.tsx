@@ -89,6 +89,7 @@ interface EditorViewProps {
   onWritingBridgeChange?: (bridge: WritingEditorBridge | null, state: WritingEditorState, releasedBridge?: WritingEditorBridge) => void;
   onAutomationBridgeChange?: (bridge: AutomationEditorBridge | null) => void;
   getDocumentRevision?: (documentId: string) => number;
+  wordWrap?: boolean;
 }
 
 export const EditorView: React.FC<EditorViewProps> = ({
@@ -109,6 +110,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
   onWritingBridgeChange,
   onAutomationBridgeChange,
   getDocumentRevision,
+  wordWrap,
 }) => {
   const { monacoTheme } = useTheme();
   const editorContainerRef = useRef<HTMLDivElement>(null);
@@ -187,6 +189,34 @@ export const EditorView: React.FC<EditorViewProps> = ({
     }
     return 14;
   });
+
+  const [storedWordWrap, setStoredWordWrap] = useState<boolean>(() => {
+    const saved = localStorage.getItem('sciencebatch:editor-word-wrap');
+    return saved === null ? true : saved === 'true';
+  });
+
+  useEffect(() => {
+    const handleWordWrapChanged = (e: Event) => {
+      const detail = (e as CustomEvent<{ wordWrap?: boolean }>).detail;
+      if (typeof detail?.wordWrap === 'boolean') {
+        setStoredWordWrap(detail.wordWrap);
+      }
+    };
+    window.addEventListener('sciencebatch:word-wrap-changed', handleWordWrapChanged);
+    return () => window.removeEventListener('sciencebatch:word-wrap-changed', handleWordWrapChanged);
+  }, []);
+
+  const effectiveWordWrap = wordWrap ?? storedWordWrap;
+  const resolvedWordWrapOption: 'on' | 'off' =
+    value.length > LARGE_DOCUMENT_INTERACTIVE_LIMIT
+      ? 'off'
+      : effectiveWordWrap
+        ? 'on'
+        : 'off';
+
+  useEffect(() => {
+    editorRef.current?.updateOptions({ wordWrap: resolvedWordWrapOption });
+  }, [resolvedWordWrapOption]);
 
   const updateFontSize = useCallback((updater: (prev: number) => number) => {
     setFontSize((prev: number) => {
@@ -628,6 +658,10 @@ export const EditorView: React.FC<EditorViewProps> = ({
     automationBridgeRef.current = null;
     if (restoreFrameRef.current !== null) cancelAnimationFrame(restoreFrameRef.current);
     if (clearViewStateFrameRef.current !== null) cancelAnimationFrame(clearViewStateFrameRef.current);
+    if (lintTimerRef.current !== null) {
+      window.clearTimeout(lintTimerRef.current);
+      lintTimerRef.current = null;
+    }
     if (jumpHighlightTimerRef.current !== null) {
       window.clearTimeout(jumpHighlightTimerRef.current);
       jumpHighlightTimerRef.current = null;
@@ -717,8 +751,39 @@ export const EditorView: React.FC<EditorViewProps> = ({
       editor.focus();
       void editor.getAction('editor.action.startFindReplaceAction')?.run();
     };
+    const handleEditorAction = (e: Event) => {
+      const editor = editorRef.current;
+      if (!editor) return;
+      const action = (e as CustomEvent<{ action?: string }>).detail?.action;
+      switch (action) {
+        case 'cut':
+          editor.focus();
+          editor.trigger('menubar', 'editor.action.clipboardCutAction', null);
+          break;
+        case 'copy':
+          editor.focus();
+          editor.trigger('menubar', 'editor.action.clipboardCopyAction', null);
+          break;
+        case 'paste':
+          editor.focus();
+          editor.trigger('menubar', 'editor.action.clipboardPasteAction', null);
+          break;
+        case 'comment':
+          editor.focus();
+          void editor.getAction('editor.action.commentLine')?.run();
+          break;
+        case 'commandPalette':
+          editor.focus();
+          void editor.getAction('editor.action.quickCommand')?.run();
+          break;
+      }
+    };
     window.addEventListener('sciencebatch:open-find-replace', handleFindReplace);
-    return () => window.removeEventListener('sciencebatch:open-find-replace', handleFindReplace);
+    window.addEventListener('sciencebatch:editor-action', handleEditorAction);
+    return () => {
+      window.removeEventListener('sciencebatch:open-find-replace', handleFindReplace);
+      window.removeEventListener('sciencebatch:editor-action', handleEditorAction);
+    };
   }, []);
 
   // Throttled Ctrl+Wheel listener for bounded code font zoom (10px to 28px)
@@ -805,7 +870,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
           insertSpaces: true,
           // A single multi-megabyte visual line is expensive to wrap and lay
           // out. Keep normal documents wrapped while large sources stay usable.
-          wordWrap: value.length <= LARGE_DOCUMENT_INTERACTIVE_LIMIT ? 'on' : 'off',
+          wordWrap: resolvedWordWrapOption,
           largeFileOptimizations: true,
           maxTokenizationLineLength: 20000,
           stopRenderingLineAfter: 10000,
