@@ -1,16 +1,39 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { FileQuestion, RefreshCw, Eye, AlertCircle } from 'lucide-react';
+import { toast } from 'sonner';
 import { DiagnosticsView } from './DiagnosticsView';
-import { DiagnosticItem } from '../types';
-import { renderPdfPagesSequentially } from './pdfRenderingHelpers';
+import { ContextMenu, ContextMenuAction } from './ContextMenu';
+import { DiagnosticItem, PdfSourceMap } from '../types';
+import {
+  createPdfLinkService,
+  getPdfModifierLabel,
+  handlePdfAnnotationLinkClickCapture,
+  renderPdfPagesSequentially,
+  trackTextLayerSelection,
+} from './pdfRenderingHelpers';
+import {
+  copySelectionInside,
+  hasSelectionInside,
+  selectAllInside,
+  shouldIgnorePdfShortcut,
+} from './pdfClipboard';
+import {
+  copyPdfImageRegionFromCanvas,
+  findPdfImageAtPoint,
+  getPageImageRects,
+  type PdfImageRect,
+} from './pdfImageHelpers';
+import { clientPointToPdfPoint, findSourceLocation, type SourceHit } from './pdfSourceMapHelpers';
 
 // Configure pdfjs worker via Vite asset URL loader
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 interface PdfViewProps {
   pdfBytes: Uint8Array | null;
+  sourceMap?: PdfSourceMap | null;
   zoom: number;
   onZoomChange?: (newZoom: number) => void;
   isCompiling: boolean;
@@ -20,12 +43,13 @@ interface PdfViewProps {
   activeTab: 'preview' | 'diagnostics';
   onTabChange: (tab: 'preview' | 'diagnostics') => void;
   onRetryCompile: () => void;
-  onSelectLine?: (line: number, file?: string | null) => void;
+  onSelectLine?: (line: number, file?: string | null, column?: number) => void;
   engine?: 'latex' | 'typst';
 }
 
 export const PdfView: React.FC<PdfViewProps> = ({
   pdfBytes,
+  sourceMap,
   zoom,
   onZoomChange,
   isCompiling,
@@ -44,11 +68,26 @@ export const PdfView: React.FC<PdfViewProps> = ({
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [isLoadingPdf, setIsLoadingPdf] = useState<boolean>(false);
   const [renderError, setRenderError] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    hasSelection: boolean;
+    hit: SourceHit | null;
+    imageHit: {
+      rect: PdfImageRect;
+      pageWidthPt: number;
+      pageHeightPt: number;
+      canvas: HTMLCanvasElement;
+    } | null;
+  } | null>(null);
 
   const pdfDocRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null);
   const loadingTaskRef = useRef<pdfjsLib.PDFDocumentLoadingTask | null>(null);
-  const renderTasksRef = useRef<pdfjsLib.RenderTask[]>([]);
+  const renderTasksRef = useRef<Array<{ cancel: () => void }>>([]);
   const renderSeqRef = useRef<number>(0);
+  const contextMenuSeqRef = useRef<number>(0);
+  const bypassLinkModifierRef = useRef<boolean>(false);
+  const textSelectionCleanupRef = useRef<(() => void) | null>(null);
   const scrollPositionRef = useRef<number>(0);
   const scrollRafRef = useRef<number | null>(null);
 
@@ -72,6 +111,7 @@ export const PdfView: React.FC<PdfViewProps> = ({
   const [isSpaceDown, setIsSpaceDown] = useState<boolean>(false);
   const [isPanning, setIsPanning] = useState<boolean>(false);
   const panStartRef = useRef<{ x: number; y: number; scrollLeft: number; scrollTop: number } | null>(null);
+  const pointerDownPosRef = useRef<{ x: number; y: number } | null>(null);
 
   // Calculate which PDF page is currently most prominent in the viewport
   const updateCurrentPage = useCallback(() => {
@@ -123,6 +163,21 @@ export const PdfView: React.FC<PdfViewProps> = ({
     }
   };
 
+  const openExternalUrl = useCallback((url: string) => {
+    void invoke('open_external_url', { url }).catch((err: unknown) => {
+      const details = err instanceof Error ? err.message : String(err);
+      toast.error('Failed to open link', { description: details });
+    });
+  }, []);
+
+  const navigateToPage = useCallback((pageNum: number) => {
+    const container = containerRef.current;
+    if (!container) return;
+    const pageEl = container.querySelector<HTMLElement>(`#pdf-page-${pageNum}`);
+    if (!pageEl) return;
+    pageEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
   // Render all pages with current zoom scale
   const renderPages = useCallback(async (pdfDoc: pdfjsLib.PDFDocumentProxy, scale: number) => {
     if (!pagesContainerRef.current) return;
@@ -145,6 +200,13 @@ export const PdfView: React.FC<PdfViewProps> = ({
     const pagesContainer = pagesContainerRef.current;
     if (!pagesContainer) return;
 
+    const linkTitlePrefix = `${getPdfModifierLabel()}+Click to follow link`;
+    const linkService = createPdfLinkService(pdfDoc, {
+      onExternalLink: openExternalUrl,
+      onInternalDestination: navigateToPage,
+      linkTitlePrefix,
+    });
+
     const outcome = await renderPdfPagesSequentially({
       pdfDoc,
       pagesContainer,
@@ -160,6 +222,16 @@ export const PdfView: React.FC<PdfViewProps> = ({
       unregisterRenderTask: (task) => {
         renderTasksRef.current = renderTasksRef.current.filter((activeTask) => activeTask !== task);
       },
+      enableTextLayer: true,
+      registerTextLayerTask: (task) => {
+        renderTasksRef.current.push(task);
+      },
+      unregisterTextLayerTask: (task) => {
+        renderTasksRef.current = renderTasksRef.current.filter((activeTask) => activeTask !== task);
+      },
+      enableAnnotationLayer: true,
+      linkService,
+      linkTitlePrefix,
     });
 
     // Check if cancelled, superseded, document changed, or zoom drifted
@@ -197,7 +269,7 @@ export const PdfView: React.FC<PdfViewProps> = ({
       }
       updateCurrentPage();
     }
-  }, [updateCurrentPage]);
+  }, [navigateToPage, openExternalUrl, updateCurrentPage]);
 
   // Load PDF document ONLY when pdfBytes change
   useEffect(() => {
@@ -341,6 +413,9 @@ export const PdfView: React.FC<PdfViewProps> = ({
   // Clean up HUD timer, scroll animation frame, and resources on unmount
   useEffect(() => {
     return () => {
+      textSelectionCleanupRef.current?.();
+      textSelectionCleanupRef.current = null;
+      contextMenuSeqRef.current++;
       if (hudTimerRef.current) {
         clearTimeout(hudTimerRef.current);
       }
@@ -470,12 +545,7 @@ export const PdfView: React.FC<PdfViewProps> = ({
   // Spacebar key tracking for pan / hand tool
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const active = document.activeElement;
-      if (active && (
-        active.tagName === 'INPUT' ||
-        active.tagName === 'TEXTAREA' ||
-        active.closest('.monaco-editor')
-      )) {
+      if (shouldIgnorePdfShortcut(document.activeElement)) {
         return;
       }
 
@@ -575,6 +645,204 @@ export const PdfView: React.FC<PdfViewProps> = ({
     };
   }, []);
 
+  const handleCopySelection = useCallback(async () => {
+    try {
+      await copySelectionInside(pagesContainerRef.current);
+    } catch (err: unknown) {
+      const details = err instanceof Error ? err.message : String(err);
+      toast.error('Copy failed', { description: details });
+    }
+  }, []);
+
+  const resolveSourceAtPoint = useCallback((
+    clientX: number,
+    clientY: number,
+    target: EventTarget | null,
+  ): { insidePage: boolean; hit: SourceHit | null } => {
+    const wrapper = (target as HTMLElement | null)?.closest<HTMLElement>('.pdf-page-wrapper') ?? null;
+    if (!wrapper) {
+      return { insidePage: false, hit: null };
+    }
+    const match = wrapper.id.match(/^pdf-page-(\d+)$/);
+    if (!match) {
+      return { insidePage: false, hit: null };
+    }
+    const pageNum = Number(match[1]);
+    if (!sourceMap) {
+      return { insidePage: true, hit: null };
+    }
+    const rect = wrapper.getBoundingClientRect();
+    const pageData = sourceMap.pages.find((entry) => entry.page === pageNum);
+    const effectiveScale =
+      pageData && pageData.widthPt > 0 && rect.width > 0
+        ? rect.width / pageData.widthPt
+        : zoomRef.current || renderedZoomRef.current;
+    const { xPt, yPt } = clientPointToPdfPoint(rect, clientX, clientY, effectiveScale);
+    return {
+      insidePage: true,
+      hit: findSourceLocation(sourceMap, pageNum, xPt, yPt),
+    };
+  }, [sourceMap]);
+
+  useEffect(() => {
+    contextMenuSeqRef.current++;
+    setContextMenu(null);
+  }, [pdfBytes, activeTab]);
+
+  // Keyboard Ctrl/Cmd+C copy and Ctrl/Cmd+A select-all support inside the PDF preview
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (activeTab !== 'preview') return;
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+      if (shouldIgnorePdfShortcut(document.activeElement)) return;
+
+      const key = e.key.toLowerCase();
+      if (key === 'c' && hasSelectionInside(pagesContainerRef.current)) {
+        e.preventDefault();
+        void handleCopySelection();
+      } else if (
+        key === 'a' &&
+        (isViewerActiveRef.current || hasSelectionInside(pagesContainerRef.current))
+      ) {
+        e.preventDefault();
+        selectAllInside(pagesContainerRef.current);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeTab, handleCopySelection]);
+
+  const handleViewerCopy = useCallback((e: React.ClipboardEvent<HTMLDivElement>) => {
+    if (hasSelectionInside(pagesContainerRef.current)) {
+      e.preventDefault();
+      void handleCopySelection();
+    }
+  }, [handleCopySelection]);
+
+  const handleViewerContextMenu = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const seq = ++contextMenuSeqRef.current;
+    const hasSelection = hasSelectionInside(pagesContainerRef.current);
+    const { hit } = resolveSourceAtPoint(e.clientX, e.clientY, e.target);
+    const menuX = e.clientX;
+    const menuY = e.clientY;
+    setContextMenu({ x: menuX, y: menuY, hasSelection, hit, imageHit: null });
+
+    const wrapper = (e.target as HTMLElement | null)?.closest<HTMLElement>('.pdf-page-wrapper') ?? null;
+    const match = wrapper?.id.match(/^pdf-page-(\d+)$/);
+    const canvas = wrapper?.querySelector<HTMLCanvasElement>('canvas') ?? null;
+    const pdfDoc = pdfDocRef.current;
+    if (!wrapper || !match || !canvas || !pdfDoc) return;
+
+    const pageNum = Number(match[1]);
+    void (async () => {
+      try {
+        const page = await pdfDoc.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 1 });
+        const rects = await getPageImageRects(page);
+        if (contextMenuSeqRef.current !== seq) return;
+        const wrapperRect = wrapper.getBoundingClientRect();
+        const effectiveScale =
+          viewport.width > 0 && wrapperRect.width > 0
+            ? wrapperRect.width / viewport.width
+            : zoomRef.current || renderedZoomRef.current;
+        const { xPt, yPt } = clientPointToPdfPoint(wrapperRect, menuX, menuY, effectiveScale);
+        const rect = findPdfImageAtPoint(rects, xPt, yPt);
+        if (!rect || contextMenuSeqRef.current !== seq) return;
+        setContextMenu((prev) =>
+          prev && prev.x === menuX && prev.y === menuY
+            ? {
+                ...prev,
+                imageHit: {
+                  rect,
+                  pageWidthPt: viewport.width,
+                  pageHeightPt: viewport.height,
+                  canvas,
+                },
+              }
+            : prev
+        );
+      } catch {
+        // Ignore image hit inspection failures
+      }
+    })();
+  }, [resolveSourceAtPoint]);
+
+  const handleViewerDoubleClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (isSpaceDownRef.current || isPanning) return;
+    const { insidePage, hit } = resolveSourceAtPoint(e.clientX, e.clientY, e.target);
+    if (!insidePage) return;
+    if (hit) {
+      onSelectLine?.(hit.line, hit.file, hit.column);
+    } else if (sourceMap) {
+      toast.info('No source mapping found at this location');
+    }
+  }, [isPanning, onSelectLine, resolveSourceAtPoint, sourceMap]);
+
+  const handleViewerClickCapture = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    handlePdfAnnotationLinkClickCapture({
+      event: e,
+      pointerDownPos: pointerDownPosRef.current,
+      isPanning,
+      isSpaceDown: isSpaceDownRef.current,
+      bypassModifierRef: bypassLinkModifierRef,
+      onOpenExternalUrl: openExternalUrl,
+      showInfoToast: (message, options) => {
+        toast.info(message, options);
+      },
+    });
+    pointerDownPosRef.current = null;
+  }, [isPanning, openExternalUrl]);
+
+  const contextMenuActions: ContextMenuAction[] = contextMenu ? [
+    {
+      label: 'Copy',
+      disabled: !contextMenu.hasSelection,
+      onSelect: () => {
+        void handleCopySelection();
+      },
+    },
+    ...(contextMenu.imageHit ? [{
+      label: 'Copy Image',
+      onSelect: () => {
+        const imageHit = contextMenu.imageHit;
+        if (!imageHit) return;
+        void copyPdfImageRegionFromCanvas(
+          imageHit.canvas,
+          imageHit.rect,
+          imageHit.pageWidthPt,
+          imageHit.pageHeightPt,
+        )
+          .then(() => {
+            toast.success('Image copied to clipboard');
+          })
+          .catch((err: unknown) => {
+            const details = err instanceof Error ? err.message : String(err);
+            toast.error('Failed to copy image', { description: details });
+          });
+      },
+    }] : []),
+    {
+      label: 'Select All',
+      disabled: numPages === 0,
+      onSelect: () => {
+        selectAllInside(pagesContainerRef.current);
+      },
+    },
+    {
+      label: 'Go to Source',
+      separatorBefore: true,
+      disabled: !contextMenu.hit,
+      onSelect: () => {
+        if (contextMenu.hit) {
+          onSelectLine?.(contextMenu.hit.line, contextMenu.hit.file, contextMenu.hit.column);
+        }
+      },
+    },
+  ] : [];
+
   const totalErrors = errors.length;
   const totalWarnings = warnings.length;
 
@@ -635,8 +903,20 @@ export const PdfView: React.FC<PdfViewProps> = ({
         ) : (
           <div
             ref={containerRef}
+            tabIndex={-1}
             className={`pdf-viewer-container ${getContainerCursorClass()}`}
             onScroll={handleScroll}
+            onMouseDown={(e) => {
+              pointerDownPosRef.current = e.button === 0 ? { x: e.clientX, y: e.clientY } : null;
+              if (e.button === 0 && !isSpaceDownRef.current) {
+                textSelectionCleanupRef.current?.();
+                textSelectionCleanupRef.current = trackTextLayerSelection(e.target);
+              }
+            }}
+            onCopy={handleViewerCopy}
+            onContextMenu={handleViewerContextMenu}
+            onDoubleClick={handleViewerDoubleClick}
+            onClickCapture={handleViewerClickCapture}
           >
             {isLoadingPdf && (
               <div className="pdf-loading-overlay">
@@ -670,6 +950,18 @@ export const PdfView: React.FC<PdfViewProps> = ({
             )}
 
             <div ref={pagesContainerRef} className="pdf-pages-wrapper" />
+
+            {contextMenu && (
+              <ContextMenu
+                x={contextMenu.x}
+                y={contextMenu.y}
+                actions={contextMenuActions}
+                onClose={() => {
+                  contextMenuSeqRef.current++;
+                  setContextMenu(null);
+                }}
+              />
+            )}
 
             {/* Floating Zoom HUD Badge */}
             <div className={`pdf-zoom-hud ${isHudVisible ? 'pdf-zoom-hud-visible' : ''}`}>

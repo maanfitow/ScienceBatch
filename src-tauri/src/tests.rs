@@ -833,3 +833,34 @@ async fn test_compiler_manager_cancellation_and_generation_ids() {
     drop(guard2);
     manager.cancel_and_wait().await;
 }
+
+#[test]
+fn test_latex_compilation_produces_synctex_source_map() {
+    let latex_source = r#"\documentclass{article}
+\begin{document}
+Hello SyncTeX world.
+\end{document}
+"#;
+    let resp = compile_latex_to_pdf(latex_source, None, Some("main.tex"));
+    assert!(
+        resp.success,
+        "LaTeX compilation failed: {:?}",
+        resp.errors.iter().map(|e| &e.message).collect::<Vec<_>>()
+    );
+    let source_map = resp
+        .source_map
+        .expect("LaTeX compilation should produce a SyncTeX source map");
+    assert!(
+        source_map.files.iter().any(|f| f == "main.tex"),
+        "Expected source_map.files to contain 'main.tex', got: {:?}",
+        source_map.files
+    );
+    assert!(
+        !source_map.pages.is_empty(),
+        "Expected source_map.pages to be non-empty"
+    );
+    assert!(
+        !source_map.pages[0].boxes.is_empty(),
+        "Expected source_map.pages[0].boxes to be non-empty"
+    );
+}

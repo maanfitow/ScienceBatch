@@ -76,8 +76,9 @@ export const App: React.FC = () => {
   const [isCloneRepositoryModalOpen, setIsCloneRepositoryModalOpen] = useState(false);
   const cloneInProgressRef = React.useRef(false);
 
-  // Diagnostics Line Navigation
-  const [jumpToLine, setJumpToLine] = useState<number | null>(null);
+  // Diagnostics & Inverse Search Line Navigation
+  const jumpSeqRef = React.useRef(0);
+  const [jumpRequest, setJumpRequest] = useState<{ line: number; column?: number; seq: number } | null>(null);
   const [writingBridge, setWritingBridge] = useState<WritingEditorBridge | null>(null);
   const [writingEditorState, setWritingEditorState] = useState<WritingEditorState>({
     language: 'latex',
@@ -790,22 +791,32 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  const handleSelectLine = async (line: number, file?: string | null) => {
-    if (file && project.projectRoot) {
-      const cleanRel = file.replace(/^\.\//, '');
-      const fullPath = file.startsWith('/') ? file : `${project.projectRoot}/${cleanRel}`;
-      if (fullPath !== project.activeFilePath) {
-        await project.selectFile(fullPath);
-        setTimeout(() => {
-          setJumpToLine(line);
-          setTimeout(() => setJumpToLine(null), 150);
-        }, 80);
+  const handleSelectLine = useCallback(async (line: number, file?: string | null, column?: number) => {
+    const currentProject = projectRef.current;
+    const dispatchJump = () => {
+      const seq = ++jumpSeqRef.current;
+      setJumpRequest({ line, ...(column && column > 0 ? { column } : {}), seq });
+    };
+
+    if (file && currentProject.projectRoot) {
+      const normalizedRoot = normalizeWorkspacePath(currentProject.projectRoot);
+      const cleanFile = file.replace(/\\/g, '/').replace(/^\.\//, '');
+      const isAbsolute = cleanFile.startsWith('/') || /^[A-Za-z]:\//.test(cleanFile);
+      const fullPath = normalizeWorkspacePath(isAbsolute ? cleanFile : `${normalizedRoot}/${cleanFile}`);
+      const activeNormalized = currentProject.activeFilePath
+        ? normalizeWorkspacePath(currentProject.activeFilePath)
+        : null;
+      const activeTab = currentProject.tabs.find((tab) => tab.id === currentProject.activeTabId);
+
+      if (fullPath !== activeNormalized || activeTab?.kind !== 'source') {
+        await currentProject.selectFile(fullPath);
+        window.setTimeout(dispatchJump, 80);
         return;
       }
     }
-    setJumpToLine(line);
-    setTimeout(() => setJumpToLine(null), 150);
-  };
+
+    dispatchJump();
+  }, []);
 
   const handleCompileCurrent = () => { void compileLiveWorkspace(); };
 
@@ -968,7 +979,7 @@ export const App: React.FC = () => {
                 onPin={project.togglePin}
                 errors={compiler.errors}
                 warnings={compiler.warnings}
-                jumpToLine={jumpToLine}
+                jumpRequest={jumpRequest}
                 engine={project.engine}
                 activeFilePath={project.activeFilePath}
                 readOnly={project.worktreeUpdateBusy}
@@ -989,6 +1000,7 @@ export const App: React.FC = () => {
             >
               <PdfView
                 pdfBytes={compiler.pdfBytes}
+                sourceMap={compiler.sourceMap}
                 zoom={compiler.zoom}
                 onZoomChange={compiler.setZoom}
                 isCompiling={compiler.isCompiling}

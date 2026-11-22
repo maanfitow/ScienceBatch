@@ -81,6 +81,44 @@ pub fn prepare_latex_source(source: &str) -> (String, usize, usize) {
     (modified, prepended_lines, inserted_lines)
 }
 
+pub fn source_lines_before_t1_insertion(source: &str) -> usize {
+    let Some(class_start) = source.find("\\documentclass") else {
+        return 0;
+    };
+    let Some(newline) = source[class_start..].find('\n') else {
+        return 0;
+    };
+    let insertion_byte = class_start + newline + 1;
+    source[..insertion_byte]
+        .bytes()
+        .filter(|byte| *byte == b'\n')
+        .count()
+}
+
+pub fn map_prepared_main_line(
+    prepared_line: usize,
+    prepended_lines: usize,
+    inserted_lines: usize,
+    insertion_after_lines: Option<usize>,
+) -> Option<usize> {
+    if prepared_line <= prepended_lines {
+        return None;
+    }
+    let mut source_line = prepared_line.checked_sub(prepended_lines)?;
+    if inserted_lines == 0 {
+        return Some(source_line);
+    }
+    let insertion_after = insertion_after_lines?;
+    if source_line <= insertion_after {
+        Some(source_line)
+    } else if source_line <= insertion_after + inserted_lines {
+        None
+    } else {
+        source_line = source_line.checked_sub(inserted_lines)?;
+        Some(source_line)
+    }
+}
+
 pub fn extract_candidate_filename(s: &str) -> Option<String> {
     let s = s.trim_start();
     if s.starts_with('"') {

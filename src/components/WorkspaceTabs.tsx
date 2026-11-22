@@ -4,10 +4,34 @@ import { X, RotateCw, FileCode2, Image as ImageIcon, FileText, Pin } from 'lucid
 import * as pdfjs from 'pdfjs-dist';
 import type { RenderTask, PDFDocumentProxy } from 'pdfjs-dist';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import { toast } from 'sonner';
 import { EditorView } from './EditorView';
 import { WorkspaceTab } from '../types/workspace';
 import { GitDiffResult } from '../types/git';
 import { ContextMenu, ContextMenuAction } from './ContextMenu';
+import {
+  createPdfLinkService,
+  getPdfModifierLabel,
+  handlePdfAnnotationLinkClickCapture,
+  renderPageAnnotationLayer,
+  renderPageTextLayer,
+  trackTextLayerSelection,
+  type TextLayerTask,
+} from './pdfRenderingHelpers';
+import {
+  copySelectionInside,
+  hasSelectionInside,
+  imageElementToClipboardImage,
+  selectAllInside,
+  shouldIgnorePdfShortcut,
+} from './pdfClipboard';
+import {
+  copyPdfImageRegionFromCanvas,
+  findPdfImageAtPoint,
+  getPageImageRects,
+  type PdfImageRect,
+} from './pdfImageHelpers';
+import { clientPointToPdfPoint } from './pdfSourceMapHelpers';
 import type { WritingEditorBridge, WritingEditorState } from '../types/writing';
 import type { AutomationEditorBridge } from '../types/automation';
 
@@ -27,7 +51,7 @@ interface WorkspaceTabsProps {
   onPin: (id: string) => void;
   errors?: React.ComponentProps<typeof EditorView>['errors'];
   warnings?: React.ComponentProps<typeof EditorView>['warnings'];
-  jumpToLine?: number | null;
+  jumpRequest?: { line: number; column?: number; seq: number } | null;
   readOnly?: boolean;
   isScratchpad?: boolean;
   canAddPackages?: boolean;
@@ -38,7 +62,7 @@ interface WorkspaceTabsProps {
 
 export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
   tabs, activeTabId, projectRoot, sourceCode, engine, activeFilePath,
-  onChange, onActivate, onPromote, onClose, onPin, errors, warnings, jumpToLine, readOnly,
+  onChange, onActivate, onPromote, onClose, onPin, errors, warnings, jumpRequest, readOnly,
   isScratchpad, canAddPackages, onWritingBridgeChange, onAutomationBridgeChange, getDocumentRevision,
 }) => {
   const activeTab = tabs.find(tab => tab.id === activeTabId) ?? null;
@@ -134,7 +158,7 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
       {contextMenu && selectedTab && <ContextMenu x={contextMenu.x} y={contextMenu.y} actions={closeActions} onClose={() => setContextMenu(null)} />}
       <div className="workspace-tab-content">
         {!activeTab ? <div className="workspace-empty">Open a source file or project asset to get started.</div> : activeTab.kind === 'source' ? (
-          <EditorView value={sourceCode} onChange={onChange} errors={errors} warnings={warnings} jumpToLine={jumpToLine} engine={engine} activeFilePath={activeFilePath} readOnly={readOnly} documentId={activeTab.id} openDocumentIds={openDocumentIds} openDocumentIdsKey={tabIds} isScratchpad={isScratchpad} canAddPackages={canAddPackages} onWritingBridgeChange={handleWritingBridgeChange} onAutomationBridgeChange={onAutomationBridgeChange} getDocumentRevision={getDocumentRevision} />
+          <EditorView value={sourceCode} onChange={onChange} errors={errors} warnings={warnings} jumpRequest={jumpRequest} engine={engine} activeFilePath={activeFilePath} readOnly={readOnly} documentId={activeTab.id} openDocumentIds={openDocumentIds} openDocumentIdsKey={tabIds} isScratchpad={isScratchpad} canAddPackages={canAddPackages} onWritingBridgeChange={handleWritingBridgeChange} onAutomationBridgeChange={onAutomationBridgeChange} getDocumentRevision={getDocumentRevision} />
         ) : activeTab.kind === 'diff' ? (
           <DiffTab path={activeTab.path || ''} projectRoot={projectRoot} repositoryRoot={activeTab.repositoryRoot || projectRoot} />
         ) : (
@@ -177,8 +201,65 @@ const AssetTab: React.FC<{ path: string }> = ({ path }) => {
   const [pdfPages, setPdfPages] = useState<number | null>(null);
   const [pageNumber, setPageNumber] = useState(1);
   const [revision, setRevision] = useState(0);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    kind: 'pdf' | 'image';
+    hasSelection: boolean;
+    imageHit: {
+      rect: PdfImageRect;
+      pageWidthPt: number;
+      pageHeightPt: number;
+      canvas: HTMLCanvasElement;
+    } | null;
+  } | null>(null);
+  const assetContainerRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const pdfPageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const textLayerRef = useRef<HTMLDivElement>(null);
+  const annotationLayerRef = useRef<HTMLDivElement>(null);
+  const activePdfPageRef = useRef<pdfjs.PDFPageProxy | null>(null);
+  const activePdfSizeRef = useRef<{ widthPt: number; heightPt: number } | null>(null);
+  const pointerDownPosRef = useRef<{ x: number; y: number } | null>(null);
+  const bypassLinkModifierRef = useRef<boolean>(false);
+  const textSelectionCleanupRef = useRef<(() => void) | null>(null);
+  const contextMenuSeqRef = useRef<number>(0);
+  const isAssetActiveRef = useRef<boolean>(false);
   const isPdf = /\.pdf$/i.test(path);
+
+  const openExternalUrl = useCallback((externalUrl: string) => {
+    void invoke('open_external_url', { url: externalUrl }).catch((err: unknown) => {
+      const details = err instanceof Error ? err.message : String(err);
+      toast.error('Failed to open link', { description: details });
+    });
+  }, []);
+
+  const handleCopySelection = useCallback(async () => {
+    try {
+      await copySelectionInside(pdfPageRef.current);
+    } catch (err: unknown) {
+      const details = err instanceof Error ? err.message : String(err);
+      toast.error('Copy failed', { description: details });
+    }
+  }, []);
+
+  const handleCopyImageElement = useCallback(async () => {
+    if (!imgRef.current) return;
+    try {
+      await imageElementToClipboardImage(imgRef.current);
+      toast.success('Image copied to clipboard');
+    } catch (err: unknown) {
+      const details = err instanceof Error ? err.message : String(err);
+      toast.error('Failed to copy image', { description: details });
+    }
+  }, []);
+
+  useEffect(() => {
+    setPageNumber(1);
+    contextMenuSeqRef.current++;
+    setContextMenu(null);
+  }, [path]);
 
   useEffect(() => {
     const refresh = () => setRevision(value => value + 1);
@@ -203,36 +284,332 @@ const AssetTab: React.FC<{ path: string }> = ({ path }) => {
     if (!isPdf || !url || !canvasRef.current) return;
     let cancelled = false;
     let renderTask: RenderTask | undefined;
+    let textLayerTask: TextLayerTask | undefined;
     let pdfDocument: PDFDocumentProxy | null = null;
     const canvas = canvasRef.current;
     const context = canvas.getContext('2d');
     if (!context) return;
+    textLayerRef.current?.replaceChildren();
+    annotationLayerRef.current?.replaceChildren();
+    activePdfPageRef.current = null;
+    activePdfSizeRef.current = null;
+    contextMenuSeqRef.current++;
+    setContextMenu(null);
+
     const draw = async () => {
       try {
         const document = await pdfjs.getDocument(url).promise;
         pdfDocument = document;
         if (cancelled) { await document.destroy(); return; }
         setPdfPages(document.numPages);
-        if (pageNumber > document.numPages) setPageNumber(document.numPages);
+        if (pageNumber > document.numPages) {
+          setPageNumber(document.numPages);
+          return;
+        }
         const page = await document.getPage(pageNumber);
         if (cancelled) return;
         const base = page.getViewport({ scale: 1 });
-        const scale = Math.min((canvas.parentElement?.clientWidth || 900) / base.width, 1.8);
+        const containerWidth = pdfPageRef.current?.parentElement?.clientWidth || 900;
+        const scale = Math.min(Math.max(containerWidth - 40, 240) / base.width, 1.8);
         const viewport = page.getViewport({ scale });
-        canvas.width = viewport.width; canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        canvas.style.width = `${viewport.width}px`;
+        canvas.style.height = `${viewport.height}px`;
         renderTask = page.render({ canvasContext: context, viewport });
         await renderTask.promise;
+        if (cancelled) return;
+
+        activePdfPageRef.current = page;
+        activePdfSizeRef.current = { widthPt: base.width, heightPt: base.height };
+
+        if (pdfPageRef.current && textLayerRef.current) {
+          try {
+            await renderPageTextLayer({
+              page,
+              wrapper: pdfPageRef.current,
+              scale,
+              isCancelled: () => cancelled,
+              targetContainer: textLayerRef.current,
+              registerTextLayerTask: (task) => {
+                textLayerTask = task;
+              },
+              unregisterTextLayerTask: () => {
+                textLayerTask = undefined;
+              },
+            });
+          } catch (textErr) {
+            if (!cancelled) {
+              console.warn('Failed to render AssetTab PDF text layer:', textErr);
+            }
+          }
+        }
+
+        if (!cancelled && pdfPageRef.current && annotationLayerRef.current) {
+          try {
+            const linkTitlePrefix = `${getPdfModifierLabel()}+Click to follow link`;
+            const linkService = createPdfLinkService(document, {
+              onExternalLink: openExternalUrl,
+              onInternalDestination: (targetPage) => setPageNumber(targetPage),
+              linkTitlePrefix,
+            });
+            await renderPageAnnotationLayer({
+              page,
+              wrapper: pdfPageRef.current,
+              scale,
+              isCancelled: () => cancelled,
+              linkService,
+              linkTitlePrefix,
+              targetContainer: annotationLayerRef.current,
+            });
+          } catch (annotationErr) {
+            if (!cancelled) {
+              console.warn('Failed to render AssetTab PDF annotation layer:', annotationErr);
+            }
+          }
+        }
+
         if (!cancelled) setLoading(false);
-      } catch (reason) { if (!cancelled) { setError(String(reason)); setLoading(false); } }
+      } catch (reason) {
+        if (!cancelled) {
+          setError(String(reason));
+          setLoading(false);
+        }
+      }
     };
     draw();
-    return () => { cancelled = true; renderTask?.cancel(); void pdfDocument?.destroy(); };
-  }, [isPdf, url, pageNumber]);
+    return () => {
+      cancelled = true;
+      textSelectionCleanupRef.current?.();
+      textSelectionCleanupRef.current = null;
+      activePdfPageRef.current = null;
+      activePdfSizeRef.current = null;
+      renderTask?.cancel();
+      textLayerTask?.cancel();
+      void pdfDocument?.destroy();
+    };
+  }, [isPdf, url, pageNumber, openExternalUrl]);
 
-  return <div className="workspace-asset">
+  useEffect(() => {
+    const handleGlobalMouseDown = (e: MouseEvent) => {
+      if (isPdf) {
+        isAssetActiveRef.current = Boolean(
+          pdfPageRef.current && pdfPageRef.current.contains(e.target as Node),
+        );
+      } else {
+        isAssetActiveRef.current = Boolean(
+          assetContainerRef.current && assetContainerRef.current.contains(e.target as Node),
+        );
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+      if (shouldIgnorePdfShortcut(document.activeElement)) return;
+
+      const key = e.key.toLowerCase();
+      if (isPdf) {
+        if (key === 'c' && hasSelectionInside(pdfPageRef.current)) {
+          e.preventDefault();
+          void handleCopySelection();
+        } else if (
+          key === 'a' &&
+          (isAssetActiveRef.current || hasSelectionInside(pdfPageRef.current))
+        ) {
+          e.preventDefault();
+          selectAllInside(textLayerRef.current);
+        }
+      } else if (key === 'c' && url && isAssetActiveRef.current && imgRef.current) {
+        e.preventDefault();
+        void handleCopyImageElement();
+      }
+    };
+    window.addEventListener('mousedown', handleGlobalMouseDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('mousedown', handleGlobalMouseDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isPdf, url, handleCopySelection, handleCopyImageElement]);
+
+  const handlePdfCopy = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    if (isPdf && hasSelectionInside(pdfPageRef.current)) {
+      e.preventDefault();
+      void handleCopySelection();
+    }
+  };
+
+  const handlePdfContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const seq = ++contextMenuSeqRef.current;
+    const menuX = e.clientX;
+    const menuY = e.clientY;
+    setContextMenu({
+      x: menuX,
+      y: menuY,
+      kind: 'pdf',
+      hasSelection: hasSelectionInside(pdfPageRef.current),
+      imageHit: null,
+    });
+
+    const page = activePdfPageRef.current;
+    const pageSize = activePdfSizeRef.current;
+    const wrapper = pdfPageRef.current;
+    const canvas = canvasRef.current;
+    if (!page || !pageSize || !wrapper || !canvas) return;
+
+    void (async () => {
+      try {
+        const rects = await getPageImageRects(page);
+        if (contextMenuSeqRef.current !== seq) return;
+        const wrapperRect = wrapper.getBoundingClientRect();
+        const effectiveScale =
+          pageSize.widthPt > 0 && wrapperRect.width > 0
+            ? wrapperRect.width / pageSize.widthPt
+            : 1;
+        const { xPt, yPt } = clientPointToPdfPoint(wrapperRect, menuX, menuY, effectiveScale);
+        const rect = findPdfImageAtPoint(rects, xPt, yPt);
+        if (!rect || contextMenuSeqRef.current !== seq) return;
+        setContextMenu((prev) =>
+          prev && prev.x === menuX && prev.y === menuY && prev.kind === 'pdf'
+            ? {
+                ...prev,
+                imageHit: {
+                  rect,
+                  pageWidthPt: pageSize.widthPt,
+                  pageHeightPt: pageSize.heightPt,
+                  canvas,
+                },
+              }
+            : prev
+        );
+      } catch {
+        // Ignore image hit inspection failures
+      }
+    })();
+  };
+
+  const handleImageContextMenu = (e: React.MouseEvent<HTMLElement>) => {
+    if (isPdf || !url) return;
+    e.preventDefault();
+    e.stopPropagation();
+    contextMenuSeqRef.current++;
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      kind: 'image',
+      hasSelection: false,
+      imageHit: null,
+    });
+  };
+
+  const handlePdfClickCapture = (e: React.MouseEvent<HTMLDivElement>) => {
+    handlePdfAnnotationLinkClickCapture({
+      event: e,
+      pointerDownPos: pointerDownPosRef.current,
+      bypassModifierRef: bypassLinkModifierRef,
+      onOpenExternalUrl: openExternalUrl,
+      showInfoToast: (message, options) => {
+        toast.info(message, options);
+      },
+    });
+    pointerDownPosRef.current = null;
+  };
+
+  const contextMenuActions: ContextMenuAction[] = contextMenu
+    ? contextMenu.kind === 'image'
+      ? [
+          {
+            label: 'Copy Image',
+            onSelect: () => {
+              void handleCopyImageElement();
+            },
+          },
+        ]
+      : [
+          {
+            label: 'Copy',
+            disabled: !contextMenu.hasSelection,
+            onSelect: () => {
+              void handleCopySelection();
+            },
+          },
+          ...(contextMenu.imageHit
+            ? [
+                {
+                  label: 'Copy Image',
+                  onSelect: () => {
+                    const imageHit = contextMenu.imageHit;
+                    if (!imageHit) return;
+                    void copyPdfImageRegionFromCanvas(
+                      imageHit.canvas,
+                      imageHit.rect,
+                      imageHit.pageWidthPt,
+                      imageHit.pageHeightPt,
+                    )
+                      .then(() => {
+                        toast.success('Image copied to clipboard');
+                      })
+                      .catch((err: unknown) => {
+                        const details = err instanceof Error ? err.message : String(err);
+                        toast.error('Failed to copy image', { description: details });
+                      });
+                  },
+                },
+              ]
+            : []),
+          {
+            label: 'Select All',
+            onSelect: () => {
+              selectAllInside(textLayerRef.current);
+            },
+          },
+        ]
+    : [];
+
+  return <div
+    ref={assetContainerRef}
+    tabIndex={-1}
+    style={{ outline: 'none' }}
+    className="workspace-asset"
+    onCopy={handlePdfCopy}
+    onContextMenu={!isPdf && url ? handleImageContextMenu : undefined}
+  >
     {loading && <div className="workspace-notice"><RotateCw className="spin" size={20} /> Loading preview…</div>}
     {error && <div className="workspace-notice">Unable to preview this file: {error}</div>}
-    {url && !isPdf && <img src={url} alt={path.split('/').pop() || 'Project image'} />}
-    {url && isPdf && <><canvas ref={canvasRef} aria-label={`PDF page ${pageNumber}`} />{pdfPages && <div className="workspace-pdf-controls"><button disabled={pageNumber <= 1} onClick={() => setPageNumber(n => n - 1)}>Previous</button><span>Page {pageNumber} of {pdfPages}</span><button disabled={pageNumber >= pdfPages} onClick={() => setPageNumber(n => n + 1)}>Next</button></div>}</>}
+    {url && !isPdf && <img ref={imgRef} src={url} alt={path.split('/').pop() || 'Project image'} />}
+    {url && isPdf && <>
+      <div
+        ref={pdfPageRef}
+        tabIndex={-1}
+        style={{ outline: 'none' }}
+        className="workspace-pdf-page"
+        onMouseDown={(e) => {
+          pointerDownPosRef.current = e.button === 0 ? { x: e.clientX, y: e.clientY } : null;
+          if (e.button === 0) {
+            textSelectionCleanupRef.current?.();
+            textSelectionCleanupRef.current = trackTextLayerSelection(e.target);
+          }
+        }}
+        onClickCapture={handlePdfClickCapture}
+        onContextMenu={handlePdfContextMenu}
+      >
+        <canvas ref={canvasRef} aria-label={`PDF page ${pageNumber}`} />
+        <div ref={textLayerRef} className="textLayer" />
+        <div ref={annotationLayerRef} className="annotationLayer" />
+      </div>
+      {pdfPages && <div className="workspace-pdf-controls"><button disabled={pageNumber <= 1} onClick={() => setPageNumber(n => n - 1)}>Previous</button><span>Page {pageNumber} of {pdfPages}</span><button disabled={pageNumber >= pdfPages} onClick={() => setPageNumber(n => n + 1)}>Next</button></div>}
+    </>}
+    {contextMenu && (
+      <ContextMenu
+        x={contextMenu.x}
+        y={contextMenu.y}
+        actions={contextMenuActions}
+        onClose={() => {
+          contextMenuSeqRef.current++;
+          setContextMenu(null);
+        }}
+      />
+    )}
   </div>;
 };

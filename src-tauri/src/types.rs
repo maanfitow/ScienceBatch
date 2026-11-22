@@ -10,6 +10,37 @@ pub struct DiagnosticItem {
     pub suggestion: Option<String>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PdfSourceBox {
+    pub x: f32,
+    pub y: f32,
+    pub w: f32,
+    pub h: f32,
+    pub file_idx: u32,
+    pub line: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub column: Option<usize>,
+    #[serde(default)]
+    pub level: u8,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PdfSourcePage {
+    pub page: usize,
+    pub width_pt: f32,
+    pub height_pt: f32,
+    pub boxes: Vec<PdfSourceBox>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PdfSourceMap {
+    pub files: Vec<String>,
+    pub pages: Vec<PdfSourcePage>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CompileResponse {
     pub pdf_bytes: Vec<u8>,
@@ -17,6 +48,8 @@ pub struct CompileResponse {
     pub errors: Vec<DiagnosticItem>,
     pub warnings: Vec<DiagnosticItem>,
     pub raw_log: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_map: Option<PdfSourceMap>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

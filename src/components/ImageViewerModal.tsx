@@ -1,9 +1,16 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { X, Image as ImageIcon, FileText, Copy, Check, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import { ContextMenu } from './ContextMenu';
+import {
+  canvasRegionToClipboardImage,
+  copyTextToClipboard,
+  imageElementToClipboardImage,
+  shouldIgnorePdfShortcut,
+} from './pdfClipboard';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
@@ -28,11 +35,61 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
   const [fileSizeBytes, setFileSizeBytes] = useState<number | null>(null);
   const [copiedLatex, setCopiedLatex] = useState(false);
   const [copiedTypst, setCopiedTypst] = useState(false);
+  const [copiedImage, setCopiedImage] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
+  const modalRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
 
   const isPdf = fileName?.toLowerCase().endsWith('.pdf') ?? false;
+
+  useEffect(() => {
+    setCopiedImage(false);
+    setContextMenu(null);
+  }, [isOpen, filePath]);
+
+  const handleCopyImage = useCallback(async () => {
+    try {
+      if (isPdf) {
+        if (!canvasRef.current || canvasRef.current.width === 0 || canvasRef.current.height === 0) {
+          throw new Error('PDF preview is not rendered yet.');
+        }
+        await canvasRegionToClipboardImage(canvasRef.current);
+      } else {
+        if (!imgRef.current) {
+          throw new Error('Image preview is not loaded yet.');
+        }
+        await imageElementToClipboardImage(imgRef.current);
+      }
+      setCopiedImage(true);
+      toast.success('Image copied to clipboard');
+      setTimeout(() => setCopiedImage(false), 2000);
+    } catch (err: unknown) {
+      const details = err instanceof Error ? err.message : String(err);
+      toast.error('Failed to copy image', { description: details });
+    }
+  }, [isPdf]);
+
+  useEffect(() => {
+    if (!isOpen || !filePath) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+      if (e.key.toLowerCase() !== 'c') return;
+      if (shouldIgnorePdfShortcut(document.activeElement)) return;
+      const selection = window.getSelection();
+      if (selection && !selection.isCollapsed && selection.toString().length > 0) return;
+      if (loading || (!isPdf && !imageUrl)) return;
+
+      e.preventDefault();
+      void handleCopyImage();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, filePath, loading, isPdf, imageUrl, handleCopyImage]);
 
   useEffect(() => {
     if (!isOpen || !filePath) {
@@ -132,7 +189,7 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
 
   const handleCopyLatex = async () => {
     try {
-      await navigator.clipboard.writeText(latexSnippet);
+      await copyTextToClipboard(latexSnippet);
       setCopiedLatex(true);
       toast.success('Copied LaTeX figure snippet to clipboard');
       setTimeout(() => setCopiedLatex(false), 2000);
@@ -143,13 +200,20 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
 
   const handleCopyTypst = async () => {
     try {
-      await navigator.clipboard.writeText(typstSnippet);
+      await copyTextToClipboard(typstSnippet);
       setCopiedTypst(true);
       toast.success('Copied Typst figure snippet to clipboard');
       setTimeout(() => setCopiedTypst(false), 2000);
     } catch {
       toast.error('Failed to copy to clipboard');
     }
+  };
+
+  const handleStageContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (loading || (!isPdf && !imageUrl)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ x: e.clientX, y: e.clientY });
   };
 
   const formatSize = (bytes: number) => {
@@ -160,7 +224,7 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-container image-viewer-modal" onClick={(e) => e.stopPropagation()}>
+      <div ref={modalRef} className="modal-container image-viewer-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-title-group">
             {isPdf ? (
@@ -179,13 +243,14 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
         </div>
 
         <div className="modal-body image-viewer-body">
-          <div className="image-preview-stage">
+          <div className="image-preview-stage" onContextMenu={handleStageContextMenu}>
             {loading && <div className="image-loading">Loading preview...</div>}
             {isPdf ? (
               <canvas ref={canvasRef} className="project-image-view" />
             ) : (
               imageUrl && (
                 <img
+                  ref={imgRef}
                   src={imageUrl}
                   alt={fileName || 'Project Image'}
                   className="project-image-view"
@@ -213,6 +278,14 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
             </div>
 
             <div className="image-actions">
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={handleCopyImage}
+                disabled={loading || (!isPdf && !imageUrl)}
+              >
+                {copiedImage ? <Check size={14} className="icon-success" /> : <Copy size={14} />}
+                <span>{copiedImage ? 'Copied Image' : 'Copy Image'}</span>
+              </button>
               <button className="btn btn-secondary btn-sm" onClick={handleCopyLatex}>
                 {copiedLatex ? <Check size={14} className="icon-success" /> : <Copy size={14} />}
                 <span>Copy LaTeX Snippet</span>
@@ -224,6 +297,21 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
             </div>
           </div>
         </div>
+        {contextMenu && (
+          <ContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            actions={[
+              {
+                label: 'Copy Image',
+                onSelect: () => {
+                  void handleCopyImage();
+                },
+              },
+            ]}
+            onClose={() => setContextMenu(null)}
+          />
+        )}
       </div>
     </div>
   );

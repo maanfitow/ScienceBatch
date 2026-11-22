@@ -48,6 +48,8 @@ struct WorkerResponse {
     warnings: Vec<DiagnosticItem>,
     #[serde(default)]
     raw_log: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_map: Option<crate::types::PdfSourceMap>,
     #[serde(default)]
     worker_error: Option<WorkerFailure>,
 }
@@ -427,6 +429,7 @@ async fn run_worker_process_with_limits(
         errors: response.errors,
         warnings: response.warnings,
         raw_log: response.raw_log,
+        source_map: response.source_map,
     })
 }
 
@@ -576,6 +579,7 @@ fn validate_worker_failure(
         || !response.errors.is_empty()
         || !response.warnings.is_empty()
         || !response.raw_log.is_empty()
+        || response.source_map.is_some()
     {
         return Err(AutomationError::new(
             "worker.protocol_invalid",
@@ -736,6 +740,7 @@ pub fn run_automation_worker() {
                 errors: vec![],
                 warnings: vec![],
                 raw_log: String::new(),
+                source_map: None,
                 worker_error: Some(bounded_worker_failure(error)),
             });
             return;
@@ -756,6 +761,7 @@ pub fn run_automation_worker() {
         errors: response.errors,
         warnings: response.warnings,
         raw_log: response.raw_log,
+        source_map: response.source_map,
         worker_error: None,
     };
     emit_worker_response(outgoing);
@@ -828,6 +834,8 @@ struct OutgoingResponse {
     errors: Vec<DiagnosticItem>,
     warnings: Vec<DiagnosticItem>,
     raw_log: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_map: Option<crate::types::PdfSourceMap>,
     worker_error: Option<WorkerFailure>,
 }
 
@@ -961,6 +969,64 @@ mod supervisor_tests {
             error.diagnostics[0].message,
             "The document class could not be loaded."
         );
+    }
+
+    #[tokio::test]
+    async fn worker_source_map_roundtrip_preserves_boxes_and_rejects_failure_with_source_map() {
+        let source_map = crate::types::PdfSourceMap {
+            files: vec!["main.tex".to_string()],
+            pages: vec![crate::types::PdfSourcePage {
+                page: 1,
+                width_pt: 612.0,
+                height_pt: 792.0,
+                boxes: vec![crate::types::PdfSourceBox {
+                    x: 72.0,
+                    y: 72.0,
+                    w: 120.0,
+                    h: 12.0,
+                    file_idx: 0,
+                    line: 3,
+                    column: Some(5),
+                    level: 0,
+                }],
+            }],
+        };
+
+        let outgoing = OutgoingResponse {
+            schema_version: 1,
+            success: true,
+            pdf_base64: base64::engine::general_purpose::STANDARD.encode(b"%PDF-1.7\n%%EOF\n"),
+            errors: vec![],
+            warnings: vec![],
+            raw_log: "ok".to_string(),
+            source_map: Some(source_map.clone()),
+            worker_error: None,
+        };
+        let encoded = serde_json::to_string(&outgoing).unwrap();
+        let decoded: WorkerResponse = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(decoded.source_map.as_ref(), Some(&source_map));
+
+        let compiled = run_fake_response(&encoded).await.unwrap();
+        assert!(compiled.success);
+        assert_eq!(compiled.source_map, Some(source_map));
+
+        let contradictory = serde_json::json!({
+            "schema_version": 1,
+            "success": false,
+            "source_map": {
+                "files": ["main.tex"],
+                "pages": []
+            },
+            "worker_error": {
+                "code": "internal.unexpected",
+                "message": "bad",
+                "exit_code": 4
+            }
+        });
+        let err = run_fake_response(&contradictory.to_string())
+            .await
+            .unwrap_err();
+        assert_eq!(err.code, "worker.protocol_invalid");
     }
 
     #[test]

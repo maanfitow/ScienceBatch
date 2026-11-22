@@ -76,6 +76,7 @@ interface EditorViewProps {
   onChange: (value: string) => void;
   errors?: DiagnosticItem[];
   warnings?: DiagnosticItem[];
+  jumpRequest?: { line: number; column?: number; seq: number } | null;
   jumpToLine?: number | null;
   engine?: 'latex' | 'typst';
   activeFilePath?: string | null;
@@ -95,6 +96,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
   onChange,
   errors = [],
   warnings = [],
+  jumpRequest,
   jumpToLine,
   engine = 'latex',
   activeFilePath,
@@ -129,6 +131,11 @@ export const EditorView: React.FC<EditorViewProps> = ({
   const writingBridgeRef = useRef<WritingEditorBridge | null>(null);
   const automationBridgeRef = useRef<AutomationEditorBridge | null>(null);
   const clipboardCommandRef = useRef<monacoType.IDisposable | null>(null);
+  const jumpHighlightCollectionRef = useRef<monacoType.editor.IEditorDecorationsCollection | null>(null);
+  const jumpHighlightTimerRef = useRef<number | null>(null);
+  const lastAppliedJumpSeqRef = useRef<number>(0);
+  const latestJumpRequestRef = useRef(jumpRequest);
+  latestJumpRequestRef.current = jumpRequest;
   const writingListenersRef = useRef<monacoType.IDisposable[]>([]);
   const writingStateRef = useRef<WritingEditorState>({ language: engine, editable: false, available: false, reason: 'Writing tools are unavailable.', source: value, cursorOffset: 0, canAddPackages: false });
   const writingPropsRef = useRef({ engine, activeFilePath, canAddPackages, onWritingBridgeChange, onAutomationBridgeChange, getDocumentRevision, documentId, isScratchpad });
@@ -306,14 +313,62 @@ export const EditorView: React.FC<EditorViewProps> = ({
     }
   }, [engine]);
 
-  // Jump to specific line when user clicks an error card badge
-  useEffect(() => {
-    if (jumpToLine && editorRef.current) {
-      editorRef.current.revealLineInCenter(jumpToLine);
-      editorRef.current.setPosition({ lineNumber: jumpToLine, column: 1 });
-      editorRef.current.focus();
+  const applyJumpToEditor = useCallback((
+    editor: monacoType.editor.IStandaloneCodeEditor,
+    targetLine: number,
+    targetColumn = 1,
+  ) => {
+    const model = editor.getModel();
+    if (!model || model.isDisposed()) return;
+
+    const lineCount = Math.max(1, model.getLineCount());
+    const lineNumber = Math.min(Math.max(1, Math.floor(targetLine)), lineCount);
+    const maxColumn = Math.max(1, model.getLineMaxColumn(lineNumber));
+    const column = Math.min(Math.max(1, Math.floor(targetColumn)), maxColumn);
+
+    editor.revealLineInCenter(lineNumber);
+    editor.setPosition({ lineNumber, column });
+    editor.focus();
+
+    if (jumpHighlightTimerRef.current !== null) {
+      window.clearTimeout(jumpHighlightTimerRef.current);
+      jumpHighlightTimerRef.current = null;
     }
-  }, [jumpToLine]);
+    jumpHighlightCollectionRef.current?.clear();
+    jumpHighlightCollectionRef.current = editor.createDecorationsCollection([
+      {
+        range: {
+          startLineNumber: lineNumber,
+          startColumn: 1,
+          endLineNumber: lineNumber,
+          endColumn: maxColumn,
+        },
+        options: {
+          isWholeLine: true,
+          className: 'monaco-inverse-search-highlight',
+        },
+      },
+    ]);
+
+    jumpHighlightTimerRef.current = window.setTimeout(() => {
+      jumpHighlightCollectionRef.current?.clear();
+      jumpHighlightTimerRef.current = null;
+    }, 1200);
+  }, []);
+
+  // Jump to specific line/column when requested by diagnostics, outline, search, or PDF inverse search
+  useEffect(() => {
+    if (!editorRef.current) return;
+    if (jumpRequest) {
+      if (jumpRequest.seq === lastAppliedJumpSeqRef.current) return;
+      lastAppliedJumpSeqRef.current = jumpRequest.seq;
+      applyJumpToEditor(editorRef.current, jumpRequest.line, jumpRequest.column ?? 1);
+      return;
+    }
+    if (jumpToLine) {
+      applyJumpToEditor(editorRef.current, jumpToLine, 1);
+    }
+  }, [jumpRequest, jumpToLine, applyJumpToEditor]);
 
   const editorLanguage = activeFilePath?.endsWith('.bib')
     ? 'bibtex'
@@ -515,7 +570,13 @@ export const EditorView: React.FC<EditorViewProps> = ({
       setIsEditorActive(true);
     });
 
-    editor.focus();
+    const pendingJump = latestJumpRequestRef.current;
+    if (pendingJump && pendingJump.seq !== lastAppliedJumpSeqRef.current) {
+      lastAppliedJumpSeqRef.current = pendingJump.seq;
+      applyJumpToEditor(editor, pendingJump.line, pendingJump.column ?? 1);
+    } else {
+      editor.focus();
+    }
   };
 
   // Keep Monaco model language in sync when editorLanguage changes (e.g. engine switch or file selection)
@@ -567,6 +628,12 @@ export const EditorView: React.FC<EditorViewProps> = ({
     automationBridgeRef.current = null;
     if (restoreFrameRef.current !== null) cancelAnimationFrame(restoreFrameRef.current);
     if (clearViewStateFrameRef.current !== null) cancelAnimationFrame(clearViewStateFrameRef.current);
+    if (jumpHighlightTimerRef.current !== null) {
+      window.clearTimeout(jumpHighlightTimerRef.current);
+      jumpHighlightTimerRef.current = null;
+    }
+    jumpHighlightCollectionRef.current?.clear();
+    jumpHighlightCollectionRef.current = null;
     const monaco = monacoRef.current;
     if (monaco) {
       for (const uri of modelUrisRef.current.values()) monaco.editor.getModel(uri)?.dispose();

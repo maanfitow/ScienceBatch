@@ -138,6 +138,7 @@ pub fn compile_typst_to_pdf(
                 }],
                 warnings: Vec::new(),
                 raw_log: format!("Typst Environment Error: {err}"),
+                source_map: None,
             };
         }
     };
@@ -173,17 +174,19 @@ pub fn compile_typst_to_pdf(
                 }],
                 warnings: Vec::new(),
                 raw_log: format!("Typst Project Error: {err}"),
+                source_map: None,
             };
         }
     };
 
-    match typst_embed::render_pdf(&project, &env) {
-        Ok(artifact) => CompileResponse {
-            pdf_bytes: artifact.bytes().to_vec(),
+    match crate::compiler::typst_sourcemap::compile_and_extract_typst(&project, &env) {
+        Ok((pdf_bytes, source_map)) => CompileResponse {
+            pdf_bytes,
             success: true,
             errors: Vec::new(),
             warnings: Vec::new(),
             raw_log: "Typst document compiled successfully in RAM VFS.".to_string(),
+            source_map: Some(source_map),
         },
         Err(err) => {
             let (errors, raw_log) = parse_typst_diagnostics(err, main_file);
@@ -193,6 +196,7 @@ pub fn compile_typst_to_pdf(
                 errors,
                 warnings: Vec::new(),
                 raw_log,
+                source_map: None,
             }
         }
     }

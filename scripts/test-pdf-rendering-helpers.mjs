@@ -1,5 +1,9 @@
 import assert from 'node:assert';
-import { renderPdfPagesSequentially } from '../src/components/pdfRenderingHelpers.ts';
+import {
+  createPdfLinkService,
+  renderPageAnnotationLayer,
+  renderPdfPagesSequentially,
+} from '../src/components/pdfRenderingHelpers.ts';
 
 class MockCanvas {
   width = 0;
@@ -27,19 +31,51 @@ class MockCanvas {
   }
 }
 
+class MockStyle {
+  transform = '';
+  width = '';
+  height = '';
+  position = '';
+  zIndex = '';
+  props = {};
+
+  setProperty(name, value) {
+    this.props[name] = value;
+  }
+}
+
 class MockElement {
   id = '';
   className = '';
+  tagName = 'div';
+  href = '';
+  rel = '';
+  title = '';
+  dataset = {};
   children = [];
   parent = null;
-  style = { transform: '', width: '', height: '', position: '', zIndex: '' };
+  style = new MockStyle();
+
+  constructor(tagName = 'div') {
+    this.tagName = tagName.toLowerCase();
+  }
+
+  get childNodes() {
+    return this.children;
+  }
 
   get ownerDocument() {
     return mockDocument;
   }
 
+  removeAttribute(name) {
+    if (name === 'href') this.href = '';
+  }
+
   querySelector(selector) {
     if (selector === 'canvas') return this.children.find((item) => item instanceof MockCanvas) ?? null;
+    if (selector === '.textLayer') return this.children.find((item) => item.className === 'textLayer') ?? null;
+    if (selector === '.annotationLayer') return this.children.find((item) => item.className === 'annotationLayer') ?? null;
     if (selector.startsWith('#')) return this.children.find((item) => item.id === selector.slice(1)) ?? null;
     return null;
   }
@@ -47,6 +83,19 @@ class MockElement {
   querySelectorAll(selector) {
     if (selector === '.pdf-page-wrapper') {
       return this.children.filter((item) => item.className === 'pdf-page-wrapper');
+    }
+    if (selector === 'a[href^="#"]') {
+      const results = [];
+      const visit = (node) => {
+        for (const child of node.children ?? []) {
+          if (child.tagName === 'a' && typeof child.href === 'string' && child.href.startsWith('#')) {
+            results.push(child);
+          }
+          visit(child);
+        }
+      };
+      visit(this);
+      return results;
     }
     return [];
   }
@@ -68,6 +117,12 @@ class MockElement {
     return previous;
   }
 
+  replaceChildren(...nodes) {
+    for (const child of this.children) child.parent = null;
+    this.children = [];
+    for (const node of nodes) this.appendChild(node);
+  }
+
   remove() {
     if (!this.parent) return;
     const index = this.parent.children.indexOf(this);
@@ -78,7 +133,7 @@ class MockElement {
 
 const mockDocument = {
   createElement(tag) {
-    return tag === 'canvas' ? new MockCanvas() : new MockElement();
+    return tag === 'canvas' ? new MockCanvas() : new MockElement(tag);
   },
 };
 
@@ -98,7 +153,10 @@ function createMockPdfDocument({
       if (pageNum < 1 || pageNum > numPages) throw new Error(`Page ${pageNum} out of bounds`);
       return {
         getViewport({ scale }) {
-          return { width: baseWidth * scale, height: baseHeight * scale };
+          return { width: baseWidth * scale, height: baseHeight * scale, scale };
+        },
+        streamTextContent() {
+          return { pageNum };
         },
         render({ canvasContext, viewport }) {
           const canvas = canvasContext.canvas;
@@ -146,6 +204,10 @@ async function render(container, pdfDoc, options = {}) {
     registerRenderTask: options.registerRenderTask,
     unregisterRenderTask: options.unregisterRenderTask,
     createCanvas: options.createCanvas ?? (() => new MockCanvas()),
+    enableTextLayer: options.enableTextLayer,
+    registerTextLayerTask: options.registerTextLayerTask,
+    unregisterTextLayerTask: options.unregisterTextLayerTask,
+    createTextLayer: options.createTextLayer,
   });
 }
 
@@ -264,6 +326,202 @@ async function runAllTests() {
     assert.deepStrictEqual(starts, [1, 2, 3]);
     assert.strictEqual(outcome.renderedPages, 3);
     console.log('  [PASS] Pages commit sequentially before rendering proceeds.');
+  }
+
+  // enableTextLayer builds a staging .textLayer at logical scale, replaces prior layers, and preserves prior layers on cancel.
+  {
+    const container = new MockElement();
+    const doc = createMockPdfDocument({ numPages: 1, renderDelayMs: 2 });
+    const createMockTextLayer = ({ delayMs = 5, onStart = () => {} } = {}) => {
+      return ({ container: textContainer, viewport }) => {
+        onStart(textContainer, viewport);
+        let aborted = false;
+        let rejectFn;
+        return {
+          render() {
+            return new Promise((resolve, reject) => {
+              rejectFn = reject;
+              setTimeout(() => {
+                if (aborted) {
+                  const err = new Error('TextLayer task cancelled.');
+                  err.name = 'AbortException';
+                  reject(err);
+                } else {
+                  const span = mockDocument.createElement('span');
+                  span.id = `scale-${viewport.scale}`;
+                  textContainer.appendChild(span);
+                  resolve();
+                }
+              }, delayMs);
+            });
+          },
+          cancel() {
+            if (aborted) return;
+            aborted = true;
+            const err = new Error('TextLayer task cancelled.');
+            err.name = 'AbortException';
+            rejectFn?.(err);
+          },
+        };
+      };
+    };
+
+    const first = await render(container, doc, {
+      scale: 1,
+      pixelRatio: 2,
+      enableTextLayer: true,
+      createTextLayer: createMockTextLayer({
+        onStart(_textContainer, viewport) {
+          assert.strictEqual(viewport.scale, 1, 'TextLayer must use logical CSS scale, not pixelRatio');
+        },
+      }),
+    });
+    assert(first.success);
+    const wrapper = wrappers(container)[0];
+    assert.strictEqual(wrapper.style.props['--scale-factor'], '1');
+    const initialTextLayer = wrapper.querySelector('.textLayer');
+    assert(initialTextLayer, 'Initial textLayer should be attached');
+    assert.strictEqual(initialTextLayer.style.zIndex, '2');
+    assert.strictEqual(initialTextLayer.children[0].id, 'scale-1');
+
+    // Re-render at zoom 1.5 and cancel mid-textLayer: prior .textLayer must remain intact
+    let activeTextTask = null;
+    let textRegisteredResolve;
+    const textRegistered = new Promise((resolve) => {
+      textRegisteredResolve = resolve;
+    });
+    let cancelled = false;
+    const cancelledZoom = render(container, doc, {
+      scale: 1.5,
+      pixelRatio: 2,
+      enableTextLayer: true,
+      isCancelled: () => cancelled,
+      registerTextLayerTask(task) {
+        activeTextTask = task;
+        textRegisteredResolve();
+      },
+      createTextLayer: createMockTextLayer({ delayMs: 25 }),
+    });
+    await textRegistered;
+    cancelled = true;
+    activeTextTask.cancel();
+    const cancelledOutcome = await cancelledZoom;
+    assert.strictEqual(cancelledOutcome.cancelled, true);
+    assert.strictEqual(wrapper.querySelector('.textLayer'), initialTextLayer);
+
+    // Complete zoom 2.0: replaces prior .textLayer and keeps exactly one committed canvas
+    const canvasBefore = wrapper.querySelector('canvas');
+    const second = await render(container, doc, {
+      scale: 2,
+      pixelRatio: 2,
+      enableTextLayer: true,
+      createTextLayer: createMockTextLayer(),
+    });
+    assert(second.success);
+    const updatedTextLayer = wrapper.querySelector('.textLayer');
+    const updatedCanvas = wrapper.querySelector('canvas');
+    assert.notStrictEqual(updatedTextLayer, initialTextLayer);
+    assert.strictEqual(updatedTextLayer.children[0].id, 'scale-2');
+    assert.strictEqual(wrapper.style.props['--scale-factor'], '2');
+    assert(updatedCanvas && updatedCanvas !== canvasBefore);
+    assert.strictEqual(updatedCanvas._scale, 4);
+    assert.strictEqual(wrapper.children.length, 2);
+    console.log('  [PASS] TextLayer renders at logical scale, replaces cleanly, and keeps single committed canvas.');
+  }
+
+  // createPdfLinkService validates external URLs and resolves internal destinations.
+  {
+    const jumpedPages = [];
+    const mockPdfDoc = {
+      numPages: 5,
+      async getDestination(name) {
+        return name === 'sec:intro' ? [{ num: 42 }, { name: 'XYZ' }] : null;
+      },
+      async getPageIndex(ref) {
+        return ref.num === 42 ? 2 : 0;
+      },
+    };
+    const linkService = createPdfLinkService(mockPdfDoc, {
+      onInternalDestination: (pageNum) => jumpedPages.push(pageNum),
+      linkTitlePrefix: 'Ctrl+Click to follow link',
+    });
+
+    const validAnchor = mockDocument.createElement('a');
+    linkService.addLinkAttributes(validAnchor, 'https://example.org/paper');
+    assert.strictEqual(validAnchor.href, 'https://example.org/paper');
+    assert.strictEqual(validAnchor.rel, 'noopener noreferrer');
+    assert.strictEqual(validAnchor.dataset.pdfExternalUrl, 'https://example.org/paper');
+    assert.strictEqual(validAnchor.title, 'Ctrl+Click to follow link (https://example.org/paper)');
+
+    const blockedAnchor = mockDocument.createElement('a');
+    linkService.addLinkAttributes(blockedAnchor, 'javascript:alert(1)');
+    assert.strictEqual(blockedAnchor.href, '');
+    assert.strictEqual(blockedAnchor.dataset.pdfExternalUrl, undefined);
+
+    await linkService.goToDestination('sec:intro');
+    await linkService.goToDestination([3, { name: 'Fit' }]);
+    linkService.goToPage(5);
+    assert.deepStrictEqual(jumpedPages, [3, 4, 5]);
+    console.log('  [PASS] createPdfLinkService filters unsafe URLs and resolves internal destinations.');
+  }
+
+  // renderPageAnnotationLayer renders links at logical scale, sets internal titles, replaces and cleans up.
+  {
+    const wrapper = new MockElement('div');
+    wrapper.className = 'pdf-page-wrapper';
+    let currentAnnotations = [{ id: '1R', subtype: 'Link' }];
+    const page = {
+      getViewport({ scale }) {
+        return { width: 500 * scale, height: 700 * scale, scale };
+      },
+      async getAnnotations() {
+        return currentAnnotations;
+      },
+    };
+    const linkService = createPdfLinkService({ numPages: 2 }, {
+      onInternalDestination: () => {},
+      linkTitlePrefix: 'Ctrl+Click to follow link',
+    });
+
+    const createMockAnnotationLayer = () => ({
+      async render({ div }) {
+        const section = mockDocument.createElement('section');
+        const internalLink = mockDocument.createElement('a');
+        internalLink.href = '#sec1';
+        section.appendChild(internalLink);
+        div.appendChild(section);
+      },
+    });
+
+    const first = await renderPageAnnotationLayer({
+      page,
+      wrapper,
+      scale: 1.5,
+      isCancelled: () => false,
+      linkService,
+      linkTitlePrefix: 'Ctrl+Click to follow link',
+      createAnnotationLayer: createMockAnnotationLayer,
+    });
+    assert.strictEqual(first.cancelled, false);
+    const layer1 = wrapper.querySelector('.annotationLayer');
+    assert(layer1, 'AnnotationLayer should be attached');
+    assert.strictEqual(layer1.style.zIndex, '3');
+    assert.strictEqual(layer1.style.props['--scale-factor'], '1.5');
+    assert.strictEqual(layer1.querySelectorAll('a[href^="#"]')[0].title, 'Ctrl+Click to follow link');
+
+    // Empty annotations removes stale .annotationLayer
+    currentAnnotations = [];
+    const second = await renderPageAnnotationLayer({
+      page,
+      wrapper,
+      scale: 1.5,
+      isCancelled: () => false,
+      linkService,
+      createAnnotationLayer: createMockAnnotationLayer,
+    });
+    assert.strictEqual(second.cancelled, false);
+    assert.strictEqual(wrapper.querySelector('.annotationLayer'), null);
+    console.log('  [PASS] renderPageAnnotationLayer attaches z-index 3 layer, sets internal link titles, and removes stale layers.');
   }
 
   console.log('=== All PDF rendering helper tests passed ===');
