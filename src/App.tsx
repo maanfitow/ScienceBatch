@@ -953,7 +953,7 @@ export const App: React.FC = () => {
         />
       ) : (
         <main className="workspace-container">
-          {/* JetBrains Left Activity Icon Bar */}
+          {/* Workspace Left Activity Icon Bar */}
           {project.projectRoot && (
             <SidebarActivityBar
               topTools={sidebar.state.topTools}

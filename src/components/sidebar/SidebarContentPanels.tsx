@@ -183,7 +183,7 @@ export const SidebarContentPanels: React.FC<SidebarContentPanelsProps> = ({
   };
 
   return (
-    <div className="jetbrains-sidebar-panels">
+    <div className="workspace-sidebar-panels">
       {isSplit && activeTopTool && activeBottomTool ? (
         <PanelGroup
           direction="vertical"

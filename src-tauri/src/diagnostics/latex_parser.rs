@@ -56,8 +56,8 @@ pub fn prepare_latex_source(source: &str) -> (String, usize, usize) {
         modified = format!("{pass_backend}{modified}");
     }
 
-    // 4. Resolve Cochineal & Cabin font loading for XeTeX/Tectonic (Overleaf compatibility)
-    // Overleaf uses system-wide fontconfig font caches. In Tectonic VFS, OpenType fonts in the bundle
+    // 4. Resolve Cochineal & Cabin font loading for XeTeX/Tectonic (XeTeX/Tectonic VFS compatibility)
+    // Desktop cloud TeX editors often rely on system-wide fontconfig font caches. In Tectonic VFS, OpenType fonts in the bundle
     // must be referenced by filename to bypass fontconfig.
     if modified.contains("{cochineal}") {
         if let Some(idx) = modified.find("{cochineal}") {

@@ -994,7 +994,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             <button
               type="button"
               className="menu-dropdown-item"
-              onClick={() => { void openExternalUrl('https://www.overleaf.com/learn'); closeMenu(); }}
+              onClick={() => { void openExternalUrl('https://www.latex-project.org/help/documentation/'); closeMenu(); }}
             >
               <div className="menu-item-left">
                 <span className="menu-item-icon" aria-hidden="true">

@@ -920,7 +920,7 @@ export const PdfView: React.FC<PdfViewProps> = ({
 
   return (
     <div className="right-panel-wrapper">
-      {/* Overleaf-Style Top Tab Bar */}
+      {/* Right Panel Top Tab Bar */}
       <div className="right-panel-tabs">
         <button
           className={`right-tab-btn ${activeTab === 'preview' ? 'right-tab-active' : ''}`}

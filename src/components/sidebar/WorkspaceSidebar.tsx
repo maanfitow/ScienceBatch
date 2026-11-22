@@ -10,7 +10,7 @@ import { GitStatusView } from './GitStatusView';
 import { DependenciesPanel } from './DependenciesPanel';
 import type { useProjectResources } from '../../hooks/useProjectResources';
 
-interface JetBrainsSidebarProps {
+interface WorkspaceSidebarProps {
   // FileTree Props
   files: FileItem[];
   activeFilePath: string | null;
@@ -50,7 +50,7 @@ interface JetBrainsSidebarProps {
   resources?: ReturnType<typeof useProjectResources>;
 }
 
-export const JetBrainsSidebar: React.FC<JetBrainsSidebarProps> = ({
+export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   files,
   activeFilePath,
   mainFilePath,
@@ -177,7 +177,7 @@ export const JetBrainsSidebar: React.FC<JetBrainsSidebarProps> = ({
   };
 
   return (
-    <div className="jetbrains-sidebar-root">
+    <div className="workspace-sidebar-root">
       {/* 1. Left Narrow Activity Icon Bar */}
       <SidebarActivityBar
         topTools={topTools}
@@ -192,7 +192,7 @@ export const JetBrainsSidebar: React.FC<JetBrainsSidebarProps> = ({
 
       {/* 2. Tool Content Panels (If open and tool selected) */}
       {hasActivePanel && (
-        <div className="jetbrains-sidebar-panels">
+        <div className="workspace-sidebar-panels">
           {isSplit && activeTopTool && activeBottomTool ? (
             <PanelGroup 
               direction="vertical"

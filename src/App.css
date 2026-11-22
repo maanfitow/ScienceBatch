@@ -385,7 +385,7 @@ html, body, #root {
 }
 
 /* ==========================================================================
-   Right Panel Wrapper & Overleaf-Style Tabs
+   Right Panel Wrapper & View Tabs
    ========================================================================== */
 .right-panel-wrapper {
   display: flex;
@@ -774,7 +774,7 @@ html, body, #root {
 }
 
 /* ==========================================================================
-   Diagnostics & Overleaf Issue Cards
+   Diagnostics & Issue Cards
    ========================================================================== */
 .diagnostics-container {
   display: flex;
@@ -2352,9 +2352,9 @@ html, body, #root {
 }
 
 /* ==========================================================================
-   JetBrains-Style Tool Window Sidebar & Activity Bar
+   Workspace Tool Window Sidebar & Activity Bar
    ========================================================================== */
-.jetbrains-sidebar-root {
+.workspace-sidebar-root {
   display: flex;
   flex-direction: row;
   height: 100%;
@@ -2451,7 +2451,7 @@ html, body, #root {
   background-color: var(--accent-primary);
 }
 
-/* JetBrains Separator */
+/* Tool Group Separator */
 .activity-bar-separator-container {
   width: 100%;
   padding: 8px 0;
@@ -2498,7 +2498,7 @@ html, body, #root {
 }
 
 /* Sidebar Panels Area */
-.jetbrains-sidebar-panels {
+.workspace-sidebar-panels {
   flex: 1;
   height: 100%;
   overflow: hidden;

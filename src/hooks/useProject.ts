@@ -466,7 +466,7 @@ export function useProject({
         : `${currentRoot}/${currentMain}`;
     }
 
-    // Overleaf behavior: If editing a secondary file, compile main entrypoint
+    // Compile the configured main entrypoint when editing a secondary file
     if (currentActive && fullMainPath && currentActive !== fullMainPath) {
       try {
         const mainContent = await invoke<string>('read_file_content', { path: fullMainPath });

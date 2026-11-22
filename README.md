@@ -22,7 +22,7 @@
 - **In-Memory RAM Compilation (Zero Disk Pollution):** Zero intermediate auxiliary files (`.aux`, `.log`, `.toc`, `.out`) written to your local disk. Powered by an isolated [Tectonic](https://tectonic-typesetting.github.io/) engine and native [Typst](https://typst.app/) compiler in RAM that pipes PDF binary data directly to the frontend.
 - **Polyglot Studio (LaTeX & Typst):** Seamlessly switch between LaTeX (Tectonic/XeTeX) and Typst compilation engines with per-engine syntax highlighting, math numbering, and live diagnostics.
 - **Full Workspace & Multi-File Project Support:** Open any local paper repository or folder. Resolves relative assets (`figures_pdf/`, `figures/`, `images/`), external `.cls`/`.sty` document classes, and nested file trees.
-- **Full Overleaf & BibTeX Compatibility:** Automatic detection and parsing of `.bib` files, dynamic citation keys suggestions (`\cite{`), and complete IEEE / ACM document class parity.
+- **Full LaTeX Package & BibTeX Compatibility:** Automatic detection and parsing of `.bib` files, dynamic citation keys suggestions (`\cite{`), and complete IEEE / ACM document class parity.
 - **First-Class Academic Classes & Modern Icon Suites:**
   - Built-in support and offline zero-warning linting for leading paper classes: **IEEEtran**, **ACM (`acmart`)**, **Springer (`llncs`)**, and **CurVe CV** (`\makerubric`, `\photo`, `\entry*`).
   - Full icon library support: **FontAwesome 5** (1,600+ icons via universal `\fa[A-Z]...` namespace), embedded **SimpleIcons** (`\simpleicon`), and **Academicons** (`\orcidicon`, `\orcidlink`).

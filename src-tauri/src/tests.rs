@@ -297,8 +297,8 @@ fn test_embedded_package_simpleicons_files() {
 
 #[test]
 fn test_import_project_from_zip() {
-    let zip_path = "/home/mauri/Desktop/overleaf example/RDMO.zip";
-    if !Path::new(zip_path).exists() {
+    let Ok(zip_path) = std::env::var("SCIENCEBATCH_TEST_ZIP_PATH") else { return; };
+    if !Path::new(&zip_path).exists() {
         return;
     }
     let temp_parent = std::env::temp_dir().join(format!(
@@ -311,7 +311,7 @@ fn test_import_project_from_zip() {
     let _ = std::fs::create_dir_all(&temp_parent);
 
     let res = import_project_from_zip(
-        zip_path,
+        &zip_path,
         temp_parent.to_str().unwrap(),
         Some("MyImportedTest"),
     );

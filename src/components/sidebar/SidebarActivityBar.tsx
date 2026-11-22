@@ -192,7 +192,7 @@ export const SidebarActivityBar: React.FC<SidebarActivityBarProps> = ({
   ] : [];
 
   return (
-    <aside className="activity-bar-container" aria-label="JetBrains Activity Bar">
+    <aside className="activity-bar-container" aria-label="Workspace Activity Bar">
       {/* Top Icons Group */}
       <div 
         className={`activity-bar-group activity-bar-top ${dropTarget?.group === 'top' && dropTarget.index === undefined ? 'group-drop-target' : ''}`}
@@ -202,12 +202,12 @@ export const SidebarActivityBar: React.FC<SidebarActivityBarProps> = ({
         {topTools.map((id, index) => renderToolButton(id, 'top', index))}
       </div>
 
-      {/* JetBrains Separator */}
+      {/* Tool Group Separator */}
       <div 
         className={`activity-bar-separator-container ${dropTarget?.isSeparator ? 'separator-drop-target' : ''}`}
         onDragOver={handleSeparatorDragOver}
         onDrop={(e) => handleDrop(e, 'bottom', 0)}
-        title="JetBrains group separator (Drag an icon here to move between groups)"
+        title="Tool group separator (Drag an icon here to move between groups)"
       >
         <div className="activity-bar-separator-line" />
         <div className="activity-bar-separator-handle" />
