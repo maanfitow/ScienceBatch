@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type SyntheticEvent } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type {
@@ -68,6 +68,7 @@ export function useProjectResources(
   isSnapshotCurrent: (fingerprint: string) => boolean,
 ) {
   const [isOpen, setIsOpen] = useState(false);
+  const [modalTab, setModalTab] = useState<'project' | 'cache'>('project');
   const [plan, setPlan] = useState<ResourcePlanSummary | null>(null);
   const [recovery, setRecovery] = useState<{ fingerprint: string; paths: string[] } | null>(null);
   const [plannedFingerprint, setPlannedFingerprint] = useState<string | null>(null);
@@ -287,11 +288,13 @@ export function useProjectResources(
   }, [analysisTargetIsCurrent, refreshPlan, selection, snapshot]);
   analyzeRef.current = analyze;
 
-  const open = useCallback(() => {
+  const open = useCallback((tab?: 'project' | 'cache' | SyntheticEvent) => {
+    const nextTab = tab === 'cache' ? 'cache' : 'project';
     if (typeof document !== 'undefined' && document.activeElement instanceof HTMLElement) {
       const active = document.activeElement;
       focusReturnRef.current = active.closest('.menu-item-wrapper')?.querySelector<HTMLElement>('.menu-button') ?? active;
     }
+    setModalTab(nextTab);
     setIsOpen(true);
     setOpenRevision(previous => previous + 1);
   }, []);
@@ -320,8 +323,8 @@ export function useProjectResources(
     });
   }, [activeJobId, isOpen, isSidebarVisible, openRevision, selection, snapshot?.fingerprint]);
 
-  const prepare = useCallback(async () => {
-    if (!snapshot || !plan || !isPlanFresh || activeJobRef.current) return;
+  const prepare = useCallback(async (): Promise<boolean> => {
+    if (!snapshot || !plan || !isPlanFresh || activeJobRef.current) return false;
     const jobId = makeJobId();
     const selected = selection.slice();
     const target: AnalysisTarget = { workspace: snapshot, selection: selected, selectionKey, key: JSON.stringify([snapshot.fingerprint, selectionKey]) };
@@ -347,7 +350,7 @@ export function useProjectResources(
         // after the active job settles instead of showing a stale-plan error.
         refreshAfterJobRef.current = true;
         setProgress(current => current ? { ...current, status: 'Finished', message: 'Detected resources are ready.' } : current);
-        return;
+        return true;
       }
       if (result.plan && typeof result.plan === 'object') {
         const refreshedPlan = result.plan as ResourcePlanSummary;
@@ -356,13 +359,14 @@ export function useProjectResources(
         setPlannedSelection(JSON.stringify(selected.slice().sort((a, b) => `${a.kind}:${a.id}`.localeCompare(`${b.kind}:${b.id}`))));
       }
       setProgress(current => current ? { ...current, status: 'Finished', message: 'Detected resources are ready.' } : current);
+      return true;
     } catch (operationError) {
       if (cancelRequestedRef.current === jobId) {
         setError(null);
         setErrorAction(null);
         setProgress(current => current ? { ...current, status: 'Cancelled', message: 'The download was paused. You can resume it when ready.' } : current);
         refreshAfterJobRef.current = true;
-        return;
+        return false;
       }
       const failure = failureFrom(operationError);
       if (snapshotSelectionIsCurrent(target)) {
@@ -370,6 +374,7 @@ export function useProjectResources(
         setErrorAction('prepare');
         setProgress(current => current ? { ...current, status: 'Error', message: failure.message } : current);
       }
+      return false;
     } finally {
       if (cancelRequestedRef.current === jobId) cancelRequestedRef.current = null;
       activeJobRef.current = null;
@@ -542,6 +547,8 @@ export function useProjectResources(
 
   return {
     isOpen,
+    modalTab,
+    setModalTab,
     isSidebarVisible,
     setSidebarVisible,
     focusReturnRef,

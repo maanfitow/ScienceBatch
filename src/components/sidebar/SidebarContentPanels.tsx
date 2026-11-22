@@ -166,7 +166,16 @@ export const SidebarContentPanels: React.FC<SidebarContentPanelsProps> = ({
         );
 
       case 'dependencies':
-        return <DependenciesPanel resources={resources} onClose={() => onCloseTool(slot)} />;
+        return (
+          <div className="sidebar-tool-panel-content">
+            <DependenciesPanel
+              resources={resources}
+              onClose={() => onCloseTool(slot)}
+              onSelectLine={onSelectLine}
+              engine={engine}
+            />
+          </div>
+        );
 
       default:
         return null;

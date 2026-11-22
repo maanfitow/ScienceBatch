@@ -229,18 +229,20 @@ try {
 
   await page.evaluate(() => { window.__resourceScenario = 'cold'; window.__delayNextAnalyze = true; });
   await page.getByRole('button', { name: 'Tools', exact: true }).click();
-  await page.getByRole('button', { name: 'Project Resources…' }).click();
+  await page.getByRole('menu').getByRole('button', { name: 'Project Resources…' }).click();
   const dialog = page.getByRole('dialog', { name: 'Project Resources' });
   await dialog.waitFor();
   await page.waitForFunction(() => window.__analysisRequests.length === 1 && typeof window.__releaseAnalyze === 'function');
   assert.equal(await dialog.getByText('Advanced', { exact: true }).count(), 0, 'the dialog has no Advanced section');
   assert.equal(await dialog.locator('.project-resources-primary').count(), 1, 'the basic view presents one primary action');
-  assert.equal(await dialog.getByRole('button', { name: 'Review resource files' }).count(), 0, 'the dialog contains no resource-list action');
+  assert.equal(await dialog.getByRole('tab', { name: 'Project', selected: true }).count(), 1, 'Project tab is active by default');
+  assert.equal(await dialog.getByRole('tab', { name: 'Shared Cache', selected: false }).count(), 1, 'Shared Cache tab is available');
   assert.equal(await page.evaluate(() => window.__listRequests.length), 0, 'opening and analyzing never fetches the resource list');
+  assert.equal(await page.evaluate(() => window.__cacheRequests.length), 0, 'opening the Project tab never fetches the shared cache list');
   assert.equal(await page.evaluate(() => window.__prepareRequests.length), 0, 'opening never prepares or downloads resources');
   assert.equal(await page.evaluate(() => window.__testInvokeCalls.filter(call => call.command === 'compile_workspace_snapshot').length), 0, 'opening never compiles');
   assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Close Project Resources', 'dialog receives initial focus');
-  assert.ok(await dialog.evaluate(element => Math.abs(element.getBoundingClientRect().width - 520) < 1), 'default dialog width is 520 pixels on a desktop viewport');
+  assert.ok(await dialog.evaluate(element => Math.abs(element.getBoundingClientRect().width - 580) < 1), 'default dialog width is 580 pixels on a desktop viewport');
 
   await page.evaluate(() => window.__releaseAnalyze());
   await page.waitForFunction(() => window.__planRequests.length === 1 && !document.querySelector('.project-resources-primary')?.disabled);
@@ -248,8 +250,9 @@ try {
   assert.deepEqual(await page.evaluate(() => window.__analysisRequests.at(-1)?.selection ?? []), [], 'normal analysis discovers project and manifest resources automatically');
   assert.equal(await page.evaluate(() => window.__listRequests.length), 0, 'planning does not fetch resource files');
   assert.equal(await dialog.locator('.project-resources-primary').innerText(), 'Download required files');
-  assert.match(await dialog.locator('.project-resources-estimate').innerText(), /14\.1 MiB/, 'cold-cache download estimate is shown in the simple view');
-  assert.equal(await dialog.getByText('Some dependencies can only be checked when you compile.', { exact: true }).count(), 1, 'the unknown-dependency caveat is visible in the basic view');
+  assert.match(await dialog.locator('.project-resources-metrics').innerText(), /14\.1 MiB/, 'cold-cache download estimate is shown in the metrics grid');
+  assert.equal(await dialog.getByText('Some dynamic references can only be checked when you compile.', { exact: true }).count(), 1, 'the unknown-dependency caveat is visible in the Project tab');
+  assert.equal(await dialog.locator('.project-resources-details').evaluate(element => element.open), false, 'Inspect detected files starts collapsed');
   await dialog.screenshot({ path: `${outputDirectory}/simple-cold-browser.png` });
 
   await page.evaluate(() => { window.__delayNextAnalyze = true; });
@@ -287,7 +290,7 @@ try {
   assert.equal(await page.getByRole('dialog', { name: 'Project Resources' }).count(), 0, 'closing hides the dialog without cancelling preparation');
   assert.equal(await page.evaluate(() => document.activeElement?.textContent?.trim()), 'Tools', 'closing restores focus to the stable menu trigger');
   await page.getByRole('button', { name: 'Tools', exact: true }).click();
-  await page.getByRole('button', { name: 'Project Resources…' }).click();
+  await page.getByRole('menu').getByRole('button', { name: 'Project Resources…' }).click();
   await page.getByRole('button', { name: 'Cancel', exact: true }).waitFor();
   assert.equal(await page.evaluate(() => window.__analysisRequests.length), 3, 'reopening during preparation keeps the active job snapshot without reanalysis');
   assert.equal(await dialog.locator('#project-resources-description').innerText(), originalProjectLabel, 'active preparation keeps its original workspace label');
@@ -301,19 +304,34 @@ try {
   assert.equal(await page.evaluate(() => window.__listRequests.length), 0, 'a successful prepare does not load the resource list');
   await dialog.screenshot({ path: `${outputDirectory}/simple-ready-browser.png` });
 
-  assert.equal(await dialog.locator('details, .project-resources-list, .project-resources-selector-form').count(), 0, 'resource details and manual selectors are removed');
+  assert.equal(await dialog.locator('.project-resources-details').evaluate(element => element.open), false, 'Inspect detected files remains collapsed after preparation');
+  assert.equal(await dialog.locator('.project-resources-selector-form').count(), 0, 'manual selectors are removed');
   assert.equal(await page.evaluate(() => window.__listRequests.length), 0, 'automatic detection does not request technical resource rows');
   const themeStyles = await page.evaluate(() => {
     const root = document.documentElement;
     const originalTheme = root.getAttribute('data-theme');
     const dialogElement = document.querySelector('.project-resources-dialog');
-    if (!dialogElement) throw new Error('Project Resources dialog is missing');
+    const primaryButton = document.querySelector('.project-resources-primary');
+    if (!dialogElement || !primaryButton) throw new Error('Project Resources dialog or primary CTA is missing');
     const readTheme = theme => {
       root.setAttribute('data-theme', theme);
       const style = getComputedStyle(dialogElement);
-      return { scheme: style.colorScheme, background: style.backgroundColor, color: style.color };
+      const primaryStyle = getComputedStyle(primaryButton);
+      return {
+        scheme: style.colorScheme,
+        background: style.backgroundColor,
+        color: style.color,
+        primaryBg: primaryStyle.backgroundColor,
+        primaryFg: primaryStyle.color,
+      };
     };
-    const styles = { dark: readTheme('dark'), light: readTheme('light'), monokai: readTheme('monokai') };
+    const styles = {
+      dark: readTheme('dark'),
+      light: readTheme('light'),
+      monokai: readTheme('monokai'),
+      'obsidian-pastel': readTheme('obsidian-pastel'),
+      'coral-depths': readTheme('coral-depths'),
+    };
     if (originalTheme) root.setAttribute('data-theme', originalTheme);
     else root.removeAttribute('data-theme');
     return styles;
@@ -321,8 +339,13 @@ try {
   assert.equal(themeStyles.dark.scheme, 'dark', 'dialog uses the dark color scheme');
   assert.equal(themeStyles.light.scheme, 'light', 'dialog follows the light theme');
   assert.equal(themeStyles.monokai.scheme, 'dark', 'dialog follows the Monokai theme');
+  assert.equal(themeStyles['obsidian-pastel'].scheme, 'dark', 'dialog follows the Obsidian Pastel theme');
+  assert.equal(themeStyles['coral-depths'].scheme, 'dark', 'dialog follows the Coral Depths theme');
   assert.notEqual(themeStyles.dark.background, themeStyles.light.background, 'dark and light dialog surfaces remain distinct');
   assert.notEqual(themeStyles.dark.color, themeStyles.light.color, 'dark and light text remain distinct');
+  for (const [themeName, style] of Object.entries(themeStyles)) {
+    assert.notEqual(style.primaryBg, style.primaryFg, `${themeName} primary CTA has distinct foreground and background colors`);
+  }
   await dialog.getByRole('button', { name: 'Close', exact: true }).focus();
   await page.keyboard.press('Tab');
   assert.equal(await page.evaluate(() => document.activeElement?.textContent?.trim()), 'Done', 'Tab moves from Close to the primary action');
@@ -335,13 +358,34 @@ try {
   assert.ok(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth + 1), 'dialog has no horizontal overflow at narrow width');
   await page.setViewportSize({ width: 1280, height: 900 });
 
+  await dialog.locator('.project-resources-details > summary').click();
+  await page.waitForFunction(() => window.__listRequests.length === 1);
+  await dialog.getByText('article-old.cls', { exact: true }).waitFor();
+  await dialog.getByText('\\input{dynamic}', { exact: true }).waitFor();
+  await dialog.getByText(/Supporting resources: 1 transitive file/).waitFor();
+  await dialog.locator('.project-resources-details > summary').click();
+
+  await dialog.getByRole('tab', { name: 'Shared Cache' }).click();
+  await page.waitForFunction(() => window.__cacheRequests.length === 1);
+  await dialog.locator('.project-resources-storage-card').getByText(/Downloaded/).waitFor();
+  await dialog.locator('.project-resources-storage-card').getByText(/Built-in starter/).waitFor();
+  await dialog.locator('.project-resources-storage-card').getByText(/Metadata & formats/).waitFor();
+  const modalInUseRow = dialog.locator('.project-resources-cache-row').filter({ hasText: 'In use' });
+  assert.equal(await modalInUseRow.locator('input').isDisabled(), true, 'In use cache entries are protected');
+  await dialog.getByLabel('Filter loaded files').fill('removable.sty');
+  assert.equal(await dialog.locator('.project-resources-cache-row').count(), 1, 'Shared Cache filter narrows loaded paths');
+  await dialog.getByRole('button', { name: 'Clear cache filter' }).click();
+  assert.equal(await dialog.locator('.project-resources-cache-row').count(), 3, 'clearing filter restores loaded cache rows');
+  await dialog.getByRole('tab', { name: 'Project' }).click();
+  await page.evaluate(() => { window.__listRequests = []; window.__cacheRequests = []; });
+
   await page.getByRole('button', { name: 'Close', exact: true }).click();
   await page.evaluate(() => { window.__scenario = 'metadata'; });
   await page.getByRole('button', { name: 'Tools', exact: true }).click();
-  await page.getByRole('button', { name: 'Project Resources…' }).click();
+  await page.getByRole('menu').getByRole('button', { name: 'Project Resources…' }).click();
   await page.getByText('Bundle setup is needed', { exact: true }).waitFor();
   assert.equal(await page.getByRole('button', { name: 'Finish setup' }).isDisabled(), false, 'missing metadata enables explicit setup even with warm resource bodies');
-  assert.match(await dialog.locator('.project-resources-estimate').innerText(), /0 B/, 'metadata-only setup requires no resource transfer');
+  assert.match(await dialog.locator('.project-resources-metrics').innerText(), /0 B/, 'metadata-only setup requires no resource transfer');
   await page.getByRole('button', { name: 'Finish setup' }).click();
   await page.getByRole('button', { name: 'Done' }).waitFor();
   assert.equal(await page.evaluate(() => window.__listRequests.length), 0, 'metadata-only setup does not fetch file details');
@@ -349,7 +393,7 @@ try {
   await page.getByRole('button', { name: 'Close', exact: true }).click();
   await page.evaluate(() => { window.__scenario = 'invalidMetadata'; });
   await page.getByRole('button', { name: 'Tools', exact: true }).click();
-  await page.getByRole('button', { name: 'Project Resources…' }).click();
+  await page.getByRole('menu').getByRole('button', { name: 'Project Resources…' }).click();
   await page.getByText('Resource information could not be verified', { exact: true }).waitFor();
   assert.equal(await page.getByRole('button', { name: 'Unavailable' }).isDisabled(), true, 'invalid metadata blocks preparation');
   assert.equal(await page.evaluate(() => window.__prepareRequests.length), 3, 'invalid metadata does not start a download');
@@ -357,7 +401,7 @@ try {
   await page.getByRole('button', { name: 'Close', exact: true }).click();
   await page.evaluate(() => { window.__scenario = 'invalidBody'; });
   await page.getByRole('button', { name: 'Tools', exact: true }).click();
-  await page.getByRole('button', { name: 'Project Resources…' }).click();
+  await page.getByRole('menu').getByRole('button', { name: 'Project Resources…' }).click();
   await page.getByRole('button', { name: 'Download required files' }).waitFor();
   assert.equal(await page.getByRole('button', { name: 'Download required files' }).isDisabled(), false, 'invalid resource bodies can be explicitly repaired');
   await page.evaluate(() => { window.__failNextPrepare = true; });
@@ -401,9 +445,10 @@ try {
   await page.keyboard.press('Control+s');
   await page.waitForFunction(() => window.__testInvokeCalls.filter(call => call.command === 'compile_workspace_snapshot').length === 3);
   await page.getByRole('button', { name: 'Project Resources…' }).last().click();
-  await page.getByText('Possible files identified during the last compile are included in this check.', { exact: true }).waitFor();
+  await page.getByText('Includes possible files identified during the last compile.', { exact: true }).waitFor();
   await page.waitForFunction(() => window.__analysisRequests.at(-1)?.selection?.some(item => item.id === 'tex/latex/example/extra.sty'));
   await page.waitForFunction(() => !document.querySelector('.project-resources-primary')?.disabled);
+  await page.getByRole('button', { name: 'Download & Recompile' }).waitFor();
   assert.equal(await page.evaluate(() => window.__prepareRequests.length), 5, 'compile feedback does not trigger downloads');
   assert.equal(await page.evaluate(() => window.__testInvokeCalls.filter(call => call.command === 'compile_workspace_snapshot').length), 3, 'recovery does not automatically retry compilation');
 
@@ -414,7 +459,21 @@ try {
     editorInstance.executeEdits('clear-old-recovery', [{ range: new monaco.Range(model.getLineCount(), model.getLineMaxColumn(model.getLineCount()), model.getLineCount(), model.getLineMaxColumn(model.getLineCount())), text: '\n% recovery snapshot changed' }]);
   });
   await page.waitForFunction(count => window.__analysisRequests.length > count && (window.__analysisRequests.at(-1)?.selection?.length ?? 0) === 0, analyzesBeforeSnapshotChange);
-  assert.equal(await dialog.getByText('Possible files identified during the last compile are included in this check.', { exact: true }).count(), 0, 'snapshot edits clear old compile candidates');
+  assert.equal(await dialog.getByText('Includes possible files identified during the last compile.', { exact: true }).count(), 0, 'snapshot edits clear old compile candidates');
+
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await page.evaluate(() => { window.__prepareImmediately = true; });
+  await page.keyboard.press('Control+s');
+  await page.waitForFunction(() => window.__testInvokeCalls.filter(call => call.command === 'compile_workspace_snapshot').length === 4);
+  await page.getByRole('button', { name: 'Project Resources…' }).last().click();
+  await page.getByRole('button', { name: 'Download & Recompile' }).waitFor();
+  await page.evaluate(() => { window.__compileError = null; });
+  await page.getByRole('button', { name: 'Download & Recompile' }).click();
+  await page.waitForFunction(() => window.__testInvokeCalls.filter(call => call.command === 'compile_workspace_snapshot').length === 5);
+  assert.equal(await page.getByRole('dialog', { name: 'Project Resources' }).count(), 0, 'Download & Recompile closes dialog and triggers recompile after preparation');
+  await page.getByRole('button', { name: 'Tools', exact: true }).click();
+  await page.getByRole('menu').getByRole('button', { name: 'Project Resources…' }).click();
+  await dialog.waitFor();
 
   await page.evaluate(() => {
     window.__delayNextCompile = true;
@@ -433,7 +492,7 @@ try {
     await new Promise(resolve => setTimeout(resolve, 50));
     window.__releaseCompile();
   });
-  await page.waitForFunction(() => window.__testInvokeCalls.filter(call => call.command === 'compile_workspace_snapshot').length === 4);
+  await page.waitForFunction(() => window.__testInvokeCalls.filter(call => call.command === 'compile_workspace_snapshot').length === 6);
   await page.waitForTimeout(100);
   assert.ok(await page.getByText('Compilation may need project resources').count() <= priorRecoveryToastCount, 'stale compile failures do not add recovery feedback');
   assert.equal(await page.evaluate(() => window.__analysisRequests.at(-1)?.selection?.length ?? 0), 0, 'stale compile misses are not added to resource analysis');
@@ -441,7 +500,7 @@ try {
   await page.getByRole('button', { name: 'Close', exact: true }).click();
   await page.evaluate(() => { window.__scenario = 'cold'; window.__prepareImmediately = false; });
   await page.getByRole('button', { name: 'Tools', exact: true }).click();
-  await page.getByRole('button', { name: 'Project Resources…' }).click();
+  await page.getByRole('menu').getByRole('button', { name: 'Project Resources…' }).click();
   await page.getByRole('button', { name: 'Download required files' }).waitFor();
   await page.getByRole('button', { name: 'Download required files' }).click();
   await page.waitForFunction(() => Boolean(window.__pendingPrepare));
@@ -449,27 +508,26 @@ try {
   await page.evaluate(() => window.__resolvePendingPrepareReady());
   await page.evaluate(() => { window.__scenario = 'ready'; });
   await page.getByRole('button', { name: 'Tools', exact: true }).click();
-  await page.getByRole('button', { name: 'Project Resources…' }).click();
+  await page.getByRole('menu').getByRole('button', { name: 'Project Resources…' }).click();
   await page.getByRole('button', { name: 'Done' }).waitFor();
   assert.equal(await dialog.locator('.project-resources-error').count(), 0, 'a successful hidden preparation does not surface an input_changed error when reopened');
 
   await page.getByRole('button', { name: 'Close', exact: true }).click();
   await page.evaluate(() => { window.__scenario = 'cold'; window.__prepareImmediately = false; });
   await page.getByRole('button', { name: 'Tools', exact: true }).click();
-  await page.getByRole('button', { name: 'Project Resources…' }).click();
+  await page.getByRole('menu').getByRole('button', { name: 'Project Resources…' }).click();
   await page.getByRole('button', { name: 'Download required files' }).waitFor();
   await page.evaluate(() => { window.__cancelCompletesFirst = true; });
   await page.getByRole('button', { name: 'Download required files' }).click();
   await page.waitForFunction(() => Boolean(window.__pendingPrepare));
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('button', { name: 'Done' }).waitFor();
-  assert.equal(await dialog.locator('.project-resources-pause-note').count(), 1, 'a completed preparation wins the concurrent cancel response');
-  assert.match(await dialog.locator('.project-resources-pause-note').innerText(), /compile this project now/);
+  assert.equal(await dialog.locator('.project-resources-note').filter({ hasText: 'compile this project now' }).count(), 1, 'a completed preparation wins the concurrent cancel response');
 
   await page.evaluate(() => { window.__scenario = 'cold'; window.__prepareImmediately = false; });
   await page.getByRole('button', { name: 'Done' }).click();
   await page.getByRole('button', { name: 'Tools', exact: true }).click();
-  await page.getByRole('button', { name: 'Project Resources…' }).click();
+  await page.getByRole('menu').getByRole('button', { name: 'Project Resources…' }).click();
   await page.getByRole('button', { name: 'Download required files' }).waitFor();
   await page.getByRole('button', { name: 'Download required files' }).click();
   await page.waitForFunction(() => Boolean(window.__pendingPrepare));
@@ -482,10 +540,11 @@ try {
   await page.evaluate(() => { window.__scenario = 'cold'; window.__prepareImmediately = false; });
   await page.getByRole('button', { name: 'Done' }).click();
   await page.getByRole('button', { name: 'Tools', exact: true }).click();
-  await page.getByRole('button', { name: 'Project Resources…' }).click();
+  await page.getByRole('menu').getByRole('button', { name: 'Project Resources…' }).click();
   await page.getByRole('button', { name: 'Download required files' }).waitFor();
+  const preparesBeforeDeferredCancel = await page.evaluate(() => window.__prepareRequests.length);
   await page.getByRole('button', { name: 'Download required files' }).click();
-  await page.waitForFunction(() => window.__prepareRequests.length === 9 && Boolean(window.__pendingPrepare));
+  await page.waitForFunction(count => window.__prepareRequests.length === count + 1 && Boolean(window.__pendingPrepare), preparesBeforeDeferredCancel);
   await page.evaluate(() => {
     window.__pendingCancel.reject({ error: { code: 'job.not_found', message: 'The resource preparation is no longer active.' } });
     window.__pendingCancel = null;
@@ -501,18 +560,31 @@ try {
     const React = (await import('/node_modules/.vite/deps/react.js')).default;
     const { createRoot } = (await import('/node_modules/.vite/deps/react-dom_client.js')).default;
     const { DependenciesPanel } = await import('/src/components/sidebar/DependenciesPanel.tsx');
+    const { ProjectResourcesDialog } = await import('/src/components/ProjectResourcesDialog.tsx');
     const container = document.createElement('div');
     container.id = 'dependencies-browser-harness';
-    container.style.cssText = 'position:fixed;left:20px;top:20px;width:360px;height:780px;z-index:5000;background:var(--bg-primary)';
+    container.style.cssText = 'position:fixed;left:20px;top:20px;width:360px;height:780px;z-index:2500;background:var(--bg-primary)';
     document.body.append(container);
     let rerender;
     window.__dependencyPrepareCalls = [];
+    window.__dependencyJumpCalls = [];
     const model = {
-      isPlanFresh: true, plan: { project: 'Browser fixture', planDigest: 'plan-browser', inputDigest: 'input-browser', bundleMetadataState: 'cached_verified', projectState: 'not_prepared', summary: { totalResources: 2, resolvedResources: 2, cachedVerifiedResources: 1, missingResources: 1, invalidResources: 0, unresolvedCount: 1, estimatedTransferBytes: 2048, cachedVerifiedBytes: 48 } },
+      isOpen: false,
+      modalTab: 'project',
+      focusReturnRef: { current: null },
+      setIsOpen: value => { model.isOpen = value; rerender(); },
+      setModalTab: tab => { model.modalTab = tab; rerender(); },
+      isPlanFresh: true, plan: { project: 'Browser fixture', engine: 'latex', planDigest: 'plan-browser', inputDigest: 'input-browser', bundleMetadataState: 'cached_verified', projectState: 'not_prepared', summary: { totalResources: 2, resolvedResources: 2, cachedVerifiedResources: 1, missingResources: 1, invalidResources: 0, unresolvedCount: 1, estimatedTransferBytes: 2048, cachedVerifiedBytes: 48 }, unknown: [{ id: 'unknown', expression: '\\input{dynamic}', reason: 'Unknown', file: 'main.tex', line: 2, parent: null }] },
       isAnalyzing: false, activeJobId: null, progress: null, error: null, errorAction: null, completedPaths: [],
       resourcePage: null, resourcePageError: null, isResourcePageLoading: false, cachePage: null, isCachePageLoading: false, cacheError: null,
-      open: () => { throw new Error('Sidebar download must not open a second dialog'); },
-      prepare: async () => { window.__dependencyPrepareCalls.push('prepare'); model.error = null; model.errorAction = null; model.activeJobId = 'sidebar-job'; model.progress = { jobId: 'sidebar-job', status: 'Started', downloadedBytes: 12, totalResources: 2 }; rerender(); },
+      isRemovingResources: false, cacheRemovalResult: null, recoveryPaths: [],
+      open: tab => {
+        if (document.activeElement instanceof HTMLElement) model.focusReturnRef.current = document.activeElement;
+        model.modalTab = tab === 'cache' ? 'cache' : 'project';
+        model.isOpen = true;
+        rerender();
+      },
+      prepare: async () => { window.__dependencyPrepareCalls.push('prepare'); model.error = null; model.errorAction = null; model.activeJobId = 'sidebar-job'; model.progress = { jobId: 'sidebar-job', status: 'Started', downloadedBytes: 12, totalResources: 2 }; rerender(); return true; },
       cancel: async () => { model.activeJobId = null; model.progress = { jobId: 'sidebar-job', status: 'Cancelled' }; rerender(); },
       analyze: async () => {},
       loadResourcePage: async () => {
@@ -520,29 +592,61 @@ try {
         if (window.__listRequests.length === 1) { model.resourcePageError = { code: 'resources.list_failed' }; rerender(); return; }
         model.resourcePageError = null;
         model.resourcePage = { planDigest: 'plan-browser', total: 2, nextCursor: null, items: [
-        { itemType: 'requirement', item: { id: 'article.cls', label: 'article.cls', path: 'article.cls', availability: 'missing', indexedBytes: 32, parents: [], evidence: [{ kind: 'detected' }] } },
-        { itemType: 'requirement', item: { id: 'base.tfm', label: 'Base package', path: 'base.tfm', availability: 'cached_verified', indexedBytes: 48, parents: ['article.cls'], evidence: [{ kind: 'package_dependency' }] } },
-        { itemType: 'unknown', item: { id: 'unknown', expression: '\\input{dynamic}', reason: 'Unknown', file: 'main.tex', line: 2, parent: null } },
+          { itemType: 'requirement', item: { id: 'article.cls', label: 'article.cls', path: 'article.cls', availability: 'missing', indexedBytes: 32, parents: [], evidence: [{ kind: 'detected', file: 'main.tex', line: 1, parent: null }] } },
+          { itemType: 'requirement', item: { id: 'base.tfm', label: 'Base package', path: 'base.tfm', availability: 'cached_verified', indexedBytes: 48, parents: ['article.cls'], evidence: [{ kind: 'package_dependency', file: null, line: null, parent: 'article.cls' }] } },
+          { itemType: 'unknown', item: { id: 'unknown', expression: '\\input{dynamic}', reason: 'Unknown', file: 'main.tex', line: 2, parent: null } },
         ] }; rerender();
       },
-      loadCachePage: async () => { window.__cacheRequests.push({ operation: 'resources.cache_list', limit: 200 }); model.cachePage = { cacheDigest: 'cache-browser', summary: { installedFiles: 3, installedBytes: 3200, metadataBytes: 256, otherBytes: 64, embeddedFiles: 5, embeddedBytes: 4096 }, items: [
-        { path: 'protected/current.sty', bytes: 128, requiredByProject: true, removable: false },
-        { path: 'protected/app-copy.sty', bytes: 256, requiredByProject: false, removable: false },
-        { path: 'installed/removable.sty', bytes: 1024, requiredByProject: false, removable: true },
-        { path: 'installed/second.sty', bytes: 2048, requiredByProject: false, removable: true },
-      ], nextCursor: null }; rerender(); },
-      removeCachedResources: async paths => { window.__cacheRemoveRequests.push({ removePaths: paths, expectedCacheDigest: 'cache-browser', expectedInputDigest: 'input-browser' }); model.cacheError = { code: 'resources.cache_stale', message: 'The installed resource inventory changed.' }; rerender(); },
+      loadCachePage: async () => {
+        window.__cacheRequests.push({ operation: 'resources.cache_list', limit: 200 });
+        model.cachePage = {
+          cacheDigest: 'cache-browser',
+          summary: { installedFiles: 3, installedBytes: 3200, metadataBytes: 256, otherBytes: 64, embeddedFiles: 5, embeddedBytes: 4096 },
+          items: [
+            { path: 'protected/current.sty', bytes: 128, requiredByProject: true, removable: false },
+            { path: 'protected/app-copy.sty', bytes: 256, requiredByProject: false, removable: false },
+            { path: 'installed/removable.sty', bytes: 1024, requiredByProject: false, removable: true },
+            { path: 'installed/second.sty', bytes: 2048, requiredByProject: false, removable: true },
+          ],
+          nextCursor: null,
+        };
+        rerender();
+      },
+      removeCachedResources: async paths => {
+        window.__cacheRemoveRequests.push({ removePaths: paths, expectedCacheDigest: 'cache-browser', expectedInputDigest: 'input-browser' });
+        model.cacheError = { code: 'resources.cache_stale', message: 'The installed resource inventory changed.' };
+        model.cachePage = null;
+        rerender();
+      },
     };
     function Harness() {
       const [, setTick] = React.useState(0); rerender = () => setTick(value => value + 1);
       window.__dependencyModel = model;
       window.__dependencyRerender = rerender;
-      return React.createElement(DependenciesPanel, { resources: model, onClose: () => {} });
+      return React.createElement(
+        React.Fragment,
+        null,
+        React.createElement(DependenciesPanel, {
+          resources: model,
+          onClose: () => {},
+          onSelectLine: (line, file) => window.__dependencyJumpCalls.push({ line, file }),
+          engine: 'latex',
+        }),
+        React.createElement(ProjectResourcesDialog, {
+          resources: model,
+          projectName: 'Browser fixture',
+          engine: 'latex',
+          onClose: () => model.setIsOpen(false),
+          onSelectLine: (line, file) => window.__dependencyJumpCalls.push({ line, file }),
+        }),
+      );
     }
     window.__dependencyRoot = createRoot(container);
     window.__dependencyRoot.render(React.createElement(Harness));
   });
-  await page.locator('.dependency-disclosure').waitFor();
+  await page.locator('.dependencies-panel-header').waitFor();
+  assert.equal(await page.locator('.dependencies-panel-title').innerText(), 'DEPENDENCIES', 'Dependencies sidebar uses standard uppercase header');
+  assert.equal(await page.locator('.dependencies-status-pill').innerText(), '1 missing', 'Dependencies header shows status pill');
   await page.getByRole('button', { name: 'Retry', exact: true }).waitFor();
   await page.waitForTimeout(50);
   assert.equal(await page.evaluate(() => window.__listRequests.length), 1, 'a failed resource page does not retry in a render loop');
@@ -550,8 +654,16 @@ try {
   await page.locator('.dependency-row strong').first().waitFor();
   await page.locator('.dependencies-panel').screenshot({ path: join(outputDirectory, 'dependencies-browser.png') });
   assert.equal(await page.evaluate(() => window.__listRequests.length), 2, 'mounting Dependencies lazily fetches one current detected-resource page and the explicit retry');
-  assert.match(await page.locator('.dependencies-summary').innerText(), /download/i, 'the sidebar reports readiness and estimated download state');
-  assert.equal(await page.locator('.dependency-row').count(), 2, 'the sidebar omits unknown expressions and groups known resources');
+  assert.match(await page.locator('.dependency-action-card').innerText(), /download/i, 'the sidebar reports readiness and estimated download state');
+  assert.equal(await page.locator('.dependency-group h3').first().innerText(), 'PACKAGES, CLASSES & ASSETS', 'direct dependencies section is clearly titled');
+  assert.equal(await page.getByText('\\input{dynamic}', { exact: true }).count(), 1, 'Unresolved References section renders dynamic expressions');
+  await page.getByRole('button', { name: 'main.tex:1' }).click();
+  await page.getByRole('button', { name: 'main.tex:2' }).click();
+  assert.deepEqual(
+    await page.evaluate(() => window.__dependencyJumpCalls),
+    [{ line: 1, file: 'main.tex' }, { line: 2, file: 'main.tex' }],
+    'clickable file:line buttons jump to both direct and unresolved locations',
+  );
   const supportingResources = page.locator('.dependency-supporting');
   assert.equal((await supportingResources.locator('summary').innerText()).replace(/\s+/g, ' '), 'Supporting resources 1', 'supporting resources have an accessible count');
   assert.equal(await supportingResources.evaluate(element => element.open), false, 'supporting resources are collapsed until requested');
@@ -559,6 +671,9 @@ try {
   await supportingResources.locator('summary').click();
   assert.equal(await page.getByText('Base package', { exact: true }).isVisible(), true, 'users can expand supporting resources on demand');
   await supportingResources.locator('summary').click();
+  await page.getByLabel('Filter dependencies').fill('dynamic');
+  assert.equal(await page.locator('.dependency-row').count(), 1, 'sidebar filter narrows detected and unresolved rows');
+  await page.getByRole('button', { name: 'Clear dependency filter' }).click();
   await page.getByRole('button', { name: 'Download required files' }).click();
   await page.getByRole('button', { name: 'Cancel', exact: true }).waitFor();
   assert.equal(await page.evaluate(() => window.__dependencyPrepareCalls.length), 1, 'the sidebar starts preparation directly after explicit activation');
@@ -582,37 +697,97 @@ try {
   await page.locator('.dependency-job').getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.getByRole('button', { name: 'Resume download' }).waitFor();
   await page.getByRole('button', { name: 'Manage installed resources' }).click();
-  const installedDialog = page.getByRole('dialog', { name: 'Installed Resources' });
-  await installedDialog.waitFor();
-  assert.equal(await page.evaluate(() => window.__cacheRequests.length), 1, 'installed inventory loads only when its modal opens');
-  await installedDialog.locator('.installed-resources-summary').getByText(/formats and other cache \(read-only\)/).waitFor();
-  await installedDialog.getByText('File sizes show logical payload bytes; occupied disk space can differ.', { exact: true }).waitFor();
-  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Close Installed Resources', 'installed modal receives initial focus');
+  const unifiedCacheDialog = page.getByRole('dialog', { name: 'Project Resources' });
+  await unifiedCacheDialog.waitFor();
+  assert.equal(await unifiedCacheDialog.getByRole('tab', { name: 'Shared Cache', selected: true }).count(), 1, 'Manage installed resources opens the unified modal directly to Shared Cache');
+  assert.equal(await page.evaluate(() => window.__cacheRequests.length), 1, 'shared cache inventory loads only when Shared Cache tab is opened');
+  await unifiedCacheDialog.locator('.project-resources-storage-card').getByText(/Metadata & formats/).waitFor();
+  await unifiedCacheDialog.getByText('Shared across LaTeX projects. Files used by this project and built-in app resources are protected.', { exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Close Project Resources', 'unified modal receives initial focus');
   await page.keyboard.press('Shift+Tab');
-  assert.equal(await page.evaluate(() => document.activeElement?.textContent?.trim()), 'Done', 'installed modal traps reverse Tab at its final control');
+  assert.equal(await page.evaluate(() => document.activeElement?.textContent?.trim()), 'Done', 'Shared Cache modal traps reverse Tab at its final enabled control');
   await page.keyboard.press('Tab');
-  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Close Installed Resources', 'installed modal wraps Tab to its close control');
-  const protectedRow = installedDialog.locator('.installed-resource-row').filter({ hasText: 'Required by current project' });
-  assert.equal(await protectedRow.locator('input').isDisabled(), true, 'current-project cache entries cannot be selected for removal');
-  const appRow = installedDialog.locator('.installed-resource-row').filter({ hasText: 'Included with app · Protected' });
-  assert.equal(await appRow.locator('input').isDisabled(), true, 'non-removable app resources are labeled and protected');
-  await installedDialog.getByLabel('Filter loaded files').fill('removable.sty');
-  assert.equal(await installedDialog.locator('.installed-resource-row').count(), 1, 'inventory filtering applies only to loaded paths');
-  await installedDialog.locator('.installed-resource-row input').check();
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Close Project Resources', 'Shared Cache modal wraps Tab to its close control');
+  const protectedRow = unifiedCacheDialog.locator('.project-resources-cache-row').filter({ hasText: 'In use' });
+  assert.equal(await protectedRow.locator('input').isDisabled(), true, 'In use cache entries cannot be selected for removal');
+  const appRow = unifiedCacheDialog.locator('.project-resources-cache-row').filter({ hasText: 'Built-in' });
+  assert.equal(await appRow.locator('input').isDisabled(), true, 'Built-in app resources are labeled and protected');
+  await unifiedCacheDialog.getByLabel('Filter loaded files').fill('removable.sty');
+  assert.equal(await unifiedCacheDialog.locator('.project-resources-cache-row').count(), 1, 'inventory filtering applies only to loaded paths');
+  await unifiedCacheDialog.locator('.project-resources-cache-row input').check();
   await page.evaluate(() => { window.__failNextCacheRemove = true; });
-  await installedDialog.getByRole('button', { name: 'Remove selected', exact: true }).click();
-  await installedDialog.getByRole('button', { name: 'Remove selected files', exact: true }).click();
-  await installedDialog.getByText('The installed resource inventory changed.', { exact: false }).waitFor();
+  await unifiedCacheDialog.getByRole('button', { name: 'Remove selected', exact: true }).click();
+  await unifiedCacheDialog.getByRole('button', { name: 'Remove selected files', exact: true }).click();
+  await unifiedCacheDialog.getByText('The installed resource inventory changed.', { exact: false }).waitFor();
   assert.equal(await page.evaluate(() => window.__cacheRemoveRequests.length), 1, 'removal sends one explicit digest-bound selection');
   const removeRequest = await page.evaluate(() => window.__cacheRemoveRequests[0]);
   assert.deepEqual(removeRequest.removePaths, ['installed/removable.sty'], 'removal sends only the selected path');
   assert.equal(removeRequest.expectedCacheDigest, 'cache-browser', 'removal is bound to the displayed cache inventory');
   assert.equal(removeRequest.expectedInputDigest, 'input-browser', 'removal is bound to current project analysis');
-  await installedDialog.getByRole('button', { name: 'Reload inventory' }).click();
-  await installedDialog.getByText('installed/removable.sty', { exact: true }).waitFor();
+  await unifiedCacheDialog.getByRole('button', { name: 'Reload inventory' }).click();
+  await unifiedCacheDialog.locator('[title="installed/removable.sty"]').waitFor();
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Manage installed resources' }).waitFor();
-  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), null, 'closing the installed modal returns focus to its trigger');
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Manage installed resources', 'closing the unified modal returns focus to its sidebar trigger');
+  await page.getByRole('button', { name: 'Manage cache…' }).click();
+  await unifiedCacheDialog.waitFor();
+  assert.equal(await unifiedCacheDialog.getByRole('tab', { name: 'Shared Cache', selected: true }).count(), 1, 'Manage cache link opens the unified modal to Shared Cache');
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => {
+    window.__dependencyModel.plan.mainFile = 'main.tex';
+    window.__dependencyModel.plan.unknown = [
+      { id: 'unknown-proj', expression: '\\input{dynamic}', reason: 'macro_valued_file_reference', file: 'main.tex', line: 2, parent: null },
+      { id: 'unknown-ctan-1', expression: '#1', reason: 'macro_valued_catalog_reference', file: 'xparse.sty', line: 120, parent: null },
+      { id: 'unknown-ctan-2', expression: 'hyperref.cfg', reason: 'input_not_found_in_project_or_bundle', file: 'hyperref.sty', line: 3973, parent: null },
+      { id: 'unknown-ctan-3', expression: '   ', reason: 'bundle_style_not_found', file: 'hyperref.sty', line: 4100, parent: 'hyperref.sty' },
+    ];
+    window.__dependencyModel.resourcePage = {
+      planDigest: 'plan-browser',
+      total: 4,
+      nextCursor: null,
+      items: [
+        { itemType: 'requirement', item: { id: 'article.cls', label: 'article.cls', path: 'article.cls', provider: 'pinned_bundle', availability: 'cached_verified', indexedBytes: 32, parents: [], evidence: [{ kind: 'detected', file: 'main.tex', line: 1, parent: null }] } },
+        { itemType: 'requirement', item: { id: 'hyperref.sty', label: 'hyperref.sty', path: 'tex/latex/hyperref/hyperref.sty', provider: 'pinned_bundle', availability: 'cached_verified', indexedBytes: 64, parents: [], evidence: [{ kind: 'detected', file: 'main.tex', line: 2, parent: null }] } },
+        { itemType: 'requirement', item: { id: 'xparse.sty', label: 'xparse.sty', path: 'tex/latex/l3packages/xparse.sty', provider: 'pinned_bundle', availability: 'cached_verified', indexedBytes: 40, parents: [], evidence: [{ kind: 'detected', file: 'main.tex', line: 3, parent: null }] } },
+        { itemType: 'requirement', item: { id: 'base.tfm', label: 'Base package', path: 'base.tfm', provider: 'pinned_bundle', availability: 'cached_verified', indexedBytes: 48, parents: ['article.cls'], evidence: [{ kind: 'package_dependency', file: null, line: null, parent: 'article.cls' }] } },
+        ...window.__dependencyModel.plan.unknown.map(item => ({ itemType: 'unknown', item })),
+      ],
+    };
+    window.__dependencyRerender();
+  });
+  const unresolvedSection = page.locator('.dependency-group', { has: page.locator('h3', { hasText: 'Unresolved References' }) });
+  await unresolvedSection.waitFor();
+  assert.equal(await unresolvedSection.locator('.dependency-unknown-row').count(), 1, 'CTAN-internal unknowns are excluded from top-level Unresolved References');
+  assert.equal(await unresolvedSection.getByText('\\input{dynamic}', { exact: true }).count(), 1, 'user-project unknown remains in Unresolved References');
+  assert.equal(await unresolvedSection.getByText('Dynamic file macro', { exact: true }).count(), 1, 'friendly reason label replaces raw snake_case code');
+  assert.equal(await unresolvedSection.getByRole('button', { name: 'main.tex:2' }).count(), 1, 'project unknown keeps clickable jump button');
+  assert.equal(await page.locator('.dependencies-panel').getByText(/macro_valued_|input_not_found_|bundle_style_not_found/).count(), 0, 'no raw snake_case reason codes leak into DependenciesPanel');
+  assert.equal((await supportingResources.locator('> summary').innerText()).replace(/\s+/g, ' '), 'Supporting resources 4', 'supporting resources count includes transitive files and catalog hooks');
+  await supportingResources.locator('> summary').click();
+  const catalogHooks = supportingResources.locator('.dependency-catalog-unknowns');
+  assert.equal((await catalogHooks.locator('> summary').innerText()).replace(/\s+/g, ' '), 'Package-internal dynamic hooks 3', 'catalog unknowns are grouped in a collapsed nested details section');
+  assert.equal(await catalogHooks.evaluate(element => element.open), false, 'package-internal dynamic hooks start collapsed');
+  await catalogHooks.locator('> summary').click();
+  assert.equal(await catalogHooks.getByText('Dynamic macro in package', { exact: true }).count(), 1, 'macro_valued_catalog_reference maps to friendly label');
+  assert.equal(await catalogHooks.getByText('Optional or missing input', { exact: true }).count(), 1, 'input_not_found_in_project_or_bundle maps to friendly label');
+  assert.equal(await catalogHooks.getByText('Package not found in bundle', { exact: true }).count(), 1, 'bundle_style_not_found maps to friendly label');
+  assert.equal(await catalogHooks.getByText('Dynamic expression', { exact: true }).count(), 1, 'empty expression renders safe Dynamic expression fallback');
+  assert.equal(await catalogHooks.getByRole('button', { name: 'xparse.sty:120' }).count(), 0, 'bundle file xparse.sty:120 is not rendered as a clickable jump button');
+  assert.equal(await catalogHooks.getByRole('button', { name: 'hyperref.sty:3973' }).count(), 0, 'bundle file hyperref.sty:3973 is not rendered as a clickable jump button');
+  assert.equal(await catalogHooks.locator('.dependency-location-text', { hasText: 'xparse.sty:120' }).count(), 1, 'bundle location xparse.sty:120 renders as non-interactive text');
+  assert.equal(await catalogHooks.locator('.dependency-location-text', { hasText: 'hyperref.sty:3973' }).count(), 1, 'bundle location hyperref.sty:3973 renders as non-interactive text');
+
+  await page.evaluate(() => { window.__dependencyModel.open('project'); });
+  await unifiedCacheDialog.waitFor();
+  await unifiedCacheDialog.locator('.project-resources-details > summary').click();
+  const dialogUnresolvedGroup = unifiedCacheDialog.locator('.project-resources-inspect-group').filter({ hasText: 'Unresolved references' });
+  await dialogUnresolvedGroup.waitFor();
+  assert.equal(await dialogUnresolvedGroup.locator('.project-resources-inspect-row').count(), 1, 'Inspect detected files excludes CTAN-internal unknowns from Unresolved references');
+  assert.equal(await dialogUnresolvedGroup.getByText('Dynamic file macro', { exact: true }).count(), 1, 'Inspect detected files displays friendly reason label');
+  assert.equal(await dialogUnresolvedGroup.getByRole('button', { name: 'main.tex:2' }).count(), 1, 'Inspect detected files keeps clickable jump button for main.tex:2');
+  assert.equal(await unifiedCacheDialog.getByText('Supporting resources: 1 transitive file · 3 package-internal dynamic hooks', { exact: true }).count(), 1, 'Inspect detected files summarizes catalog hooks alongside supporting files');
+  await page.keyboard.press('Escape');
+
   await page.evaluate(() => { window.__dependencyRoot.unmount(); document.getElementById('dependencies-browser-harness')?.remove(); });
 
   await page.evaluate(async () => {
@@ -668,7 +843,7 @@ try {
     window.__hotCache = true;
     void window.__hookResources.analyze();
   });
-  await page.waitForFunction(() => window.__listRequests.length === 3 && document.querySelector('.dependency-row')?.textContent.includes('Downloaded'));
+  await page.waitForFunction(() => window.__listRequests.length === 3 && document.querySelector('.dependency-row')?.textContent.includes('Ready'));
   assert.equal(await page.evaluate(() => window.__hookResources.plan.planDigest), oldAvailabilityPlanDigest, 'cache availability can change while the stable source plan digest stays the same');
   assert.equal(await page.evaluate(() => window.__listRequests.length), 3, 'a fresh plan object with unchanged digest still refreshes resource rows');
   await page.evaluate(() => { window.__resourceHookRoot.unmount(); document.getElementById('resource-hook-browser-harness')?.remove(); });

@@ -1107,7 +1107,10 @@ export const App: React.FC = () => {
       <ProjectResourcesDialog
         resources={projectResources}
         projectName={projectResources.activeWorkspaceLabel?.projectName ?? project.projectName}
+        engine={project.engine}
         onClose={() => projectResources.setIsOpen(false)}
+        onRecompile={handleCompileCurrent}
+        onSelectLine={handleSelectLine}
       />
 
       <Toaster position="bottom-center" closeButton theme={theme === 'light' ? 'light' : 'dark'} />

@@ -161,7 +161,14 @@ export const JetBrainsSidebar: React.FC<JetBrainsSidebarProps> = ({
 
       case 'dependencies':
         return resources
-          ? <DependenciesPanel resources={resources} onClose={() => onCloseTool(slot)} />
+          ? (
+            <DependenciesPanel
+              resources={resources}
+              onClose={() => onCloseTool(slot)}
+              onSelectLine={onSelectLine}
+              engine={engine}
+            />
+          )
           : <div className="sidebar-tool-panel-content">Open a project to view dependencies.</div>;
 
       default:

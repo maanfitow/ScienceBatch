@@ -873,7 +873,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               </button>
             )}
 
-            {resolvedHasProjectFolder && (
+            {hasOpenProject && (
               <button type="button" className="menu-dropdown-item" onClick={() => { onOpenProjectResources(); closeMenu(); }}>
                 <div className="menu-item-left">
                   <span className="menu-item-icon" aria-hidden="true">
