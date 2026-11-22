@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   FolderTree, 
   Search, 
@@ -11,6 +11,7 @@ import {
   LucideIcon
 } from 'lucide-react';
 import { SidebarToolId } from '../../types/sidebar';
+import { ContextMenu, ContextMenuAction } from '../ContextMenu';
 
 interface ToolMeta {
   id: SidebarToolId;
@@ -85,26 +86,6 @@ export const SidebarActivityBar: React.FC<SidebarActivityBarProps> = ({
     x: number;
     y: number;
   } | null>(null);
-
-  const contextMenuRef = useRef<HTMLDivElement>(null);
-
-  // Close context menu on external click
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
-        setContextMenu(null);
-      }
-    };
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setContextMenu(null);
-    };
-    window.addEventListener('mousedown', handleClickOutside);
-    window.addEventListener('keydown', handleEscape);
-    return () => {
-      window.removeEventListener('mousedown', handleClickOutside);
-      window.removeEventListener('keydown', handleEscape);
-    };
-  }, []);
 
   // Drag & Drop handlers
   const handleDragStart = (e: React.DragEvent, id: SidebarToolId) => {
@@ -190,6 +171,26 @@ export const SidebarActivityBar: React.FC<SidebarActivityBarProps> = ({
     );
   };
 
+  const contextMenuActions: ContextMenuAction[] = contextMenu ? [
+    contextMenu.currentGroup === 'top'
+      ? {
+          label: 'Move to Bottom Group',
+          icon: <MoveDown size={14} />,
+          onSelect: () => onMoveTool(contextMenu.toolId, 'bottom'),
+        }
+      : {
+          label: 'Move to Top Group',
+          icon: <MoveUp size={14} />,
+          onSelect: () => onMoveTool(contextMenu.toolId, 'top'),
+        },
+    {
+      label: 'Reset to Default Layout',
+      icon: <RotateCcw size={14} />,
+      separatorBefore: true,
+      onSelect: onResetToDefaults,
+    },
+  ] : [];
+
   return (
     <aside className="activity-bar-container" aria-label="JetBrains Activity Bar">
       {/* Top Icons Group */}
@@ -223,55 +224,12 @@ export const SidebarActivityBar: React.FC<SidebarActivityBarProps> = ({
 
       {/* Context Menu for right-click on icons */}
       {contextMenu && (
-        <div 
-          ref={contextMenuRef}
-          className="activity-bar-context-menu"
-          role="menu"
-          style={{ 
-            top: Math.max(8, Math.min(contextMenu.y, window.innerHeight - 84)),
-            left: Math.max(8, Math.min(contextMenu.x + 8, window.innerWidth - 220)),
-          }}
-        >
-          {contextMenu.currentGroup === 'top' ? (
-            <button 
-              className="context-menu-item"
-              role="menuitem"
-              onClick={() => {
-                onMoveTool(contextMenu.toolId, 'bottom');
-                setContextMenu(null);
-              }}
-            >
-              <MoveDown size={14} className="context-menu-icon" />
-              <span>Move to Bottom Group</span>
-            </button>
-          ) : (
-            <button 
-              className="context-menu-item"
-              role="menuitem"
-              onClick={() => {
-                onMoveTool(contextMenu.toolId, 'top');
-                setContextMenu(null);
-              }}
-            >
-              <MoveUp size={14} className="context-menu-icon" />
-              <span>Move to Top Group</span>
-            </button>
-          )}
-
-          <div className="context-menu-divider" />
-
-          <button 
-            className="context-menu-item"
-            role="menuitem"
-            onClick={() => {
-              onResetToDefaults();
-              setContextMenu(null);
-            }}
-          >
-            <RotateCcw size={14} className="context-menu-icon text-muted" />
-            <span>Reset to Default Layout</span>
-          </button>
-        </div>
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          actions={contextMenuActions}
+          onClose={() => setContextMenu(null)}
+        />
       )}
     </aside>
   );

@@ -49,7 +49,7 @@
 .dependency-spin { animation: project-resources-spin 1s linear infinite; }
 @keyframes dependency-pulse { to { opacity: .35; } }
 
-.installed-resources-overlay { position: fixed; inset: 0; z-index: 3100; display: grid; place-items: center; padding: 14px; background: rgb(0 0 0 / 58%); }
+.installed-resources-overlay { position: fixed; inset: 0; z-index: 3100; display: grid; place-items: center; padding: 14px; background: var(--overlay-backdrop, rgb(0 0 0 / 58%)); }
 .installed-resources-dialog { display: flex; width: min(680px, 100%); max-height: min(760px, calc(100vh - 28px)); min-height: 0; flex-direction: column; overflow: hidden; border: 1px solid var(--border-color); border-radius: 9px; outline: none; color: var(--text-primary); color-scheme: dark; background: var(--bg-primary); box-shadow: 0 24px 70px rgb(0 0 0 / 45%); }
 [data-theme='light'] .installed-resources-dialog { color-scheme: light; }
 .installed-resources-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(105px, 1fr)); gap: 8px; padding: 10px 13px; border-bottom: 1px solid var(--border-color); color: var(--text-secondary); font-size: 9px; }

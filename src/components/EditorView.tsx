@@ -710,6 +710,17 @@ export const EditorView: React.FC<EditorViewProps> = ({
     editorRef.current.updateOptions({ readOnly: readOnlyRef.current });
   }, [readOnly]);
 
+  useEffect(() => {
+    const handleFindReplace = () => {
+      const editor = editorRef.current;
+      if (!editor) return;
+      editor.focus();
+      void editor.getAction('editor.action.startFindReplaceAction')?.run();
+    };
+    window.addEventListener('sciencebatch:open-find-replace', handleFindReplace);
+    return () => window.removeEventListener('sciencebatch:open-find-replace', handleFindReplace);
+  }, []);
+
   // Throttled Ctrl+Wheel listener for bounded code font zoom (10px to 28px)
   useEffect(() => {
     const container = editorContainerRef.current;
@@ -774,6 +785,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
           fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace",
           fontLigatures: true,
           fixedOverflowWidgets: true,
+          useShadowDOM: false,
           links: true,
           hover: {
             enabled: true,

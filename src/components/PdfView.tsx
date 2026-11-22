@@ -2,7 +2,19 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-import { FileQuestion, RefreshCw, Eye, AlertCircle } from 'lucide-react';
+import {
+  FileQuestion,
+  RefreshCw,
+  Eye,
+  AlertCircle,
+  Copy,
+  Image as ImageIcon,
+  Code2,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  RotateCcw,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { DiagnosticsView } from './DiagnosticsView';
 import { ContextMenu, ContextMenuAction } from './ContextMenu';
@@ -36,6 +48,10 @@ interface PdfViewProps {
   sourceMap?: PdfSourceMap | null;
   zoom: number;
   onZoomChange?: (newZoom: number) => void;
+  onZoomIn?: () => void;
+  onZoomOut?: () => void;
+  onZoomReset?: () => void;
+  onFitWidth?: () => void;
   isCompiling: boolean;
   errors: DiagnosticItem[];
   warnings: DiagnosticItem[];
@@ -52,6 +68,10 @@ export const PdfView: React.FC<PdfViewProps> = ({
   sourceMap,
   zoom,
   onZoomChange,
+  onZoomIn,
+  onZoomOut,
+  onZoomReset,
+  onFitWidth,
   isCompiling,
   errors,
   warnings,
@@ -799,6 +819,8 @@ export const PdfView: React.FC<PdfViewProps> = ({
   const contextMenuActions: ContextMenuAction[] = contextMenu ? [
     {
       label: 'Copy',
+      icon: <Copy size={14} />,
+      shortcut: 'Ctrl+C',
       disabled: !contextMenu.hasSelection,
       onSelect: () => {
         void handleCopySelection();
@@ -806,6 +828,7 @@ export const PdfView: React.FC<PdfViewProps> = ({
     },
     ...(contextMenu.imageHit ? [{
       label: 'Copy Image',
+      icon: <ImageIcon size={14} />,
       onSelect: () => {
         const imageHit = contextMenu.imageHit;
         if (!imageHit) return;
@@ -826,6 +849,7 @@ export const PdfView: React.FC<PdfViewProps> = ({
     }] : []),
     {
       label: 'Select All',
+      shortcut: 'Ctrl+A',
       disabled: numPages === 0,
       onSelect: () => {
         selectAllInside(pagesContainerRef.current);
@@ -833,12 +857,54 @@ export const PdfView: React.FC<PdfViewProps> = ({
     },
     {
       label: 'Go to Source',
+      icon: <Code2 size={14} />,
+      shortcut: 'Double-click',
       separatorBefore: true,
       disabled: !contextMenu.hit,
       onSelect: () => {
         if (contextMenu.hit) {
           onSelectLine?.(contextMenu.hit.line, contextMenu.hit.file, contextMenu.hit.column);
         }
+      },
+    },
+    {
+      label: 'Zoom In',
+      icon: <ZoomIn size={14} />,
+      shortcut: 'Ctrl++',
+      separatorBefore: true,
+      disabled: numPages === 0,
+      onSelect: () => {
+        if (onZoomIn) onZoomIn();
+        else onZoomChange?.(Math.min(Number((zoom + 0.15).toFixed(2)), 5.0));
+      },
+    },
+    {
+      label: 'Zoom Out',
+      icon: <ZoomOut size={14} />,
+      shortcut: 'Ctrl+-',
+      disabled: numPages === 0,
+      onSelect: () => {
+        if (onZoomOut) onZoomOut();
+        else onZoomChange?.(Math.max(Number((zoom - 0.15).toFixed(2)), 0.25));
+      },
+    },
+    {
+      label: 'Fit to Width',
+      icon: <Maximize2 size={14} />,
+      disabled: numPages === 0,
+      onSelect: () => {
+        if (onFitWidth) onFitWidth();
+        else window.dispatchEvent(new CustomEvent('sciencebatch:fit-width'));
+      },
+    },
+    {
+      label: 'Reset Zoom (100%)',
+      icon: <RotateCcw size={14} />,
+      shortcut: 'Ctrl+0',
+      disabled: numPages === 0,
+      onSelect: () => {
+        if (onZoomReset) onZoomReset();
+        else onZoomChange?.(1.0);
       },
     },
   ] : [];
@@ -962,7 +1028,11 @@ export const PdfView: React.FC<PdfViewProps> = ({
                 }}
               />
             )}
+          </div>
+        )}
 
+        {activeTab === 'preview' && (
+          <>
             {/* Floating Zoom HUD Badge */}
             <div className={`pdf-zoom-hud ${isHudVisible ? 'pdf-zoom-hud-visible' : ''}`}>
               <span>{Math.round(zoom * 100)}%</span>
@@ -977,7 +1047,7 @@ export const PdfView: React.FC<PdfViewProps> = ({
                 {currentPage} / {numPages}
               </div>
             )}
-          </div>
+          </>
         )}
       </div>
     </div>

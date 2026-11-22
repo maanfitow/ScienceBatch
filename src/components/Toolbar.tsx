@@ -67,8 +67,17 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         setIsExportOpen(false);
       }
     };
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsExportOpen(false);
+      }
+    };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
   }, []);
   return (
     <header className="toolbar">
@@ -76,9 +85,12 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         {/* Toggle Sidebar Button when project is open */}
         {hasOpenProject && (
           <button
+            type="button"
             className={`btn btn-icon ${sidebarOpen ? 'btn-sidebar-active' : ''}`}
             onClick={onToggleSidebar}
             title="Toggle File Explorer (Ctrl + B)"
+            aria-label="Toggle File Explorer"
+            aria-pressed={sidebarOpen}
           >
             <Sidebar size={16} />
           </button>
@@ -95,29 +107,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           <span className="logo-badge">Studio</span>
         </div>
 
-        {/* Engine Switcher Pill Button */}
-        <button
-          className="btn btn-secondary btn-sm engine-toggle-btn"
-          onClick={() => onSwitchEngine(engine === 'latex' ? 'typst' : 'latex')}
-          title={`Click to switch typesetting engine (Currently: ${engine === 'latex' ? 'LaTeX' : 'Typst'})`}
-        >
-          {engine === 'typst' ? (
-            <>
-              <FileCode size={13} className="icon-typst" />
-              <span>Engine: Typst</span>
-            </>
-          ) : (
-            <>
-              <FileText size={13} className="icon-latex" />
-              <span>Engine: LaTeX</span>
-            </>
-          )}
-          <RefreshCw size={11} className="text-muted ml-1" />
-        </button>
-
         {/* Primary Compile / Stop Action Button */}
         {isCompiling ? (
           <button
+            type="button"
             className="btn btn-compile btn-stop"
             onClick={onCancelCompile}
             title="Cancel compilation (Stop)"
@@ -128,6 +121,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           </button>
         ) : (
           <button
+            type="button"
             className="btn btn-compile"
             onClick={onCompile}
             title="Compile Document (Ctrl + S)"
@@ -162,36 +156,65 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       </div>
 
       <div className="toolbar-right">
+        {/* Engine Switcher Pill Button */}
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm engine-toggle-btn"
+          onClick={() => onSwitchEngine(engine === 'latex' ? 'typst' : 'latex')}
+          title={`Click to switch typesetting engine (Currently: ${engine === 'latex' ? 'LaTeX' : 'Typst'})`}
+        >
+          {engine === 'typst' ? (
+            <>
+              <FileCode size={13} className="icon-typst" />
+              <span>Engine: Typst</span>
+            </>
+          ) : (
+            <>
+              <FileText size={13} className="icon-latex" />
+              <span>Engine: LaTeX</span>
+            </>
+          )}
+          <RefreshCw size={11} className="text-muted ml-1" />
+        </button>
+
         {/* PDF Zoom Controls */}
         <div className="zoom-controls">
           <button
+            type="button"
             className="btn btn-icon"
             onClick={onZoomOut}
             title="Zoom out"
+            aria-label="Zoom out"
             disabled={!hasPdf}
           >
             <ZoomOut size={16} />
           </button>
           <button
+            type="button"
             className="btn btn-zoom-level"
             onClick={onZoomReset}
             title="Reset zoom to 100%"
+            aria-label={`Zoom level ${Math.round(zoom * 100)}%, click to reset`}
             disabled={!hasPdf}
           >
             {Math.round(zoom * 100)}%
           </button>
           <button
+            type="button"
             className="btn btn-icon"
             onClick={onZoomIn}
             title="Zoom in"
+            aria-label="Zoom in"
             disabled={!hasPdf}
           >
             <ZoomIn size={16} />
           </button>
           <button
+            type="button"
             className="btn btn-icon"
             onClick={onFitWidth}
             title="Fit to width"
+            aria-label="Fit to width"
             disabled={!hasPdf}
           >
             <Maximize2 size={16} />
@@ -201,9 +224,12 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         {/* Multi-Format Export Dropdown */}
         <div className="export-dropdown-wrapper" ref={exportDropdownRef}>
           <button
+            type="button"
             className={`btn btn-secondary export-btn ${isExportOpen ? 'btn-active' : ''}`}
             onClick={() => setIsExportOpen(!isExportOpen)}
             title="Export document in various formats"
+            aria-haspopup="menu"
+            aria-expanded={isExportOpen}
           >
             <Download size={15} />
             <span>Export</span>

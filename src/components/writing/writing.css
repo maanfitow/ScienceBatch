@@ -50,7 +50,7 @@
 .writing-ribbon-edit { height: 26px; border-color: var(--border-color); font-size: 11px; }
 .writing-ribbon-hint { flex: 1 1 auto; min-width: 0; overflow: hidden; max-width: min(50vw, 640px); padding-left: 12px; color: var(--text-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .writing-ribbon-compact { position: relative; display: none; }
-.writing-compact-menu { position: absolute; top: 31px; right: 0; z-index: 30; display: grid; min-width: 128px; padding: 4px; border: 1px solid var(--border-color); border-radius: 7px; background: var(--bg-primary); box-shadow: 0 10px 28px rgb(0 0 0 / 24%); }
+.writing-compact-menu { position: absolute; top: 31px; right: 0; z-index: 30; display: grid; min-width: 128px; padding: 4px; border: 1px solid var(--menu-border); border-radius: 6px; background: var(--menu-bg); box-shadow: 0 10px 28px rgb(0 0 0 / 32%); }
 .writing-ribbon-compact:focus-within .writing-compact-menu { display: grid; }
 .writing-compact-menu button { padding: 8px 10px; border: 0; border-radius: 4px; background: transparent; color: var(--text-primary); text-align: left; font: inherit; font-size: 12px; cursor: pointer; }
 .writing-compact-menu button:hover { background: var(--bg-tertiary); }
@@ -104,7 +104,7 @@
 .writing-preview-math .katex { font-size: 1em; }
 .writing-preview-fallback { display: grid; flex: 0 0 112px; width: 100%; height: 112px; place-items: center; border: 1px solid var(--border-color); border-radius: 7px; background: var(--bg-primary); color: var(--text-primary); font-family: 'Cambria Math', 'STIX Two Math', serif; font-size: 46px; }
 .writing-glyph-preview { display: grid; flex: 0 0 112px; width: 100%; height: 112px; place-items: center; border: 1px solid var(--border-color); border-radius: 7px; background: var(--bg-primary); color: var(--text-primary); font-family: 'Cambria Math', 'STIX Two Math', serif; font-size: 58px; }
-.writing-final-syntax { padding: 5px 8px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--bg-primary); font-family: monospace; }
+.writing-final-syntax { padding: 5px 8px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--bg-primary); font-family: var(--font-mono); }
 .writing-note { color: var(--text-muted); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
 .writing-dialog-footer { position: relative; z-index: 1; display: flex; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: 8px; min-height: 54px; padding: 9px 16px; border-top: 1px solid var(--border-color); background: var(--bg-primary); }
 .writing-inline-status { flex: 1 1 auto; min-width: 0; color: var(--text-muted); font-size: 11px; }

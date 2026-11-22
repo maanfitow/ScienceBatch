@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { 
   Folder, 
   FolderOpen, 
@@ -17,9 +17,14 @@ import {
   Sliders,
   BookMarked,
   FileUp,
-  X
+  X,
+  Copy,
+  Code2
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { FileItem } from '../types';
+import { ContextMenu, ContextMenuAction } from './ContextMenu';
+import { copyTextToClipboard } from './pdfClipboard';
 
 export type { FileItem };
 
@@ -62,6 +67,23 @@ export const FileTree: React.FC<FileTreeProps> = ({
   const [creatingType, setCreatingType] = useState<'file' | 'folder' | null>(null);
   const [creatingParent, setCreatingParent] = useState<string>(projectRoot);
   const [newItemName, setNewItemName] = useState<string>('');
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; item: FileItem } | null>(null);
+  const createInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (creatingType) {
+      createInputRef.current?.focus();
+    }
+  }, [creatingType, creatingParent]);
+
+  const getRelativePath = (fullPath: string) => {
+    const normalizedRoot = projectRoot.replace(/\\/g, '/').replace(/\/+$/, '');
+    const normalizedPath = fullPath.replace(/\\/g, '/');
+    if (normalizedRoot && normalizedPath.startsWith(`${normalizedRoot}/`)) {
+      return normalizedPath.slice(normalizedRoot.length + 1);
+    }
+    return normalizedPath;
+  };
 
   const toggleFolder = (path: string) => {
     setExpandedFolders((prev) => ({
@@ -70,8 +92,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
     }));
   };
 
-  const handleStartCreate = (type: 'file' | 'folder', parent: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleStartCreate = (type: 'file' | 'folder', parent: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setExpandedFolders((prev) => ({ ...prev, [parent]: true }));
     setCreatingType(type);
     setCreatingParent(parent);
     setNewItemName('');
@@ -133,6 +156,11 @@ export const FileTree: React.FC<FileTreeProps> = ({
             className="file-tree-row file-tree-folder-row"
             style={{ paddingLeft: `${depth * 14 + 10}px` }}
             onClick={() => toggleFolder(item.path)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setContextMenu({ x: e.clientX, y: e.clientY, item });
+            }}
           >
             <span className="folder-caret">
               {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -146,8 +174,10 @@ export const FileTree: React.FC<FileTreeProps> = ({
 
             <div className="file-tree-actions">
               <button 
+                type="button"
                 className="btn-tree-action" 
                 title="New file inside folder"
+                aria-label={`New file inside ${item.name}`}
                 onClick={(e) => handleStartCreate('file', item.path, e)}
               >
                 <FilePlus size={13} />
@@ -177,6 +207,11 @@ export const FileTree: React.FC<FileTreeProps> = ({
           }
         }}
         onDoubleClick={() => onSelectFile(item.path, true)}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setContextMenu({ x: e.clientX, y: e.clientY, item });
+        }}
       >
         {getFileIcon(item.name)}
         <span className="file-tree-label truncate">{item.name}</span>
@@ -191,16 +226,20 @@ export const FileTree: React.FC<FileTreeProps> = ({
         <div className="file-tree-actions">
           {!isMain && (item.name.endsWith('.tex') || item.name.endsWith('.typ')) && (
             <button
+              type="button"
               className="btn-tree-action"
               title="Set as Main Entrypoint File"
+              aria-label={`Set ${item.name} as Main Entrypoint File`}
               onClick={(e) => { e.stopPropagation(); onSetMainFile(item.path); }}
             >
               <Star size={12} />
             </button>
           )}
           <button
+            type="button"
             className="btn-tree-action btn-tree-danger"
             title="Delete file"
+            aria-label={`Delete ${item.name}`}
             onClick={(e) => { e.stopPropagation(); onDeleteFile(item.path); }}
           >
             <Trash2 size={12} />
@@ -208,6 +247,95 @@ export const FileTree: React.FC<FileTreeProps> = ({
         </div>
       </div>
     );
+  };
+
+  const buildContextMenuActions = (item: FileItem): ContextMenuAction[] => {
+    const relPath = getRelativePath(item.path);
+    if (item.is_dir) {
+      const isExpanded = !!expandedFolders[item.path];
+      return [
+        {
+          label: 'New File Here…',
+          icon: <FilePlus size={14} />,
+          onSelect: () => handleStartCreate('file', item.path),
+        },
+        {
+          label: 'New Folder Here…',
+          icon: <FolderPlus size={14} />,
+          onSelect: () => handleStartCreate('folder', item.path),
+        },
+        {
+          label: isExpanded ? 'Collapse Folder' : 'Expand Folder',
+          icon: isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />,
+          separatorBefore: true,
+          onSelect: () => toggleFolder(item.path),
+        },
+        {
+          label: 'Copy Relative Path',
+          icon: <Copy size={14} />,
+          onSelect: () => {
+            void copyTextToClipboard(relPath)
+              .then(() => toast.success('Relative path copied'))
+              .catch(() => toast.error('Failed to copy path'));
+          },
+        },
+      ];
+    }
+
+    const ext = item.name.split('.').pop()?.toLowerCase() || '';
+    const isMediaAsset = ['png', 'jpg', 'jpeg', 'svg', 'webp', 'gif', 'pdf'].includes(ext);
+    const isMain = mainFilePath === item.path || (mainFilePath && item.path.endsWith(mainFilePath));
+    const canSetMain = !isMain && (ext === 'tex' || ext === 'typ');
+    const stem = item.name.replace(/\.[^/.]+$/, '');
+    const figureLabel = stem.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase() || 'figure';
+    const figureSnippet = engine === 'typst'
+      ? `#figure(\n  image("${relPath}", width: 80%),\n  caption: [${stem}],\n) <fig:${figureLabel}>`
+      : `\\begin{figure}[htbp]\n  \\centering\n  \\includegraphics[width=0.8\\textwidth]{${relPath}}\n  \\caption{${stem}}\n  \\label{fig:${figureLabel}}\n\\end{figure}`;
+
+    return [
+      {
+        label: isMediaAsset ? 'Preview Asset' : 'Open File',
+        icon: isMediaAsset ? <ImageIcon size={14} /> : <FileText size={14} />,
+        onSelect: () => {
+          if (isMediaAsset && onViewImage) {
+            onViewImage(item.path, item.name);
+          } else {
+            onSelectFile(item.path, true);
+          }
+        },
+      },
+      ...(canSetMain ? [{
+        label: 'Set as Main Entrypoint',
+        icon: <Star size={14} />,
+        onSelect: () => onSetMainFile(item.path),
+      }] : []),
+      ...(isMediaAsset ? [{
+        label: `Copy ${engine === 'typst' ? 'Typst' : 'LaTeX'} Figure Snippet`,
+        icon: <Code2 size={14} />,
+        onSelect: () => {
+          void copyTextToClipboard(figureSnippet)
+            .then(() => toast.success('Figure snippet copied to clipboard'))
+            .catch(() => toast.error('Failed to copy snippet'));
+        },
+      }] : []),
+      {
+        label: 'Copy Relative Path',
+        icon: <Copy size={14} />,
+        separatorBefore: true,
+        onSelect: () => {
+          void copyTextToClipboard(relPath)
+            .then(() => toast.success('Relative path copied'))
+            .catch(() => toast.error('Failed to copy path'));
+        },
+      },
+      {
+        label: 'Delete',
+        icon: <Trash2 size={14} />,
+        danger: true,
+        separatorBefore: true,
+        onSelect: () => onDeleteFile(item.path),
+      },
+    ];
   };
 
   return (
@@ -257,21 +385,29 @@ export const FileTree: React.FC<FileTreeProps> = ({
       </div>
 
       {creatingType && (
-        <div className="file-tree-inline-input">
-          <input
-            type="text"
-            placeholder={creatingType === 'file' ? 'filename.tex or filename.typ' : 'folder name'}
-            value={newItemName}
-            onChange={(e) => setNewItemName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleConfirmCreate();
-              if (e.key === 'Escape') setCreatingType(null);
-            }}
-            autoFocus
-          />
-          <button className="btn-confirm-create" onClick={handleConfirmCreate}>
-            <Plus size={13} />
-          </button>
+        <div className="file-tree-inline-create">
+          {creatingParent !== projectRoot && (
+            <div className="file-tree-create-target truncate" title={getRelativePath(creatingParent)}>
+              Inside: <code>{getRelativePath(creatingParent)}</code>
+            </div>
+          )}
+          <div className="file-tree-inline-input">
+            <input
+              ref={createInputRef}
+              type="text"
+              placeholder={creatingType === 'file' ? 'filename.tex or filename.typ' : 'folder name'}
+              value={newItemName}
+              onChange={(e) => setNewItemName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleConfirmCreate();
+                if (e.key === 'Escape') setCreatingType(null);
+              }}
+              autoFocus
+            />
+            <button type="button" className="btn-confirm-create" aria-label="Confirm create" onClick={handleConfirmCreate}>
+              <Plus size={13} />
+            </button>
+          </div>
         </div>
       )}
 
@@ -284,6 +420,15 @@ export const FileTree: React.FC<FileTreeProps> = ({
           </div>
         )}
       </div>
+
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          actions={buildContextMenuActions(contextMenu.item)}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 };

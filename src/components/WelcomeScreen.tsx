@@ -8,6 +8,7 @@ import {
   FileText, 
   ChevronRight,
   BookOpen,
+  Archive,
   X
 } from 'lucide-react';
 import { RecentProject } from '../types';
@@ -29,6 +30,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   onNewProject,
   onOpenFolder,
   onCloneRepository,
+  onImportZip,
   onQuickScratchpad,
   recentProjects,
   onOpenRecentProject,
@@ -79,7 +81,18 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
               <ChevronRight size={16} className="action-arrow" />
             </button>
 
-            <button className="btn-welcome-action" onClick={onCloneRepository}>
+            <button type="button" className="btn-welcome-action" onClick={onImportZip}>
+              <div className="action-icon-circle action-icon-archive">
+                <Archive size={20} />
+              </div>
+              <div className="action-text-group">
+                <span className="action-title">Import from ZIP</span>
+                <span className="action-desc">Extract and open a LaTeX or Typst .zip archive</span>
+              </div>
+              <ChevronRight size={16} className="action-arrow" />
+            </button>
+
+            <button type="button" className="btn-welcome-action" onClick={onCloneRepository}>
               <div className="action-icon-circle action-icon-git">
                 <GitBranch size={20} />
               </div>
@@ -130,7 +143,15 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
                 <div 
                   key={proj.path} 
                   className="recent-project-row"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => onOpenRecentProject(proj.path)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onOpenRecentProject(proj.path);
+                    }
+                  }}
                 >
                   <div className="recent-proj-info">
                     <div className="recent-proj-header">

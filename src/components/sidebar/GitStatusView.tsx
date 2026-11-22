@@ -199,7 +199,8 @@ export const GitStatusView: React.FC<GitStatusViewProps> = ({ projectRoot, proje
   ] : [];
   const currentBranch = branches?.currentBranch || status?.branch || '';
   const branchActions: ContextMenuAction[] = (branches?.branches || []).map(branch => ({
-    label: branch === currentBranch ? `✓  ${branch}` : branch,
+    label: branch,
+    checked: branch === currentBranch,
     onSelect: () => { if (branch !== currentBranch) void switchBranch(branch); },
     disabled: actionsBlocked || hasUnsavedChanges || branch === currentBranch,
   }));

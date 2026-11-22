@@ -851,8 +851,12 @@ export const App: React.FC = () => {
         recentProjects={recentProjects}
         onOpenRecentProject={(path) => openProjectFolder(path)}
         hasOpenProject={viewMode === 'editor'}
+        hasProjectFolder={project.projectRoot !== null}
+        hasPdf={compiler.pdfBytes !== null && compiler.pdfBytes.length > 0}
+        hasActiveSourceEditor={viewMode === 'editor' && activeWorkspaceTab?.kind === 'source'}
         onUndo={() => automationEditorBridgeRef.current?.undo()}
         onRedo={() => automationEditorBridgeRef.current?.redo()}
+        onFindReplace={() => window.dispatchEvent(new CustomEvent('sciencebatch:open-find-replace'))}
       />
 
       {/* Main Workspace Toolbar (Shown only in editor mode) */}
@@ -1003,6 +1007,10 @@ export const App: React.FC = () => {
                 sourceMap={compiler.sourceMap}
                 zoom={compiler.zoom}
                 onZoomChange={compiler.setZoom}
+                onZoomIn={compiler.handleZoomIn}
+                onZoomOut={compiler.handleZoomOut}
+                onZoomReset={compiler.handleZoomReset}
+                onFitWidth={compiler.handleFitWidth}
                 isCompiling={compiler.isCompiling}
                 errors={compiler.errors}
                 warnings={compiler.warnings}
@@ -1043,7 +1051,7 @@ export const App: React.FC = () => {
         onClose={() => projectResources.setIsOpen(false)}
       />
 
-      <Toaster position="bottom-right" closeButton theme={theme === 'light' ? 'light' : 'dark'} />
+      <Toaster position="bottom-center" closeButton theme={theme === 'light' ? 'light' : 'dark'} />
     </div>
   );
 };

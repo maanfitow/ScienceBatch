@@ -50,8 +50,12 @@ interface MenuBarProps {
   recentProjects: RecentProject[];
   onOpenRecentProject: (path: string) => void;
   hasOpenProject: boolean;
+  hasProjectFolder?: boolean;
+  hasPdf?: boolean;
+  hasActiveSourceEditor?: boolean;
   onUndo?: () => void;
   onRedo?: () => void;
+  onFindReplace?: () => void;
 }
 
 export const MenuBar: React.FC<MenuBarProps> = ({
@@ -78,16 +82,23 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   recentProjects,
   onOpenRecentProject,
   hasOpenProject,
+  hasProjectFolder,
+  hasPdf,
+  hasActiveSourceEditor,
   onUndo,
   onRedo,
+  onFindReplace,
 }) => {
+  const resolvedHasProjectFolder = hasProjectFolder ?? hasOpenProject;
+  const resolvedHasPdf = hasPdf ?? true;
+  const resolvedHasActiveSourceEditor = hasActiveSourceEditor ?? hasOpenProject;
   const { theme, setTheme } = useTheme();
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [showRecentSubmenu, setShowRecentSubmenu] = useState<boolean>(false);
   const [showExportSubmenu, setShowExportSubmenu] = useState<boolean>(false);
   const menuBarRef = useRef<HTMLDivElement>(null);
 
-  // Close menus on click outside
+  // Close menus on click outside or Escape
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (menuBarRef.current && !menuBarRef.current.contains(e.target as Node)) {
@@ -96,9 +107,54 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         setShowExportSubmenu(false);
       }
     };
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && activeMenu !== null) {
+        e.preventDefault();
+        setActiveMenu(null);
+        setShowRecentSubmenu(false);
+        setShowExportSubmenu(false);
+      }
+    };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [activeMenu]);
+
+  const MENU_ORDER = ['file', 'edit', 'view', 'tools', 'theme', 'help'] as const;
+
+  const handleMenuBarKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!activeMenu) return;
+    const currentIndex = MENU_ORDER.indexOf(activeMenu as (typeof MENU_ORDER)[number]);
+    if (e.key === 'ArrowRight' && currentIndex >= 0) {
+      e.preventDefault();
+      const nextMenu = MENU_ORDER[(currentIndex + 1) % MENU_ORDER.length];
+      setActiveMenu(nextMenu);
+      setShowRecentSubmenu(false);
+      setShowExportSubmenu(false);
+    } else if (e.key === 'ArrowLeft' && currentIndex >= 0) {
+      e.preventDefault();
+      const prevMenu = MENU_ORDER[(currentIndex - 1 + MENU_ORDER.length) % MENU_ORDER.length];
+      setActiveMenu(prevMenu);
+      setShowRecentSubmenu(false);
+      setShowExportSubmenu(false);
+    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      const dropdown = menuBarRef.current?.querySelector<HTMLElement>('.menu-dropdown');
+      if (!dropdown) return;
+      const items = Array.from(
+        dropdown.querySelectorAll<HTMLElement>('button.menu-dropdown-item:not(:disabled), a.menu-dropdown-item'),
+      );
+      if (items.length === 0) return;
+      e.preventDefault();
+      const activeIdx = items.indexOf(document.activeElement as HTMLElement);
+      const nextIdx = e.key === 'ArrowDown'
+        ? (activeIdx < 0 ? 0 : (activeIdx + 1) % items.length)
+        : (activeIdx < 0 ? items.length - 1 : (activeIdx - 1 + items.length) % items.length);
+      items[nextIdx]?.focus();
+    }
+  };
 
   const handleMenuToggle = (name: string) => {
     setActiveMenu((prev) => (prev === name ? null : name));
@@ -121,7 +177,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   };
 
   return (
-    <div className="menu-bar-container" ref={menuBarRef}>
+    <div className="menu-bar-container" ref={menuBarRef} onKeyDown={handleMenuBarKeyDown}>
       {/* File Menu */}
       <div className="menu-item-wrapper">
         <button 
@@ -220,14 +276,20 @@ export const MenuBar: React.FC<MenuBarProps> = ({
 
                   {showExportSubmenu && (
                     <div className="menu-submenu">
-                      <button className="menu-dropdown-item" onClick={() => { onExportPdf(); closeMenu(); }}>
+                      <button
+                        type="button"
+                        className="menu-dropdown-item"
+                        disabled={!resolvedHasPdf}
+                        title={resolvedHasPdf ? 'Export compiled PDF document' : 'Compile document first to export PDF'}
+                        onClick={() => { onExportPdf(); closeMenu(); }}
+                      >
                         <div className="menu-item-left">
                           <FileText size={14} className="icon-latex" />
                           <span>PDF Document (.pdf)</span>
                         </div>
                       </button>
 
-                      <button className="menu-dropdown-item" onClick={() => { onExportZip(); closeMenu(); }}>
+                      <button type="button" className="menu-dropdown-item" onClick={() => { onExportZip(); closeMenu(); }}>
                         <div className="menu-item-left">
                           <Archive size={14} className="icon-archive" />
                           <span>Source Archive (.zip)</span>
@@ -262,20 +324,37 @@ export const MenuBar: React.FC<MenuBarProps> = ({
 
         {activeMenu === 'edit' && (
           <div className="menu-dropdown">
-            <button className="menu-dropdown-item" aria-label="Undo" onClick={() => { onUndo?.(); closeMenu(); }}>
+            <button
+              type="button"
+              className="menu-dropdown-item"
+              aria-label="Undo"
+              disabled={!resolvedHasActiveSourceEditor}
+              onClick={() => { onUndo?.(); closeMenu(); }}
+            >
               <div className="menu-item-left">
                 <span>Undo</span>
               </div>
               <span className="menu-shortcut">Ctrl+Z</span>
             </button>
-            <button className="menu-dropdown-item" aria-label="Redo" onClick={() => { onRedo?.(); closeMenu(); }}>
+            <button
+              type="button"
+              className="menu-dropdown-item"
+              aria-label="Redo"
+              disabled={!resolvedHasActiveSourceEditor}
+              onClick={() => { onRedo?.(); closeMenu(); }}
+            >
               <div className="menu-item-left">
                 <span>Redo</span>
               </div>
               <span className="menu-shortcut">Ctrl+Y</span>
             </button>
             <div className="menu-divider" />
-            <button className="menu-dropdown-item" onClick={closeMenu}>
+            <button
+              type="button"
+              className="menu-dropdown-item"
+              disabled={!resolvedHasActiveSourceEditor}
+              onClick={() => { onFindReplace?.(); closeMenu(); }}
+            >
               <div className="menu-item-left">
                 <span>Find & Replace</span>
               </div>
@@ -297,55 +376,79 @@ export const MenuBar: React.FC<MenuBarProps> = ({
 
         {activeMenu === 'view' && (
           <div className="menu-dropdown">
-            <button className="menu-dropdown-item" onClick={() => { onToggleSidebar(); closeMenu(); }}>
+            <button
+              type="button"
+              className="menu-dropdown-item"
+              disabled={!resolvedHasProjectFolder}
+              onClick={() => { onToggleSidebar(); closeMenu(); }}
+            >
               <div className="menu-item-left">
                 <Sidebar size={14} />
                 <span>Toggle File Explorer</span>
               </div>
-              {sidebarOpen && <Check size={14} />}
+              {resolvedHasProjectFolder && sidebarOpen && <Check size={14} />}
             </button>
 
             <div className="menu-divider" />
 
             <button 
+              type="button"
               className={`menu-dropdown-item ${activeTab === 'preview' ? 'menu-dropdown-item-checked' : ''}`}
+              disabled={!hasOpenProject}
               onClick={() => { onTabChange('preview'); closeMenu(); }}
             >
               <div className="menu-item-left">
                 <Eye size={14} />
                 <span>PDF Preview</span>
               </div>
-              {activeTab === 'preview' && <Check size={14} />}
+              {hasOpenProject && activeTab === 'preview' && <Check size={14} />}
             </button>
 
             <button 
+              type="button"
               className={`menu-dropdown-item ${activeTab === 'diagnostics' ? 'menu-dropdown-item-checked' : ''}`}
+              disabled={!hasOpenProject}
               onClick={() => { onTabChange('diagnostics'); closeMenu(); }}
             >
               <div className="menu-item-left">
                 <AlertTriangle size={14} />
                 <span>Logs & Diagnostics</span>
               </div>
-              {activeTab === 'diagnostics' && <Check size={14} />}
+              {hasOpenProject && activeTab === 'diagnostics' && <Check size={14} />}
             </button>
 
             <div className="menu-divider" />
 
-            <button className="menu-dropdown-item" onClick={() => { onZoomIn(); closeMenu(); }}>
+            <button
+              type="button"
+              className="menu-dropdown-item"
+              disabled={!hasOpenProject || !resolvedHasPdf}
+              onClick={() => { onZoomIn(); closeMenu(); }}
+            >
               <div className="menu-item-left">
                 <ZoomIn size={14} />
                 <span>Zoom In</span>
               </div>
               <span className="menu-shortcut">Ctrl++</span>
             </button>
-            <button className="menu-dropdown-item" onClick={() => { onZoomOut(); closeMenu(); }}>
+            <button
+              type="button"
+              className="menu-dropdown-item"
+              disabled={!hasOpenProject || !resolvedHasPdf}
+              onClick={() => { onZoomOut(); closeMenu(); }}
+            >
               <div className="menu-item-left">
                 <ZoomOut size={14} />
                 <span>Zoom Out</span>
               </div>
               <span className="menu-shortcut">Ctrl+-</span>
             </button>
-            <button className="menu-dropdown-item" onClick={() => { onZoomReset(); closeMenu(); }}>
+            <button
+              type="button"
+              className="menu-dropdown-item"
+              disabled={!hasOpenProject || !resolvedHasPdf}
+              onClick={() => { onZoomReset(); closeMenu(); }}
+            >
               <div className="menu-item-left">
                 <RotateCcw size={14} />
                 <span>Reset Zoom</span>
@@ -388,8 +491,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
               </button>
             )}
 
-            {hasOpenProject && (
-              <button className="menu-dropdown-item" onClick={() => { onOpenProjectResources(); closeMenu(); }}>
+            {resolvedHasProjectFolder && (
+              <button type="button" className="menu-dropdown-item" onClick={() => { onOpenProjectResources(); closeMenu(); }}>
                 <div className="menu-item-left">
                   <Package size={14} />
                   <span>Project Resources…</span>

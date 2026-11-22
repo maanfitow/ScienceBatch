@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { X, Folder, Sparkles, FileText, FileCode, Check, Archive } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import { DEFAULT_LATEX_SOURCE } from '../editor/latexData';
@@ -34,6 +34,24 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
   const [parentDir, setParentDir] = useState<string>('');
   const [zipPath, setZipPath] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTab(initialTab);
+    }
+  }, [isOpen, initialTab]);
+
+  useEffect(() => {
+    if (!isOpen || isProcessing) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isProcessing, onClose]);
 
   if (!isOpen) return null;
 
@@ -108,7 +126,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={() => { if (!isProcessing) onClose(); }}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div className="modal-title-group">
@@ -119,7 +137,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
             )}
             <h3>{activeTab === 'import' ? 'Import Project from ZIP' : 'Create New Scientific Project'}</h3>
           </div>
-          <button className="btn-modal-close" onClick={onClose}>
+          <button type="button" className="btn-modal-close" aria-label="Close dialog" disabled={isProcessing} onClick={onClose}>
             <X size={18} />
           </button>
         </div>
@@ -167,7 +185,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
                   <span>Browse ZIP...</span>
                 </button>
               </div>
-              <p className="modal-desc text-xs text-muted" style={{ marginTop: '4px', fontSize: '12px', color: 'var(--text-muted)' }}>
+              <p className="modal-desc">
                 Select any LaTeX or Typst archive (.zip), including project packages exported from cloud services.
               </p>
             </div>
