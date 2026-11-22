@@ -55,7 +55,7 @@
 .clone-repository-footer .btn-primary {
   border-color: var(--accent-primary);
   background: var(--accent-primary);
-  color: white;
+  color: var(--accent-contrast, #ffffff);
 }
 
 .clone-repository-progress,
@@ -80,8 +80,8 @@
 }
 
 .clone-repository-error {
-  color: var(--danger-color, #f87171);
-  background: color-mix(in srgb, var(--danger-color, #ef4444) 12%, transparent);
+  color: var(--status-error);
+  background: var(--status-error-bg);
 }
 
 .clone-repository-recovery {

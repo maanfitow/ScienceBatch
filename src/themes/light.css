@@ -1,31 +1,138 @@
 /* ==========================================================================
-   Light Theme
+   Light Editorial Theme
+   Warm paper canvas (#f6f5f1) with stark editorial ink (#111214) and
+   solid pastel accents with dark ink.
    ========================================================================== */
 
 [data-theme='light'] {
-  --bg-primary: #f8fafc;
-  --bg-secondary: #ffffff;
-  --bg-tertiary: #f1f5f9;
-  --bg-hover: #e2e8f0;
-  
-  --border-color: #cbd5e1;
-  --border-focus: #2563eb;
-  
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #94a3b8;
+  color-scheme: light;
 
-  --accent-primary: #2563eb;
-  --accent-hover: #1d4ed8;
-  --accent-active: #1e40af;
-  --accent-glow: rgba(37, 99, 235, 0.15);
+  /* Core Surfaces */
+  --bg: #f6f5f1;
+  --surface: #ffffff;
+  --surface-alt: #eceae3;
+  --rule: #d8d5cc;
+  --control-border: #6c6f76;
 
-  --status-success: #059669;
-  --status-warning: #d97706;
-  --status-error: #dc2626;
+  --bg-primary: var(--bg);
+  --bg-secondary: var(--surface);
+  --bg-tertiary: var(--surface-alt);
+  --bg-hover: #e2e0d8;
 
+  --border-color: var(--rule);
+  --border-subtle: #e7e5dd;
+  --border-focus: #111214;
+
+  /* Typography */
+  --text: #111214;
+  --text-primary: var(--text);
+  --text-secondary: #26292e;
+  --text-muted: #52555c;
+
+  /* Editorial Pills & Dropdown Hover */
+  --pill-bg: #111214;
+  --pill-fg: #ffffff;
+  --option-hover-bg: #e2e0d8;
+  --option-hover-fg: #111214;
+
+  /* Primary Interactive Accent (Stark Editorial Ink) */
+  --accent-primary: #111214;
+  --accent-hover: #26292e;
+  --accent-active: #343840;
+  --accent-contrast: #ffffff;
+  --accent-glow: #e4f7f1;
+  --accent-border: #8d9096;
+
+  /* Primary Compile / Stop CTA */
+  --btn-compile-bg: #111214;
+  --btn-compile-hover: #26292e;
+  --btn-compile-active: #343840;
+  --btn-compile-fg: #ffffff;
+  --btn-compile-border: #111214;
+  --btn-stop-bg: #991b1b;
+  --btn-stop-hover: #7f1d1d;
+  --btn-stop-fg: #ffffff;
+  --btn-stop-border: #991b1b;
+  --kbd-bg: rgba(255, 255, 255, 0.18);
+  --kbd-border: rgba(255, 255, 255, 0.32);
+  --kbd-fg: #ffffff;
+
+  /* Solid Editorial Pastel Tiles & Badges with Crisp Dark Ink */
+  --tile-latex-bg: #dec2ff;
+  --tile-latex-fg: #111214;
+  --tile-typst-bg: #74eec8;
+  --tile-typst-fg: #111214;
+  --tile-folder-bg: #fde068;
+  --tile-folder-fg: #111214;
+  --tile-git-bg: #a7e3c5;
+  --tile-git-fg: #111214;
+
+  /* High-Contrast Text Icons on Light Paper */
+  --accent-latex: #5b3b8c;
+  --accent-latex-bg: #dec2ff;
+  --accent-typst: #0f766e;
+  --accent-typst-bg: #74eec8;
+  --accent-folder: #8a5a00;
+  --accent-folder-bg: #fde068;
+  --accent-git: #157347;
+  --accent-git-bg: #a7e3c5;
+  --accent-archive: #9a4726;
+  --accent-archive-bg: #f6b89e;
+  --accent-info: #2c5282;
+  --accent-info-bg: #a5d8ff;
+  --accent-rose: #9d3452;
+  --accent-rose-bg: #f3a6b8;
+
+  /* Status Semantics */
+  --status-success: #0f6b4b;
+  --status-success-bg: #d9f8ee;
+  --status-success-border: #55b899;
+
+  --status-warning: #7a4f00;
+  --status-warning-bg: #fef0b2;
+  --status-warning-border: #c99d24;
+
+  --status-error: #991b1b;
+  --status-error-bg: #fee2e2;
+  --status-error-border: #ef9a9a;
+
+  --status-info: #4b2d7a;
+  --status-info-bg: #efe2ff;
+  --status-info-border: #b38fe6;
+
+  /* Diagnostics Cards & Log Viewer */
+  --diag-error-bg: #fef2f2;
+  --diag-error-border: #f5b4b4;
+  --diag-error-fg: #991b1b;
+  --diag-error-msg-bg: #ffffff;
+
+  --diag-warning-bg: #fefce8;
+  --diag-warning-border: #ebd178;
+  --diag-warning-fg: #854d0e;
+  --diag-warning-msg-bg: #ffffff;
+
+  --diag-tip-bg: #ffffff;
+  --diag-tip-fg: #111214;
+  --diag-tip-accent: #5b3b8c;
+
+  --raw-log-bg: #f6f5f1;
+  --raw-log-fg: #26292e;
+
+  /* Git Diff & File Type Accents */
+  --diff-added-bg: #d9f8ee;
+  --diff-added-fg: #0f6b4b;
+  --diff-removed-bg: #fee2e2;
+  --diff-removed-fg: #991b1b;
+  --diff-hunk-bg: #efe2ff;
+  --diff-hunk-fg: #4b2d7a;
+
+  /* Solid Crisp Surfaces & HUD */
   --card-bg: #ffffff;
-  --viewer-bg: #e2e8f0;
+  --viewer-bg: #e7e5dd;
   --menu-bg: #ffffff;
-  --menu-border: #cbd5e1;
+  --menu-border: #c9c6bc;
+  --hud-bg: #ffffff;
+  --hud-fg: #111214;
+  --hud-border: #8d9096;
+  --overlay-backdrop: rgba(17, 18, 20, 0.45);
 }

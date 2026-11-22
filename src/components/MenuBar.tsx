@@ -21,11 +21,9 @@ import {
   Check,
   Archive,
   FileText,
-  FileCode,
-  Globe,
   Package
 } from 'lucide-react';
-import { useTheme } from '../themes/ThemeContext';
+import { useTheme, THEME_OPTIONS } from '../themes/ThemeContext';
 import { RecentProject } from '../types';
 
 interface MenuBarProps {
@@ -35,8 +33,6 @@ interface MenuBarProps {
   onSaveFile: () => void;
   onExportPdf: () => void;
   onExportZip: () => void;
-  onExportMarkdown: () => void;
-  onExportHtml: () => void;
   onCloseProject: () => void;
   onCompile: () => void;
   onOpenProjectResources: () => void;
@@ -65,8 +61,6 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   onSaveFile,
   onExportPdf,
   onExportZip,
-  onExportMarkdown,
-  onExportHtml,
   onCloseProject,
   onCompile,
   onOpenProjectResources,
@@ -228,33 +222,15 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                     <div className="menu-submenu">
                       <button className="menu-dropdown-item" onClick={() => { onExportPdf(); closeMenu(); }}>
                         <div className="menu-item-left">
-                          <FileText size={14} className="text-blue-400" />
+                          <FileText size={14} className="icon-latex" />
                           <span>PDF Document (.pdf)</span>
                         </div>
-                        <span className="menu-shortcut">Ctrl+Shift+E</span>
                       </button>
 
                       <button className="menu-dropdown-item" onClick={() => { onExportZip(); closeMenu(); }}>
                         <div className="menu-item-left">
-                          <Archive size={14} className="text-amber-400" />
+                          <Archive size={14} className="icon-archive" />
                           <span>Source Archive (.zip)</span>
-                        </div>
-                        <span className="menu-shortcut">Ctrl+Shift+Z</span>
-                      </button>
-
-                      <div className="menu-divider" />
-
-                      <button className="menu-dropdown-item" onClick={() => { onExportMarkdown(); closeMenu(); }}>
-                        <div className="menu-item-left">
-                          <FileCode size={14} className="text-emerald-400" />
-                          <span>Markdown (.md)</span>
-                        </div>
-                      </button>
-
-                      <button className="menu-dropdown-item" onClick={() => { onExportHtml(); closeMenu(); }}>
-                        <div className="menu-item-left">
-                          <Globe size={14} className="text-cyan-400" />
-                          <span>HTML Document (.html)</span>
                         </div>
                       </button>
                     </div>
@@ -394,7 +370,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
           <div className="menu-dropdown">
             {isCompiling ? (
               <button 
-                className="menu-dropdown-item text-rose-400 hover:text-rose-300" 
+                className="menu-dropdown-item menu-dropdown-item-danger" 
                 onClick={() => { onCancelCompile?.(); closeMenu(); }}
               >
                 <div className="menu-item-left">
@@ -458,39 +434,49 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         </button>
 
         {activeMenu === 'theme' && (
-          <div className="menu-dropdown">
-            <button 
-              className={`menu-dropdown-item ${theme === 'dark' ? 'menu-dropdown-item-checked' : ''}`}
-              onClick={() => { setTheme('dark'); closeMenu(); }}
-            >
-              <div className="menu-item-left">
-                <Moon size={14} />
-                <span>Dark (Default)</span>
-              </div>
-              {theme === 'dark' && <Check size={14} />}
-            </button>
+          <div className="menu-dropdown menu-dropdown-themes">
+            <div className="menu-section-label">Editorial Pastels</div>
+            {THEME_OPTIONS.slice(0, 2).map((option) => (
+              <button
+                key={option.id}
+                className={`menu-dropdown-item ${theme === option.id ? 'menu-dropdown-item-checked' : ''}`}
+                onClick={() => { setTheme(option.id); closeMenu(); }}
+                title={option.description}
+              >
+                <div className="menu-item-left">
+                  <span className="theme-swatch-group" aria-hidden="true">
+                    {option.swatches.map((hex, index) => (
+                      <span key={index} className="theme-swatch-dot" style={{ backgroundColor: hex }} />
+                    ))}
+                  </span>
+                  <span>{option.label}</span>
+                </div>
+                {theme === option.id && <Check size={14} />}
+              </button>
+            ))}
 
-            <button 
-              className={`menu-dropdown-item ${theme === 'light' ? 'menu-dropdown-item-checked' : ''}`}
-              onClick={() => { setTheme('light'); closeMenu(); }}
-            >
-              <div className="menu-item-left">
-                <Sun size={14} />
-                <span>Light</span>
-              </div>
-              {theme === 'light' && <Check size={14} />}
-            </button>
-
-            <button 
-              className={`menu-dropdown-item ${theme === 'monokai' ? 'menu-dropdown-item-checked' : ''}`}
-              onClick={() => { setTheme('monokai'); closeMenu(); }}
-            >
-              <div className="menu-item-left">
-                <Palette size={14} />
-                <span>Monokai</span>
-              </div>
-              {theme === 'monokai' && <Check size={14} />}
-            </button>
+            <div className="menu-divider" />
+            <div className="menu-section-label">Classic Themes</div>
+            {THEME_OPTIONS.slice(2).map((option) => (
+              <button
+                key={option.id}
+                className={`menu-dropdown-item ${theme === option.id ? 'menu-dropdown-item-checked' : ''}`}
+                onClick={() => { setTheme(option.id); closeMenu(); }}
+                title={option.description}
+              >
+                <div className="menu-item-left">
+                  {option.id === 'light' ? (
+                    <Sun size={14} />
+                  ) : option.id === 'dark' ? (
+                    <Moon size={14} />
+                  ) : (
+                    <Palette size={14} />
+                  )}
+                  <span>{option.label}</span>
+                </div>
+                {theme === option.id && <Check size={14} />}
+              </button>
+            ))}
           </div>
         )}
       </div>

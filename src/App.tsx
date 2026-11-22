@@ -19,6 +19,7 @@ import { WritingRibbon } from './components/writing/WritingRibbon';
 import { useRecentProjects, useCompiler, useExport, useProject, useProjectResources, useSidebar } from './hooks';
 import { useGitOperation } from './hooks/useGitOperation';
 import { useWorkspaceAutomation } from './hooks/useWorkspaceAutomation';
+import { useTheme } from './themes/ThemeContext';
 import { ViewMode } from './types';
 import { tabIsDirty, type WorkspaceTab } from './types/workspace';
 import type { ProjectResourceSnapshot } from './types/projectResources';
@@ -66,6 +67,7 @@ const waitForRenderTurn = () => new Promise<void>(resolve => {
 });
 
 export const App: React.FC = () => {
+  const { theme } = useTheme();
   // Navigation & Workspace UI State
   const [viewMode, setViewMode] = useState<ViewMode>('welcome');
   const sidebar = useSidebar();
@@ -701,16 +703,6 @@ export const App: React.FC = () => {
     void openProjectFolder();
   });
 
-  useHotkeys('ctrl+shift+e, meta+shift+e', (e) => {
-    e.preventDefault();
-    if (viewMode === 'editor') exportService.downloadPdf(compiler.pdfBytes, project.projectName, project.projectRoot);
-  }, [exportService, compiler.pdfBytes, project.projectName, project.projectRoot, viewMode]);
-
-  useHotkeys('ctrl+shift+z, meta+shift+z', (e) => {
-    e.preventDefault();
-    if (viewMode === 'editor') exportService.exportZip(project.projectRoot, project.projectName, project.sourceCode, project.engine);
-  }, [exportService, project.projectRoot, project.projectName, project.sourceCode, project.engine, viewMode]);
-
   // Context-aware Zoom hotkeys (intercept default webview scaling and delegate)
   useHotkeys(['ctrl+=', 'ctrl+plus', 'meta+=', 'meta+plus'], (e) => {
     e.preventDefault();
@@ -831,8 +823,6 @@ export const App: React.FC = () => {
         onSaveFile={project.saveFile}
         onExportPdf={() => exportService.downloadPdf(compiler.pdfBytes, project.projectName, project.projectRoot)}
         onExportZip={() => exportService.exportZip(project.projectRoot, project.projectName, project.sourceCode, project.engine)}
-        onExportMarkdown={() => exportService.exportMarkdown(project.projectRoot, project.projectName, project.sourceCode, project.engine, project.mainFilePath)}
-        onExportHtml={() => exportService.exportHtml(project.projectRoot, project.projectName, project.sourceCode, project.engine, project.mainFilePath)}
         onCloseProject={project.closeProject}
         onCompile={handleCompileCurrent}
         onOpenProjectResources={projectResources.open}
@@ -869,8 +859,6 @@ export const App: React.FC = () => {
           onFitWidth={compiler.handleFitWidth}
           onDownloadPdf={() => exportService.downloadPdf(compiler.pdfBytes, project.projectName, project.projectRoot)}
           onExportZip={() => exportService.exportZip(project.projectRoot, project.projectName, project.sourceCode, project.engine)}
-          onExportMarkdown={() => exportService.exportMarkdown(project.projectRoot, project.projectName, project.sourceCode, project.engine, project.mainFilePath)}
-          onExportHtml={() => exportService.exportHtml(project.projectRoot, project.projectName, project.sourceCode, project.engine, project.mainFilePath)}
           hasPdf={compiler.pdfBytes !== null && compiler.pdfBytes.length > 0}
           engine={project.engine}
           onSwitchEngine={project.switchEngine}
@@ -1043,7 +1031,7 @@ export const App: React.FC = () => {
         onClose={() => projectResources.setIsOpen(false)}
       />
 
-      <Toaster position="bottom-right" richColors closeButton />
+      <Toaster position="bottom-right" closeButton theme={theme === 'light' ? 'light' : 'dark'} />
     </div>
   );
 };

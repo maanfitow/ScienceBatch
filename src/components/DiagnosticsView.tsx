@@ -153,7 +153,7 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({
           >
             {copiedErrors ? (
               <>
-                <Check size={14} className="text-emerald-400" />
+                <Check size={14} className="icon-success" />
                 <span>Copied!</span>
               </>
             ) : (
@@ -173,7 +173,7 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({
           >
             {copiedRawLog ? (
               <>
-                <Check size={14} className="text-emerald-400" />
+                <Check size={14} className="icon-success" />
                 <span>Copied!</span>
               </>
             ) : (
@@ -226,7 +226,7 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({
                   onClick={() => handleCopySingleCard(err, cardKey)}
                   title="Copy this error message"
                 >
-                  {isCopied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                  {isCopied ? <Check size={14} className="icon-success" /> : <Copy size={14} />}
                 </button>
               </div>
 
@@ -272,7 +272,7 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({
                   onClick={() => handleCopySingleCard(warn, cardKey)}
                   title="Copy this warning message"
                 >
-                  {isCopied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                  {isCopied ? <Check size={14} className="icon-success" /> : <Copy size={14} />}
                 </button>
               </div>
 
@@ -293,7 +293,7 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({
         {/* Empty / Clean State */}
         {!hasIssues && (
           <div className="diag-empty-clean">
-            <CheckCircle2 size={42} className="text-emerald-400" />
+            <CheckCircle2 size={42} className="icon-success" />
             <h3>No Compilation Errors</h3>
             <p>Your document source code compiled cleanly without any errors or warnings.</p>
           </div>
@@ -319,7 +319,7 @@ export const DiagnosticsView: React.FC<DiagnosticsViewProps> = ({
                 onClick={handleCopyRawLog}
                 title="Copy entire raw log"
               >
-                {copiedRawLog ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+                {copiedRawLog ? <Check size={13} className="icon-success" /> : <Copy size={13} />}
                 <span>{copiedRawLog ? 'Copied' : 'Copy'}</span>
               </button>
             </div>
