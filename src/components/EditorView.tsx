@@ -88,6 +88,7 @@ interface EditorViewProps {
   canAddPackages?: boolean;
   onWritingBridgeChange?: (bridge: WritingEditorBridge | null, state: WritingEditorState, releasedBridge?: WritingEditorBridge) => void;
   onAutomationBridgeChange?: (bridge: AutomationEditorBridge | null) => void;
+  onCursorLineChange?: (line: number) => void;
   getDocumentRevision?: (documentId: string) => number;
   wordWrap?: boolean;
 }
@@ -109,6 +110,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
   canAddPackages = false,
   onWritingBridgeChange,
   onAutomationBridgeChange,
+  onCursorLineChange,
   getDocumentRevision,
   wordWrap,
 }) => {
@@ -133,6 +135,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
   const writingBridgeRef = useRef<WritingEditorBridge | null>(null);
   const automationBridgeRef = useRef<AutomationEditorBridge | null>(null);
   const clipboardCommandRef = useRef<monacoType.IDisposable | null>(null);
+  const cursorListenerRef = useRef<monacoType.IDisposable | null>(null);
   const jumpHighlightCollectionRef = useRef<monacoType.editor.IEditorDecorationsCollection | null>(null);
   const jumpHighlightTimerRef = useRef<number | null>(null);
   const lastAppliedJumpSeqRef = useRef<number>(0);
@@ -140,7 +143,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
   latestJumpRequestRef.current = jumpRequest;
   const writingListenersRef = useRef<monacoType.IDisposable[]>([]);
   const writingStateRef = useRef<WritingEditorState>({ language: engine, editable: false, available: false, reason: 'Writing tools are unavailable.', source: value, cursorOffset: 0, canAddPackages: false });
-  const writingPropsRef = useRef({ engine, activeFilePath, canAddPackages, onWritingBridgeChange, onAutomationBridgeChange, getDocumentRevision, documentId, isScratchpad });
+  const writingPropsRef = useRef({ engine, activeFilePath, canAddPackages, onWritingBridgeChange, onAutomationBridgeChange, onCursorLineChange, getDocumentRevision, documentId, isScratchpad });
   const writingContextKey = `${engine}\u0000${documentId}\u0000${activeFilePath ?? ''}\u0000${isScratchpad}\u0000${readOnly}`;
   const writingContextKeyRef = useRef(writingContextKey);
   const writingContextRevisionRef = useRef(0);
@@ -148,7 +151,15 @@ export const EditorView: React.FC<EditorViewProps> = ({
     writingContextKeyRef.current = writingContextKey;
     writingContextRevisionRef.current += 1;
   }
-  writingPropsRef.current = { engine, activeFilePath, canAddPackages, onWritingBridgeChange, onAutomationBridgeChange, getDocumentRevision, documentId, isScratchpad };
+  writingPropsRef.current = { engine, activeFilePath, canAddPackages, onWritingBridgeChange, onAutomationBridgeChange, onCursorLineChange, getDocumentRevision, documentId, isScratchpad };
+  const emitCursorLine = useCallback((line: number, filePath: string | null | undefined) => {
+    writingPropsRef.current.onCursorLineChange?.(line);
+    window.dispatchEvent(
+      new CustomEvent('sciencebatch:cursor-line-changed', {
+        detail: { line, filePath: filePath ?? null },
+      })
+    );
+  }, []);
   baseReadOnlyRef.current = readOnly;
   readOnlyRef.current = readOnly || exportFreezeRef.current;
   latestValueRef.current = value;
@@ -536,7 +547,16 @@ export const EditorView: React.FC<EditorViewProps> = ({
         lintLatexDocument(model, monaco);
       }
       syncCompilerMarkers();
+
+      const initialPosition = editor.getPosition();
+      if (initialPosition) {
+        emitCursorLine(initialPosition.lineNumber, writingPropsRef.current.activeFilePath);
+      }
     }
+    cursorListenerRef.current?.dispose();
+    cursorListenerRef.current = editor.onDidChangeCursorPosition((event) => {
+      emitCursorLine(event.position.lineNumber, writingPropsRef.current.activeFilePath);
+    });
     publishWritingState();
 
     // Register external link opener for Monaco's link detector (handles Ctrl + Click and "Follow link")
@@ -651,6 +671,8 @@ export const EditorView: React.FC<EditorViewProps> = ({
   useEffect(() => () => {
     viewStateListenersRef.current.forEach(listener => listener.dispose());
     writingListenersRef.current.forEach(listener => listener.dispose());
+    cursorListenerRef.current?.dispose();
+    cursorListenerRef.current = null;
     const bridge = writingBridgeRef.current;
     if (bridge) writingPropsRef.current.onWritingBridgeChange?.(null, writingStateRef.current, bridge);
     writingBridgeRef.current = null;
@@ -687,6 +709,16 @@ export const EditorView: React.FC<EditorViewProps> = ({
       modelUrisRef.current.delete(id);
     }
   }, [documentId, editorModelPath, openDocumentIdsKey]);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const model = editor.getModel();
+    const position = editor.getPosition();
+    if (model && position) {
+      emitCursorLine(position.lineNumber, activeFilePath);
+    }
+  }, [activeFilePath, documentId, emitCursorLine]);
 
   useEffect(() => () => {
     clipboardCommandRef.current?.dispose();

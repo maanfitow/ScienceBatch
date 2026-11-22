@@ -70,13 +70,13 @@
 
   /* Inline Icon Accents */
   --accent-latex: #dec2ff;
-  --accent-latex-bg: #dec2ff;
+  --accent-latex-bg: #211b2e;
   --accent-typst: #74eec8;
-  --accent-typst-bg: #74eec8;
+  --accent-typst-bg: #122621;
   --accent-folder: #fde068;
-  --accent-folder-bg: #fde068;
+  --accent-folder-bg: #262112;
   --accent-git: #a7e3c5;
-  --accent-git-bg: #a7e3c5;
+  --accent-git-bg: #15261e;
   --accent-archive: #f6b89e;
   --accent-archive-bg: #261d1a;
   --accent-info: #a5d8ff;

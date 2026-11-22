@@ -92,6 +92,7 @@ export const App: React.FC = () => {
   // Diagnostics & Inverse Search Line Navigation
   const jumpSeqRef = React.useRef(0);
   const [jumpRequest, setJumpRequest] = useState<{ line: number; column?: number; seq: number } | null>(null);
+  const [cursorLocation, setCursorLocation] = useState<{ line: number; filePath: string | null } | null>(null);
   const [writingBridge, setWritingBridge] = useState<WritingEditorBridge | null>(null);
   const [writingEditorState, setWritingEditorState] = useState<WritingEditorState>({
     language: 'latex',
@@ -124,6 +125,22 @@ export const App: React.FC = () => {
     };
     window.addEventListener('contextmenu', preventNativeContextMenu, true);
     return () => window.removeEventListener('contextmenu', preventNativeContextMenu, true);
+  }, []);
+
+  useEffect(() => {
+    const handleCursorLineChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{ line?: number; filePath?: string | null }>).detail;
+      if (typeof detail?.line !== 'number' || !Number.isFinite(detail.line)) return;
+      const nextLine = detail.line;
+      const nextFilePath = detail.filePath ?? null;
+      setCursorLocation((prev) =>
+        prev && prev.line === nextLine && prev.filePath === nextFilePath
+          ? prev
+          : { line: nextLine, filePath: nextFilePath }
+      );
+    };
+    window.addEventListener('sciencebatch:cursor-line-changed', handleCursorLineChanged);
+    return () => window.removeEventListener('sciencebatch:cursor-line-changed', handleCursorLineChanged);
   }, []);
 
   const project = useProject({
@@ -991,6 +1008,15 @@ export const App: React.FC = () => {
                     projectName={project.projectName}
                     engine={project.engine}
                     sourceCode={project.sourceCode}
+                    activeCursorLine={
+                      cursorLocation && (
+                        cursorLocation.filePath && project.activeFilePath
+                          ? normalizeWorkspacePath(cursorLocation.filePath) === normalizeWorkspacePath(project.activeFilePath)
+                          : (cursorLocation.filePath ?? null) === (project.activeFilePath ?? null)
+                      )
+                        ? cursorLocation.line
+                        : null
+                    }
                     onUpdateSourceCode={project.setSourceCode}
                     onSelectLine={handleSelectLine}
                   />

@@ -39,6 +39,7 @@ interface SidebarContentPanelsProps {
 
   // Editor & Search Props
   sourceCode: string;
+  activeCursorLine?: number | null;
   onUpdateSourceCode: (code: string) => void;
   onSelectLine: (line: number, file?: string | null) => void;
   onOpenDiff?: (path: string, repositoryRoot: string) => void;
@@ -74,6 +75,7 @@ export const SidebarContentPanels: React.FC<SidebarContentPanelsProps> = ({
   projectName,
   engine,
   sourceCode,
+  activeCursorLine,
   onUpdateSourceCode,
   onSelectLine,
   onOpenDiff,
@@ -137,6 +139,7 @@ export const SidebarContentPanels: React.FC<SidebarContentPanelsProps> = ({
               engine={engine}
               sourceCode={sourceCode}
               activeFilePath={activeFilePath}
+              activeCursorLine={activeCursorLine}
               mainFilePath={mainFilePath}
               projectRoot={projectRoot}
               onSelectFile={onSelectFile}
