@@ -701,16 +701,6 @@ export const App: React.FC = () => {
     void openProjectFolder();
   });
 
-  useHotkeys('ctrl+shift+e, meta+shift+e', (e) => {
-    e.preventDefault();
-    if (viewMode === 'editor') exportService.downloadPdf(compiler.pdfBytes, project.projectName, project.projectRoot);
-  }, [exportService, compiler.pdfBytes, project.projectName, project.projectRoot, viewMode]);
-
-  useHotkeys('ctrl+shift+z, meta+shift+z', (e) => {
-    e.preventDefault();
-    if (viewMode === 'editor') exportService.exportZip(project.projectRoot, project.projectName, project.sourceCode, project.engine);
-  }, [exportService, project.projectRoot, project.projectName, project.sourceCode, project.engine, viewMode]);
-
   // Context-aware Zoom hotkeys (intercept default webview scaling and delegate)
   useHotkeys(['ctrl+=', 'ctrl+plus', 'meta+=', 'meta+plus'], (e) => {
     e.preventDefault();
@@ -831,8 +821,6 @@ export const App: React.FC = () => {
         onSaveFile={project.saveFile}
         onExportPdf={() => exportService.downloadPdf(compiler.pdfBytes, project.projectName, project.projectRoot)}
         onExportZip={() => exportService.exportZip(project.projectRoot, project.projectName, project.sourceCode, project.engine)}
-        onExportMarkdown={() => exportService.exportMarkdown(project.projectRoot, project.projectName, project.sourceCode, project.engine, project.mainFilePath)}
-        onExportHtml={() => exportService.exportHtml(project.projectRoot, project.projectName, project.sourceCode, project.engine, project.mainFilePath)}
         onCloseProject={project.closeProject}
         onCompile={handleCompileCurrent}
         onOpenProjectResources={projectResources.open}
@@ -869,8 +857,6 @@ export const App: React.FC = () => {
           onFitWidth={compiler.handleFitWidth}
           onDownloadPdf={() => exportService.downloadPdf(compiler.pdfBytes, project.projectName, project.projectRoot)}
           onExportZip={() => exportService.exportZip(project.projectRoot, project.projectName, project.sourceCode, project.engine)}
-          onExportMarkdown={() => exportService.exportMarkdown(project.projectRoot, project.projectName, project.sourceCode, project.engine, project.mainFilePath)}
-          onExportHtml={() => exportService.exportHtml(project.projectRoot, project.projectName, project.sourceCode, project.engine, project.mainFilePath)}
           hasPdf={compiler.pdfBytes !== null && compiler.pdfBytes.length > 0}
           engine={project.engine}
           onSwitchEngine={project.switchEngine}

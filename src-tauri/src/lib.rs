@@ -2,7 +2,6 @@ pub mod automation;
 pub mod commands;
 pub mod compiler;
 pub mod diagnostics;
-pub mod exporters;
 pub mod fs;
 pub mod types;
 
@@ -91,8 +90,6 @@ pub fn run() {
             commands::files::reset_webview_zoom,
             commands::export::import_project_from_zip,
             commands::export::export_project_to_zip,
-            commands::export::export_document_to_markdown,
-            commands::export::export_document_to_html,
             commands::git::get_git_status,
             commands::git::get_git_diff,
             commands::git::initialize_git_repository,

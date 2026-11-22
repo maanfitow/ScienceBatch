@@ -21,6 +21,7 @@ html, body, #root {
    Toolbar
    ========================================================================== */
 .toolbar {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -29,7 +30,7 @@ html, body, #root {
   padding: 0 16px;
   background-color: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
-  z-index: 20;
+  z-index: 26;
 }
 
 .toolbar-left, .toolbar-right {
