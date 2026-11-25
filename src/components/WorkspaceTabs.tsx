@@ -298,7 +298,11 @@ const AssetTab: React.FC<{ path: string }> = ({ path }) => {
 
     const draw = async () => {
       try {
-        const document = await pdfjs.getDocument(url).promise;
+        const document = await pdfjs.getDocument({
+          url,
+          cMapUrl: '/cmaps/',
+          cMapPacked: true,
+        }).promise;
         pdfDocument = document;
         if (cancelled) { await document.destroy(); return; }
         setPdfPages(document.numPages);
