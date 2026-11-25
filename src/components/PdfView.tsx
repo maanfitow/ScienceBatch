@@ -333,7 +333,7 @@ export const PdfView: React.FC<PdfViewProps> = ({
         const dataCopy = new Uint8Array(pdfBytes);
         const loadingTask = pdfjsLib.getDocument({
           data: dataCopy,
-          cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/cmaps/',
+          cMapUrl: '/cmaps/',
           cMapPacked: true,
           // WebKit's worker-side OffscreenCanvas path can leave embedded images
           // missing after a canvas is repainted at a new zoom level.

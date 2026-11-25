@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useLayoutEffect, useCallback, useState } from 'react';
+import '../editor/monacoSetup';
 import Editor, { OnMount, BeforeMount } from '@monaco-editor/react';
 import type * as monacoType from 'monaco-editor';
 import type { Monaco } from '@monaco-editor/react';

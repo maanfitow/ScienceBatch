@@ -113,7 +113,11 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
         setFileSizeBytes(uint8.byteLength);
 
         if (isPdf) {
-          const loadingTask = pdfjsLib.getDocument({ data: uint8 });
+          const loadingTask = pdfjsLib.getDocument({
+            data: uint8,
+            cMapUrl: '/cmaps/',
+            cMapPacked: true,
+          });
           const pdfDoc = await loadingTask.promise;
           if (cancelled) return;
 
