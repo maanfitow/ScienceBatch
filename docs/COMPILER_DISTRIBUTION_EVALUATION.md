@@ -14,12 +14,17 @@ All MB/GB values below use decimal units. Download archives, logical file payloa
 
 | Item | Bytes | Meaning |
 | --- | ---: | --- |
-| Current debug `.deb` | 132,534,018 | Existing installer archive, not a production release |
-| Debug installed size from package metadata | 448,211,968 | `Installed-Size: 437707` KiB |
-| GUI after `strip --strip-all` | 94,215,512 | Temporary copy; original executable preserved |
-| CLI after `strip --strip-all` | 81,418,160 | Temporary copy; original executable preserved |
-| Stripped analysis package | 49,521,468 | Temporary xz-compressed package; size experiment only |
-| Stripped analysis package file payload | 175,635,195 | Both executables and the existing packaged assets |
+| Current debug `.deb` (2026-10-08 baseline) | 132,534,018 | Historical debug installer archive, not a production release |
+| Debug installed size from package metadata (2026-10-08) | 448,211,968 | `Installed-Size: 437707` KiB |
+| Production release `.deb` (`phase2/release-build-smoke`, 2026-11-25) | 94,610,486 | `90.23 MiB` gzip-compressed `.deb` built with `[profile.release]` (`opt-level = 3`, `lto = "thin"`, `strip = true`, `debug = false`), including bundled Monaco, UI fonts, and PDF.js CMaps |
+| Production release `.AppImage` (`phase2/release-build-smoke`, 2026-11-25) | 169,511,416 | `161.66 MiB` self-contained AppImage (`linuxdeploy`-bundled shared libraries + RPATH-patched binaries) |
+| Release installed size from `.deb` metadata (`2026-11-25`) | 183,982,080 | `Installed-Size: 179670` KiB (~59.0% reduction vs debug `.deb` metadata) |
+| Release `usr/bin/sciencebatch` (`2026-11-25`) | 98,299,576 | Packaged stripped GUI executable (thin LTO) |
+| Release `usr/bin/sciencebatch-cli` (`2026-11-25`) | 85,627,992 | Packaged stripped CLI sidecar (thin LTO) |
+| GUI after `strip --strip-all` (2026-10-08 experiment) | 94,215,512 | Temporary copy; original executable preserved |
+| CLI after `strip --strip-all` (2026-10-08 experiment) | 81,418,160 | Temporary copy; original executable preserved |
+| Stripped analysis package (2026-10-08 experiment) | 49,521,468 | Temporary xz-compressed package; size experiment only |
+| Stripped analysis package file payload (2026-10-08 experiment) | 175,635,195 | Both executables and the existing packaged assets |
 | Complete resource cache, logical size | 2,782,353,293 | Includes the bundle index and resource files |
 | Complete resource cache, allocated space | 3,107,639,296 | Observed on this filesystem; many small files add allocation overhead |
 | Existing partial cache, allocated space | 55,910,400 | Includes resources, index, and reusable formats; sufficient for the tested fixtures, not all supported documents |
@@ -83,7 +88,11 @@ The external ScienceBatch variant has not been built. Its exact installer and in
 
 ## Evidence and limits
 
-- Existing artifact: `src-tauri/target/debug/bundle/deb/ScienceBatch_0.1.0_amd64.deb`.
+- Existing release artifacts (2026-11-25):
+  - `src-tauri/target/release/bundle/deb/ScienceBatch_0.1.0_amd64.deb` (`94,610,486` bytes / `90.23 MiB`, `Installed-Size: 179670` KiB), built via `pnpm tauri build --bundles deb` (`sciencebatch` binary `98,299,576` bytes; packaged `sciencebatch-cli` sidecar `85,627,992` bytes, matching `src-tauri/binaries/sciencebatch-cli-x86_64-unknown-linux-gnu` SHA-256 `951d62b07ab5752de23f496e9c5dd72cfc6a09e10b38b4459aae261f343ce919`).
+  - `src-tauri/target/release/bundle/appimage/ScienceBatch_0.1.0_amd64.AppImage` (`169,511,416` bytes / `161.66 MiB`), built via `pnpm tauri build --bundles appimage` (its `linuxdeploy`-patched internal binaries measure `98,346,425` bytes for `usr/bin/sciencebatch` and `85,653,625` bytes for `usr/bin/sciencebatch-cli`). `.rpm` was intentionally deferred (`rpmbuild` absent on host).
+- Clean-environment Linux smoke checks (2026-11-25, under isolated `HOME` and empty `TECTONIC_CACHE_DIR`): extracted `.deb` checks passed `--help`, `resources status`, Typst offline compile (`5,511` B PDF), LaTeX Showcase offline compile (`3,581` B PDF), `fontawesome5` selective prepare (`528,427` B downloaded) + offline compile (`4,603` B PDF), `fontspec` + `fontawesome5` 2-pass selective recovery (`372,555` B downloaded, including dynamic `fontspec-xetex.sty`) + offline compile (`4,090` B PDF), `sciencebatch --compile-worker` (`9,966` B Typst PDF), and isolated GUI startup (`alive_2500ms_clean_sigterm`) with zero `AF_INET`/`AF_INET6` `connect()` calls recorded by `strace` during offline `.deb` phases. Extracted/FUSE `.AppImage` checks separately passed direct FUSE GUI launch (`direct_fuse`), `resources status`, Typst (`5,511` B PDF), LaTeX Showcase (`3,581` B PDF), and `sciencebatch --compile-worker` (`8,428` B Typst PDF). Note: a standalone `IEEEtran` smoke fixture without its full font pack triggered `path.outside_project` when XeTeX's Fontconfig fallback resolved `/usr/share/fonts/...` inside `SnapshotIo`; this remains a separate automation-sandbox observation outside release packaging.
+- Historical debug artifact (2026-10-08): `src-tauri/target/debug/bundle/deb/ScienceBatch_0.1.0_amd64.deb`.
 - Stripped copies: `/tmp/sciencebatch-size-strip-all-5htf3qc4/`.
 - Size-only package: `/tmp/sciencebatch-size-package-xfjvr7u5/sciencebatch-stripped-analysis.deb`.
 - Stripped CLI matrix fixtures: `/tmp/sciencebatch-automation-cli-C4LB9d/`.
@@ -92,6 +101,6 @@ The external ScienceBatch variant has not been built. Its exact installer and in
 - Archive SHA-256: `4d519d6236ee6798e3ec0d8e2093d1fda01aeb267aa22c2a5586d76bcfce6566`, matching the official GitHub release API digest.
 - TypeScript typecheck and Rust `cargo check` passed during this evaluation. Graphify was consulted before evaluating architecture changes. No application code or engine configuration was changed by this evaluation.
 
-An isolated cold release benchmark used `cargo build --manifest-path src-tauri/Cargo.toml --release --bins --features tauri/custom-protocol`, two jobs, debug information disabled, symbol stripping, thin LTO, and one codegen unit. The benchmark disabled the prebuilt sidecar requirement only through its environment and used a separate temporary target. It was stopped and reaped at the agreed 15-minute evaluation limit while dependencies were still compiling; no ScienceBatch release binaries were produced. Its temporary target was removed. The production release size remains unmeasured: the successful size result above is the stripped-debug experiment, not a completed optimized release build.
+Historical note (2026-10-08): an isolated cold release benchmark using `--release --bins --features tauri/custom-protocol`, two jobs, and `codegen-units = 1` was stopped and reaped at its 15-minute evaluation limit before producing binaries. On 2026-11-25, configuring `[profile.release]` (`opt-level = 3`, `lto = "thin"`, `strip = true`, `debug = false`, default codegen-units) in `src-tauri/Cargo.toml` completed `pnpm tauri build --bundles deb` (`6m 15s` for the Rust desktop binary on a warm 16-core release target) and produced the measured release `.deb` recorded above.
 
-Previous native QA statuses are unchanged. Archive inspection and CLI checks do not establish native GUI or cross-platform release readiness.
+Previous native QA statuses are unchanged. Linux `.deb` smoke checks do not establish native WebKitGTK QA sign-off (Phase 3) or Windows/macOS release readiness (Phase 4).
