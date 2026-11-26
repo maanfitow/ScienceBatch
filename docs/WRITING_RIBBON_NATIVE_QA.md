@@ -25,9 +25,9 @@ Record application revision, OS/WebKit version, test document, zoom levels, and 
 
 ## Latest attempt — 2026-10-05
 
-The coordinator started the current Tauri development build and confirmed, through native accessibility state, that Quick LaTeX opened with the writing ribbon and **Document Not Compiled**. Orca's computer-use runtime was initially unavailable; starting it enabled application discovery and accessibility observation.
+The coordinator started the current Tauri development build and confirmed, through native accessibility state, that Quick LaTeX opened with the writing ribbon and **Document Not Compiled**. The external GUI automation runtime was initially unavailable; starting it enabled application discovery and accessibility observation.
 
-The Linux provider reported no focus/hotkey support. `get-app-state --restore-window` still captured the covering Orca window rather than ScienceBatch, so visual output could not be inspected. Setting Monaco's accessible editor value failed with `accessibility_error: 'Accessible' object has no attribute 'is_editable_text'`. The unchanged editor content was read back. No user document was changed, and no compilation was triggered in this attempt.
+The Linux provider reported no focus/hotkey support. `get-app-state --restore-window` still captured the covering controller window rather than ScienceBatch, so visual output could not be inspected. Setting Monaco's accessible editor value failed with `accessibility_error: 'Accessible' object has no attribute 'is_editable_text'`. The unchanged editor content was read back. No user document was changed, and no compilation was triggered in this attempt.
 
 This attempt independently established no ribbon acceptance result: native Copy, PDF retention, embedded-PDF zoom, and Git-lock checks were **Unverified** because the provider could not control the foreground application.
 
@@ -55,3 +55,20 @@ Keep these specific gaps open until the detailed report or new native evidence c
 The authorized Bold/Italic controls have no native GTK/WebKit acceptance results yet. Frontend/browser verification is complete; verify both LaTeX and Typst in a fresh Tauri app using disposable scratch documents. Exercise mouse and keyboard activation for Bold and Italic with forward, reverse, and empty selections; combine and remove recognized nested wrappers; confirm unsupported partial/protected selections stay disabled; and check exact source, directional selection, focus, Undo/Redo, read-only behavior, and unchanged PDF until explicit Compile. Confirm no save or compile is triggered by formatting. Record app revision, OS/WebKit, engine/source fixture, and individual outcomes. Mark these cases **Unverified** until that native run occurs.
 
 Browser fixtures that seed editor read-only references or mock Tauri IPC do not substitute for an actual native read-only transition. This formatting procedure also does not close the separately pending embedded-PDF figure or real Git-operation workspace-lock cases above.
+
+## Native Linux QA pass — 2026-11-25
+
+Executed on Linux (`kernel 6.17.0-35-generic`, WebKitGTK `2.52.6-0ubuntu0.24.04.2`) against a live `pnpm dev` + `src-tauri/target/debug/sciencebatch` window driven with AT-SPI, `wmctrl`, `xclip`, and `WorkspaceBridge` ([native-linux-qa-2026-11-25.json](qa/native-linux-qa-2026-11-25.json)):
+
+| Check | Status (2026-11-25) | Observed evidence |
+| --- | --- | --- |
+| Native Copy | **Passed** | Selected `"BoldTarget"` in Monaco, triggered native `Edit -> Copy`, and read `"BoldTarget"` from the X11 clipboard via `xclip`. |
+| Clipboard failure | **Unit/regression covered** | Controlled failure feedback remains covered by `node scripts/test-editor-clipboard.mjs`. |
+| Writing Ribbon (LaTeX & Typst) | **Passed** | Tested `Symbols` cancel, `Table` cancel/insert/Undo, and `Matrix` cancel/insert/Undo in both engines via AT-SPI. |
+| Bold/Italic native (LaTeX & Typst) | **Passed** | Verified `\textbf{}` / `\textit{}` (LaTeX) and `#strong[]` / `#emph[]` (Typst), native `Edit -> Undo` / `Redo`, and unchanged uncompiled PDF state. |
+| Embedded PDF figure zoom | **Passed** | 2-page LaTeX fixture embedding `figure_embedded.pdf` (text, vector lines/circle, and raster `sample.png`) inspected via native window screenshots at `100%`, `74%` (`Fit to width`), `70%`, and `130%` with no blank regions. |
+| Real Git-operation workspace lock | **Passed** | Triggered native Git `Push` to a bare remote running a 3s `pre-receive` hook; verified `git.locked` on `workspace.apply`, `Bold` disabled in UI (`boldEnabledDuringLock: false`), and full unlock after push completion. |
+| `Dependencies` / `Project Resources` | **Passed** | Verified live progress bar, mid-download `Cancel` reaping the worker, `Resume download`, `Download & Recompile` (`Page 1 of 1`), `Shared Cache` pruning (`Removed 1 file · 50.5 KiB`), and `file:line` jump (`main.tex:4`). |
+| Workspace bridge native suite | **Passed** | `node scripts/test-workspace-native-qa.mjs` passed all 10 scenarios (`2 MiB edit: 170 ms`) after adding a render-turn wait to `workspace.openProject` in `src/App.tsx`. |
+
+Cross-platform native validation (Windows and macOS) remains pending for Phase 4.

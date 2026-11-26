@@ -22,6 +22,10 @@ node scripts/test-pdf-rendering-helpers.mjs
 
 The tests cover fractional canvas sizing, the one-page staging bound, cancellation, failed renders, and sequential page commits. They do not validate WebKit's visual output. For that, open a document with embedded PDF figures, use Fit to width/screen, and inspect the affected pages at several zoom levels. Confirm both that content remains visible and that scrolling still tracks the same page after redraws.
 
+### Native Linux validation — 2026-11-25
+
+On Linux (`WebKitGTK 2.52.6-0ubuntu0.24.04.2`), a 2-page LaTeX document embedding a PDF figure (`figure_embedded.pdf` containing text, vector lines/circle, and raster `sample.png`) was compiled in the native Tauri window and visually inspected via window captures at `100%`, `74%` (`Fit to width`), `70%`, and `130%` ([native-linux-qa-2026-11-25.json](qa/native-linux-qa-2026-11-25.json)). All text, vector paths, and raster pixels rendered intact without blank regions. Windows and macOS visual validation remains separate.
+
 ## Future source navigation
 
 Page wrappers and canvas-relative hit testing can remain the preview surface for future click-to-source navigation. The canvas does not contain LaTeX or Typst source locations by itself; accurate navigation will need source-position metadata, such as SyncTeX data for LaTeX or an equivalent mapping produced by the Typst pipeline. Keep that mapping separate from the PDF rasterization path so source navigation does not require replacing the lightweight canvas viewer.

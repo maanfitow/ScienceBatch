@@ -63,7 +63,7 @@ Context-menu Copy uses the Tauri clipboard plugin in desktop mode and the browse
 - Maintain listener cleanup and strict TypeScript. Any future compiler package addition must update linter, autocomplete, and project scanning together.
 - Do not discard unsupported source or evaluate user macros in previews.
 - Query Graphify before choosing a code change. After code changes, run extraction followed by clustering.
-- If operating through Orca, use supervised Tasks and Dispatches. Do not launch an untracked implementation terminal. Antigravity is the user-selected recipient for this continuation; do not silently substitute an agent or model.
+- Antigravity is the user-selected recipient for this continuation; do not silently substitute an agent or model.
 
 ## Continuation deliveries
 

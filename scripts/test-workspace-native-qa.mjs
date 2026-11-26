@@ -49,18 +49,55 @@ const request = (operation, args = {}, timeoutMs = 40_000) => {
 };
 
 const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
-const computer = (...args) => JSON.parse(execFileSync('orca-ide', args, { encoding: 'utf8' }));
-const appSnapshot = () => computer('computer', 'get-app-state', '--app', 'sciencebatch', '--no-screenshot', '--json').result.snapshot;
-const clickAppElement = index => computer('computer', 'click', '--app', 'sciencebatch', '--element-index', String(index), '--no-screenshot', '--json');
+const clickAccessibleEditMenuItem = label => {
+  const py = `
+import gi, sys
+gi.require_version('Atspi', '2.0')
+from gi.repository import Atspi
+
+label = sys.argv[1]
+desktop = Atspi.get_desktop(0)
+
+def find_app():
+    for i in range(desktop.get_child_count()):
+        app = desktop.get_child_at_index(i)
+        if app and 'sciencebatch' in (app.get_name() or '').lower():
+            return app
+    return None
+
+def find_button(node, name):
+    if node is None:
+        return None
+    if node.get_role_name() == 'push button' and (node.get_name() or '').strip() == name:
+        return node
+    for i in range(node.get_child_count()):
+        hit = find_button(node.get_child_at_index(i), name)
+        if hit is not None:
+            return hit
+    return None
+
+def press(node):
+    action = node.get_action_iface()
+    if action is None:
+        raise RuntimeError(f'Button {node.get_name()!r} exposes no AT-SPI action interface')
+    action.do_action(0)
+
+app = find_app()
+if app is None:
+    raise RuntimeError('ScienceBatch accessible application not found')
+edit_btn = find_button(app, 'Edit')
+if edit_btn is None:
+    raise RuntimeError('Native Edit menu button not found')
+press(edit_btn)
+cmd_btn = find_button(app, label)
+if cmd_btn is None:
+    raise RuntimeError(f'Native Edit menu item {label!r} not found')
+press(cmd_btn)
+`;
+  execFileSync('python3', ['-c', py, label], { encoding: 'utf8' });
+};
 const triggerEditCommand = label => {
-  let snapshot = appSnapshot();
-  const editIndex = Number(snapshot.treeText.match(/^\s*(\d+) push button Edit\s*$/m)?.[1]);
-  assert.ok(Number.isInteger(editIndex), 'the native Edit menu is accessible');
-  clickAppElement(editIndex);
-  snapshot = appSnapshot();
-  const commandIndex = Number(snapshot.treeText.match(new RegExp(`^\\s*(\\d+) push button ${label}\\s*$`, 'm'))?.[1]);
-  assert.ok(Number.isInteger(commandIndex), `the native Edit menu exposes ${label}`);
-  clickAppElement(commandIndex);
+  clickAccessibleEditMenuItem(label);
 };
 const successful = (reply, operation) => {
   assert.equal(reply.ok, true, `${operation} succeeds: ${reply.error?.code ?? ''} ${reply.error?.message ?? ''}`);

@@ -302,7 +302,16 @@ export const App: React.FC = () => {
           if (!contextStillCurrent()) return reject('conflict.project', 'The workspace changed while project access was being checked.');
           if (current.tabs.some(tabIsDirty)) return reject('conflict.dirty', 'Unsaved documents must be saved before switching projects.');
           const opened = await current.openFolder(authorizedTarget, true);
-          if (opened && projectRef.current.projectRoot !== authorizedTarget) return reject('conflict.project', 'The workspace changed while the project was opening.');
+          if (opened) {
+            let latest = projectRef.current;
+            for (let attempt = 0; attempt < 30 && latest.projectRoot !== authorizedTarget; attempt++) {
+              await waitForRenderTurn();
+              latest = projectRef.current;
+            }
+            if (latest.projectRoot !== authorizedTarget) {
+              return reject('conflict.project', 'The workspace changed while the project was opening.');
+            }
+          }
           return opened ? respond({ projectRoot: projectRef.current.projectRoot, workspaceGeneration: projectRef.current.getProjectGeneration() }) : reject('project.open', 'The requested project could not be opened.');
         }
         case 'workspace.openFile': {

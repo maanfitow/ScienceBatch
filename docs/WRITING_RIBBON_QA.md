@@ -43,7 +43,7 @@ The latest `pnpm tsc --noEmit`, `pnpm build`, `cargo check --manifest-path src-t
 
 The table preview sizes columns to their content, follows the selected left/center/right alignment (left by default), and bolds only an enabled header row. Empty cells remain blank. Plain has no rules, Grid draws every cell border, and Booktabs shows top/bottom rules with a header separator only when enabled. Wide tables scroll horizontally inside the preview frame without widening the dialog. The preview uses a compact serif font and spacing as a screen approximation; final size and font depend on the LaTeX document. Raw LaTeX cells are shown as source. Generated LaTeX is unchanged.
 
-`node /tmp/sciencebatch-table-preview-qa.mjs` passed against real Monaco with mocked Tauri IPC. It covered the supplied 3×3 sample, default/mixed/all-center alignment, all three formats including a one-row Booktabs table, visible blank rows, the three themes, and long-cell scrolling with bounded layout at 900×600. Source insertion, Undo/Redo, cancellation, and dialog bounds remained correct; the run reported no runtime errors and made no save or compile calls. `pnpm tsc --noEmit` and `cargo check --manifest-path src-tauri/Cargo.toml` passed. Native Tauri visual verification remains unavailable because the required `orca-ide` runtime metadata is missing.
+`node /tmp/sciencebatch-table-preview-qa.mjs` passed against real Monaco with mocked Tauri IPC. It covered the supplied 3×3 sample, default/mixed/all-center alignment, all three formats including a one-row Booktabs table, visible blank rows, the three themes, and long-cell scrolling with bounded layout at 900×600. Source insertion, Undo/Redo, cancellation, and dialog bounds remained correct; the run reported no runtime errors and made no save or compile calls. `pnpm tsc --noEmit` and `cargo check --manifest-path src-tauri/Cargo.toml` passed. Native Tauri visual verification remained unavailable in that run because the external GUI automation runtime metadata was missing.
 
 ### Editor context-menu Copy
 
@@ -55,7 +55,7 @@ Monaco's **Copy** command now writes selected plain text through the Tauri clipb
 
 The native GTK/WebKit system clipboard remains unverified because native GUI automation is unavailable. Restart `pnpm tauri dev` to load the newly registered Rust clipboard plugin before manual desktop verification.
 
-Native Tauri verification of PDF retention and Git-lock UI behavior could not be completed because `orca-ide` runtime metadata required by the native GUI automation tooling was unavailable. The mock bridge check passed; the native check remains open.
+Native Tauri verification of PDF retention and Git-lock UI behavior could not be completed in that run because the external GUI automation runtime metadata was unavailable. The mock bridge check passed; the native check remains open.
 
 In a separate extended engine-switch run, the zero-runtime-errors assertion failed on a nonfatal unhandled Monaco `Canceled` rejection after a long-document scenario. Assertions for Typst tool disabling and tab closing passed. The stack passed through CDN Monaco 0.55.1 cancellation/disposal and `setModel` in `@monaco-editor/react`. A minimal engine-only reproduction did not reproduce it, and the archived `b3ca9e8` baseline also did not reproduce it. Treat this as an unconfirmed follow-up investigation; it is not evidence of a pre-existing defect, and no editor or engine changes were made for it.
 
@@ -73,7 +73,7 @@ Next validation work is native Tauri PDF-retention and Git-lock UI QA. The Monac
 
 [SPEC-WRITE-004](TYPST_WRITING_TOOLS.md) now defines Typst Symbols followed by Table/Matrix creation and compatible editing. At this historical 2026-10-05 documentation-only step, Typst writing tools were not yet implemented and were disabled; font controls remained future work and Bold/Italic had not yet been authorized.
 
-The native development app started, and accessibility observation confirmed Quick LaTeX opened with the ribbon and an uncompiled document. Starting Orca made native observation available, but its Linux provider could not bring ScienceBatch to the foreground for screenshots and failed to set Monaco's accessible value. The detailed attempt and repeatable acceptance procedure are recorded in [Native Writing Ribbon Acceptance](WRITING_RIBBON_NATIVE_QA.md). Native Copy, PDF-retention/zoom, and Git-lock checks remain unverified.
+The native development app started, and accessibility observation confirmed Quick LaTeX opened with the ribbon and an uncompiled document. Starting the native accessibility controller enabled application observation, but its Linux provider could not bring ScienceBatch to the foreground for screenshots and failed to set Monaco's accessible value. The detailed attempt and repeatable acceptance procedure are recorded in [Native Writing Ribbon Acceptance](WRITING_RIBBON_NATIVE_QA.md). Native Copy, PDF-retention/zoom, and Git-lock checks remain unverified.
 
 `pnpm tsc --noEmit`, `cargo check --manifest-path src-tauri/Cargo.toml`, and the clipboard, writing-core, writing-bridge, and PDF-helper scripts passed again. No code modules changed, so this documentation step did not require a Graphify extraction refresh.
 

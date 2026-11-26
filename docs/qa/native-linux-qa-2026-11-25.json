@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-25",
+  "status": "passed",
+  "branch": "phase3/native-qa-signoff",
+  "platform": "Linux",
+  "kernel": "6.17.0-35-generic",
+  "webkit": "2.52.6-0ubuntu0.24.04.2",
+  "app": "Current Vite dev server + debug Rust desktop build (src-tauri/target/debug/sciencebatch) driven via AT-SPI, wmctrl, xclip, and WorkspaceBridge",
+  "checks": {
+    "workspaceNativeQa": {
+      "command": "node scripts/test-workspace-native-qa.mjs <registry.json>",
+      "status": "passed",
+      "largeEditMs": 170,
+      "fixVerified": "Added waitForRenderTurn loop in workspace.openProject (src/App.tsx) to prevent React state render race returning conflict.project."
+    },
+    "pdfPreviewEmbeddedFigure": {
+      "status": "passed",
+      "fixture": "2-page LaTeX article embedding figure_embedded.pdf (text + vector line/circle/borders + raster sample.png)",
+      "zoomLevelsInspected": ["100%", "74% (Fit to width)", "70%", "130%"],
+      "result": "Text, vector graphics, and embedded raster image remained visible across all inspected zoom levels; no blank-canvas regression observed."
+    },
+    "writingRibbonAndFormatting": {
+      "status": "passed",
+      "latexCopyClipboard": "BoldTarget",
+      "latexFormatting": ["Bold (\\textbf{})", "Italic (\\textit{})", "Edit -> Undo", "Edit -> Redo", "PDF remained uncompiled"],
+      "latexRibbon": ["Symbols Cancel", "Table Cancel/Insert/Undo", "Matrix Cancel/Insert/Undo"],
+      "typstFormattingAndRibbon": ["Bold (#strong[])", "Italic (#emph[])", "Table Insert/Undo", "Matrix Insert/Undo"]
+    },
+    "realGitLock": {
+      "status": "passed",
+      "mechanism": "Local Git repository pushing to bare remote with sleep(3) pre-receive hook",
+      "bridgeErrorDuringPush": "git.locked",
+      "boldEnabledDuringLock": false,
+      "unlockedAfterPush": true
+    },
+    "dependenciesAndProjectResources": {
+      "status": "passed",
+      "fileLineJump": "main.tex:4 clicked from Dependencies; Symbols button enabled after cursor moved from preamble into document body",
+      "liveProgressAndCancel": "Project Resources dialog displayed live progress (481 files / 10.0 MiB); Cancel mid-download yielded Resume download and reaped worker (0 active)",
+      "resumeDownload": "Direct Resume download from Dependencies completed cleanly",
+      "downloadAndRecompile": "Download & Recompile closed modal on completion and compiled beamer fixture to Page 1 of 1",
+      "sharedCachePruning": "Filtered enumitem.sty in Shared Cache and removed it (Removed 1 file · 50.5 KiB)"
+    }
+  },
+  "limits": [
+    "Linux X11 WebKitGTK only; Windows and macOS native QA remain for Phase 4.",
+    "Controlled clipboard failure feedback remains covered by node scripts/test-editor-clipboard.mjs."
+  ]
+}

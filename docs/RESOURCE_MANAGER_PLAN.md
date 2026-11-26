@@ -141,7 +141,7 @@ Add a cross-process cache writer lock per bundle, bounded acquisition/cancellati
 
 ## Phased implementation and acceptance gates
 
-Each future stage receives a separate self-contained assignment with target, ownership, constraints and acceptance. The main chat owns decisions/review; authorized implementation goes to `sciencebatch_implementer` (Luna High), or a supervised Luna Dispatch when operating in Orca. Proposed file ownership below is sequential to avoid conflicting compiler/resource edits. No implementation, commit, push, merge, or engine migration is assigned here.
+Each future stage receives a separate self-contained assignment with target, ownership, constraints and acceptance. The main chat owns decisions/review; authorized implementation goes to `sciencebatch_implementer` (Luna High). Proposed file ownership below is sequential to avoid conflicting compiler/resource edits. No implementation, commit, push, merge, or engine migration is assigned here.
 
 | Stage | Scope and likely ownership | Exit criteria |
 | --- | --- | --- |
