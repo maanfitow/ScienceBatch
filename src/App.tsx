@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useHotkeys } from 'react-hotkeys-hook';
 import { Toaster, toast } from 'sonner';
@@ -68,6 +69,7 @@ const waitForRenderTurn = () => new Promise<void>(resolve => {
 });
 
 export const App: React.FC = () => {
+  const { t } = useTranslation(['editor', 'errors', 'common']);
   const { theme } = useTheme();
   // Navigation & Workspace UI State
   const [viewMode, setViewMode] = useState<ViewMode>('welcome');
@@ -95,15 +97,15 @@ export const App: React.FC = () => {
   const [jumpRequest, setJumpRequest] = useState<{ line: number; column?: number; seq: number } | null>(null);
   const [cursorLocation, setCursorLocation] = useState<{ line: number; filePath: string | null } | null>(null);
   const [writingBridge, setWritingBridge] = useState<WritingEditorBridge | null>(null);
-  const [writingEditorState, setWritingEditorState] = useState<WritingEditorState>({
+  const [writingEditorState, setWritingEditorState] = useState<WritingEditorState>(() => ({
     language: 'latex',
     editable: false,
     available: false,
-    reason: 'Select an editable LaTeX source file.',
+    reason: t('editor:writing.selectLatexSource'),
     source: '',
     cursorOffset: 0,
     canAddPackages: false,
-  });
+  }));
 
   // Modular Domain Hooks
   const {
@@ -186,7 +188,7 @@ export const App: React.FC = () => {
     const current = projectRef.current;
     const snapshot = providedSnapshot ?? captureProjectSnapshot(current);
     if (!Object.keys(snapshot.overlays).length) {
-      toast.error('No source document is open', { description: 'Open or create a source document before compiling.' });
+      toast.error(t('errors:compiler.noSourceTitle'), { description: t('errors:compiler.noSourceDescription') });
       return;
     }
     const jobId = `desktop-${globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
@@ -210,12 +212,12 @@ export const App: React.FC = () => {
     const possibleMissingResource = Boolean(result.error?.code.startsWith('resources.'))
       || result.errors.some(item => /resource|file not found|not found|missing/i.test(item.message));
     if (possibleMissingResource) {
-      toast.error('Compilation may need project resources', {
-        description: result.error?.message ?? result.errors[0]?.message ?? 'Review the missing resource and prepare it explicitly.',
-        action: { label: 'Project Resources…', onClick: projectResources.open },
+      toast.error(t('errors:compiler.missingResourcesTitle'), {
+        description: result.error?.message ?? result.errors[0]?.message ?? t('errors:compiler.missingResourcesDescription'),
+        action: { label: t('editor:resources.openDialogAction'), onClick: projectResources.open },
       });
     }
-  }, [isWorkspaceSnapshotCurrent, projectResources.offerRecoveryPaths, projectResources.open]);
+  }, [isWorkspaceSnapshotCurrent, projectResources.offerRecoveryPaths, projectResources.open, t]);
   compileWorkspaceDelegateRef.current = () => compileLiveWorkspace();
   const automationEditorBridgeRef = React.useRef<AutomationEditorBridge | null>(null);
   const handleAutomationEditorBridgeChange = useCallback((bridge: AutomationEditorBridge | null) => {
@@ -638,7 +640,7 @@ export const App: React.FC = () => {
       const opened = await project.openFolder(result.projectPath);
       if (!opened) {
         throw Object.assign(
-          new Error('The repository was cloned, but ScienceBatch could not open the project.'),
+          new Error(t('errors:git.clonedOpenFailed')),
           { projectPath: result.projectPath },
         );
       }

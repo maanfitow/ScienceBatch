@@ -21,7 +21,7 @@ pub async fn export_project_to_zip(
         )
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| format!("export.task_failed: {e}"))?
 }
 
 #[command]
@@ -34,5 +34,5 @@ pub async fn import_project_from_zip(
         fs_import_zip(&zip_path, &parent_dir, project_name.as_deref())
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| format!("export.task_failed: {e}"))?
 }

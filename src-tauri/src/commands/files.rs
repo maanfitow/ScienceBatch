@@ -15,7 +15,7 @@ fn normalize_lexical(path: &Path) -> Result<PathBuf, String> {
             Component::CurDir => {}
             Component::ParentDir => {
                 if !normalized.pop() {
-                    return Err("Path traverses above filesystem root.".to_string());
+                    return Err("files.path_escapes_root: Path traverses above filesystem root.".to_string());
                 }
             }
             Component::Normal(part) => normalized.push(part),
@@ -34,17 +34,17 @@ pub(crate) fn resolve_contained_path(
     target: &str,
 ) -> Result<(PathBuf, PathBuf), String> {
     if project_root.is_empty() || project_root.contains('\0') {
-        return Err("Project root must be non-empty and cannot contain NUL bytes.".to_string());
+        return Err("files.invalid_path: Project root must be non-empty and cannot contain NUL bytes.".to_string());
     }
     if target.is_empty() || target.contains('\0') {
-        return Err("Target path must be non-empty and cannot contain NUL bytes.".to_string());
+        return Err("files.invalid_path: Target path must be non-empty and cannot contain NUL bytes.".to_string());
     }
 
     let root_path = Path::new(project_root);
     let canonical_root = std::fs::canonicalize(root_path)
-        .map_err(|e| format!("Invalid project root '{project_root}': {e}"))?;
+        .map_err(|e| format!("files.invalid_project_root: Invalid project root '{project_root}': {e}"))?;
     if !canonical_root.is_dir() {
-        return Err(format!("Project root is not a directory: '{project_root}'"));
+        return Err(format!("files.invalid_project_root: Project root is not a directory: '{project_root}'"));
     }
 
     let raw_target = Path::new(target);
@@ -60,13 +60,13 @@ pub(crate) fn resolve_contained_path(
     loop {
         if probe.exists() || std::fs::symlink_metadata(&probe).is_ok() {
             let canonical_ancestor = std::fs::canonicalize(&probe)
-                .map_err(|e| format!("Failed to resolve path '{}': {e}", probe.display()))?;
+                .map_err(|e| format!("files.path_resolve_failed: Failed to resolve path '{}': {e}", probe.display()))?;
             let mut resolved = canonical_ancestor;
             for part in tail.iter().rev() {
                 resolved.push(part);
             }
             if !resolved.starts_with(&canonical_root) {
-                return Err(format!("Path '{target}' escapes the project root."));
+                return Err(format!("files.path_escapes_root: Path '{target}' escapes the project root."));
             }
             return Ok((canonical_root, resolved));
         }
@@ -78,7 +78,7 @@ pub(crate) fn resolve_contained_path(
             }
             _ => {
                 return Err(format!(
-                    "Path '{target}' has no existing ancestor inside the project root."
+                    "files.path_no_ancestor: Path '{target}' has no existing ancestor inside the project root."
                 ));
             }
         }
@@ -87,14 +87,14 @@ pub(crate) fn resolve_contained_path(
 
 fn copy_path_recursive(src: &Path, dest: &Path) -> Result<(), String> {
     let meta = std::fs::symlink_metadata(src)
-        .map_err(|e| format!("Failed to inspect '{}': {e}", src.display()))?;
+        .map_err(|e| format!("files.io_failed: Failed to inspect '{}': {e}", src.display()))?;
 
     if meta.file_type().is_symlink() {
         let target_meta = std::fs::metadata(src)
-            .map_err(|e| format!("Failed to follow symlink '{}': {e}", src.display()))?;
+            .map_err(|e| format!("files.io_failed: Failed to follow symlink '{}': {e}", src.display()))?;
         if target_meta.is_dir() {
             return Err(format!(
-                "Cannot recursively duplicate symlinked directory '{}'.",
+                "files.symlink_dir_unsupported: Cannot recursively duplicate symlinked directory '{}'.",
                 src.display()
             ));
         }
@@ -102,26 +102,26 @@ fn copy_path_recursive(src: &Path, dest: &Path) -> Result<(), String> {
 
     if meta.is_dir() {
         std::fs::create_dir_all(dest)
-            .map_err(|e| format!("Failed to create directory '{}': {e}", dest.display()))?;
+            .map_err(|e| format!("files.io_failed: Failed to create directory '{}': {e}", dest.display()))?;
         let entries = std::fs::read_dir(src)
-            .map_err(|e| format!("Failed to read directory '{}': {e}", src.display()))?;
+            .map_err(|e| format!("files.io_failed: Failed to read directory '{}': {e}", src.display()))?;
         for entry in entries {
             let entry = entry
-                .map_err(|e| format!("Failed to read entry in '{}': {e}", src.display()))?;
+                .map_err(|e| format!("files.io_failed: Failed to read entry in '{}': {e}", src.display()))?;
             copy_path_recursive(&entry.path(), &dest.join(entry.file_name()))?;
         }
     } else {
         if let Some(parent) = dest.parent() {
             std::fs::create_dir_all(parent).map_err(|e| {
                 format!(
-                    "Failed to create parent directory '{}': {e}",
+                    "files.io_failed: Failed to create parent directory '{}': {e}",
                     parent.display()
                 )
             })?;
         }
         std::fs::copy(src, dest).map_err(|e| {
             format!(
-                "Failed to copy '{}' to '{}': {e}",
+                "files.io_failed: Failed to copy '{}' to '{}': {e}",
                 src.display(),
                 dest.display()
             )
@@ -135,19 +135,19 @@ pub async fn list_project_files(dir_path: String) -> Result<Vec<FileItem>, Strin
     tokio::task::spawn_blocking(move || {
         let path = Path::new(&dir_path);
         if !path.exists() || !path.is_dir() {
-            return Err(format!("Directory does not exist: {dir_path}"));
+            return Err(format!("files.dir_not_found: Directory does not exist: {dir_path}"));
         }
-        read_dir_recursive(path).map_err(|e| e.to_string())
+        read_dir_recursive(path).map_err(|e| format!("files.io_failed: {e}"))
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| format!("files.task_failed: {e}"))?
 }
 
 #[command]
 pub async fn read_file_content(path: String) -> Result<String, String> {
     tokio::fs::read_to_string(&path)
         .await
-        .map_err(|e| format!("Failed to read file '{path}': {e}"))
+        .map_err(|e| format!("files.io_failed: Failed to read file '{path}': {e}"))
 }
 
 #[command]
@@ -155,12 +155,12 @@ pub async fn existing_file_paths(paths: Vec<String>) -> Result<Vec<String>, Stri
     let mut existing = Vec::new();
     for path in paths {
         if path.is_empty() || path.contains('\0') {
-            return Err("File paths must be non-empty and cannot contain NUL bytes.".to_string());
+            return Err("files.invalid_path: File paths must be non-empty and cannot contain NUL bytes.".to_string());
         }
         match tokio::fs::metadata(&path).await {
             Ok(metadata) if metadata.is_file() => {
                 tokio::fs::File::open(&path).await.map_err(|error| {
-                    format!("Could not check whether file '{path}' is readable: {error}")
+                    format!("files.io_failed: Could not check whether file '{path}' is readable: {error}")
                 })?;
                 existing.push(path);
             }
@@ -168,7 +168,7 @@ pub async fn existing_file_paths(paths: Vec<String>) -> Result<Vec<String>, Stri
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(error) => {
                 return Err(format!(
-                    "Could not check whether file '{path}' exists: {error}"
+                    "files.io_failed: Could not check whether file '{path}' exists: {error}"
                 ))
             }
         }
@@ -180,31 +180,31 @@ pub async fn existing_file_paths(paths: Vec<String>) -> Result<Vec<String>, Stri
 pub async fn write_file_content(path: String, content: String) -> Result<(), String> {
     tokio::fs::write(&path, &content)
         .await
-        .map_err(|e| format!("Failed to write file '{path}': {e}"))
+        .map_err(|e| format!("files.io_failed: Failed to write file '{path}': {e}"))
 }
 
 #[command]
 pub async fn read_binary_file(path: String) -> Result<Vec<u8>, String> {
     tokio::fs::read(&path)
         .await
-        .map_err(|e| format!("Failed to read binary file '{path}': {e}"))
+        .map_err(|e| format!("files.io_failed: Failed to read binary file '{path}': {e}"))
 }
 
 #[command]
 pub async fn import_file_to_project(src_path: String, dest_dir: String) -> Result<String, String> {
     let src = Path::new(&src_path);
     if !src.exists() || !src.is_file() {
-        return Err(format!("Source file does not exist: {src_path}"));
+        return Err(format!("files.file_not_found: Source file does not exist: {src_path}"));
     }
     let file_name = match src.file_name() {
         Some(name) => name,
-        None => return Err("Invalid file name".into()),
+        None => return Err("files.invalid_path: Invalid file name".into()),
     };
     let dest = Path::new(&dest_dir).join(file_name);
 
     tokio::fs::copy(&src, &dest)
         .await
-        .map_err(|e| format!("Failed to copy file '{src_path}' to '{dest:?}': {e}"))?;
+        .map_err(|e| format!("files.io_failed: Failed to copy file '{src_path}' to '{dest:?}': {e}"))?;
 
     Ok(dest.to_string_lossy().to_string())
 }
@@ -226,21 +226,21 @@ pub async fn create_project_folder(
             .any(|character| matches!(character, '/' | '\\' | '\0') || character.is_control())
     {
         return Err(
-            "Project name must be a single safe folder name of at most 100 characters.".into(),
+            "files.invalid_project_name: Project name must be a single safe folder name of at most 100 characters.".into(),
         );
     }
     let normalized_engine = engine.to_ascii_lowercase();
     let is_typst = match normalized_engine.as_str() {
         "typst" => true,
         "latex" => false,
-        _ => return Err("Engine must be latex or typst.".into()),
+        _ => return Err("files.invalid_engine: Engine must be latex or typst.".into()),
     };
     let project_path = Path::new(&parent_dir).join(&project_name);
     tokio::fs::create_dir(&project_path).await.map_err(|e| {
         if e.kind() == std::io::ErrorKind::AlreadyExists {
-            format!("Project folder already exists: {}", project_path.display())
+            format!("files.project_exists: Project folder already exists: {}", project_path.display())
         } else {
-            format!("Failed to create project folder: {e}")
+            format!("files.io_failed: Failed to create project folder: {e}")
         }
     })?;
 
@@ -258,7 +258,7 @@ pub async fn create_project_folder(
         let assets_dir = project_path.join("assets");
         tokio::fs::create_dir(&assets_dir)
             .await
-            .map_err(|error| format!("Failed to create template assets folder: {error}"))?;
+            .map_err(|error| format!("files.io_failed: Failed to create template assets folder: {error}"))?;
         create_new_file(
             &assets_dir.join("sample.png"),
             crate::compiler::embedded::SAMPLE_PNG,
@@ -277,7 +277,7 @@ pub async fn create_project_folder(
             "createdAt": format!("{:?}", std::time::SystemTime::now())
         });
         let config_bytes = serde_json::to_vec_pretty(&config_json)
-            .map_err(|error| format!("Failed to encode project configuration: {error}"))?;
+            .map_err(|error| format!("files.io_failed: Failed to encode project configuration: {error}"))?;
         create_new_file(&project_path.join(".sciencebatch.json"), &config_bytes).await?;
         Ok::<(), String>(())
     }
@@ -298,13 +298,13 @@ async fn create_new_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
         .create_new(true)
         .open(path)
         .await
-        .map_err(|error| format!("Failed to create '{}': {error}", path.display()))?;
+        .map_err(|error| format!("files.io_failed: Failed to create '{}': {error}", path.display()))?;
     file.write_all(bytes)
         .await
-        .map_err(|error| format!("Failed to write '{}': {error}", path.display()))?;
+        .map_err(|error| format!("files.io_failed: Failed to write '{}': {error}", path.display()))?;
     file.flush()
         .await
-        .map_err(|error| format!("Failed to flush '{}': {error}", path.display()))
+        .map_err(|error| format!("files.io_failed: Failed to flush '{}': {error}", path.display()))
 }
 
 /// Creates a new empty file inside `project_root`, creating missing parent directories.
@@ -312,12 +312,12 @@ async fn create_new_file(path: &Path, bytes: &[u8]) -> Result<(), String> {
 pub async fn create_project_file(project_root: String, path: String) -> Result<(), String> {
     let (canonical_root, resolved) = resolve_contained_path(&project_root, &path)?;
     if resolved == canonical_root {
-        return Err("Cannot create a file at the project root path.".to_string());
+        return Err("files.cannot_modify_root: Cannot create a file at the project root path.".to_string());
     }
     if let Some(parent) = resolved.parent() {
         tokio::fs::create_dir_all(parent).await.map_err(|e| {
             format!(
-                "Failed to create parent directories for '{}': {e}",
+                "files.io_failed: Failed to create parent directories for '{}': {e}",
                 resolved.display()
             )
         })?;
@@ -329,9 +329,9 @@ pub async fn create_project_file(project_root: String, path: String) -> Result<(
         .await
         .map_err(|e| {
             if e.kind() == std::io::ErrorKind::AlreadyExists {
-                format!("File already exists: '{}'", resolved.display())
+                format!("files.already_exists: File already exists: '{}'", resolved.display())
             } else {
-                format!("Failed to create file '{}': {e}", resolved.display())
+                format!("files.io_failed: Failed to create file '{}': {e}", resolved.display())
             }
         })?;
     Ok(())
@@ -344,14 +344,14 @@ pub async fn create_project_directory(project_root: String, path: String) -> Res
     if let Ok(meta) = tokio::fs::symlink_metadata(&resolved).await {
         if !meta.is_dir() {
             return Err(format!(
-                "Cannot create directory '{}': a file already exists at that path.",
+                "files.file_exists_at_path: Cannot create directory '{}': a file already exists at that path.",
                 resolved.display()
             ));
         }
     }
     tokio::fs::create_dir_all(&resolved)
         .await
-        .map_err(|e| format!("Failed to create directory '{}': {e}", resolved.display()))?;
+        .map_err(|e| format!("files.io_failed: Failed to create directory '{}': {e}", resolved.display()))?;
     Ok(())
 }
 
@@ -365,24 +365,24 @@ pub async fn rename_project_path(
     let (canonical_root, resolved_old) = resolve_contained_path(&project_root, &old_path)?;
     let (_, resolved_new) = resolve_contained_path(&project_root, &new_path)?;
     if resolved_old == canonical_root || resolved_new == canonical_root {
-        return Err("Cannot rename or overwrite the project root directory.".to_string());
+        return Err("files.cannot_modify_root: Cannot rename or overwrite the project root directory.".to_string());
     }
     let old_meta = tokio::fs::symlink_metadata(&resolved_old)
         .await
-        .map_err(|_| format!("Source path does not exist: '{}'", resolved_old.display()))?;
+        .map_err(|_| format!("files.not_found: Source path does not exist: '{}'", resolved_old.display()))?;
     if tokio::fs::symlink_metadata(&resolved_new).await.is_ok() {
         return Err(format!(
-            "Destination path already exists: '{}'",
+            "files.already_exists: Destination path already exists: '{}'",
             resolved_new.display()
         ));
     }
     if old_meta.is_dir() && resolved_new.starts_with(&resolved_old) {
-        return Err("Cannot move a directory into a subdirectory of itself.".to_string());
+        return Err("files.move_into_self: Cannot move a directory into a subdirectory of itself.".to_string());
     }
     if let Some(parent) = resolved_new.parent() {
         tokio::fs::create_dir_all(parent).await.map_err(|e| {
             format!(
-                "Failed to create parent directory for '{}': {e}",
+                "files.io_failed: Failed to create parent directory for '{}': {e}",
                 resolved_new.display()
             )
         })?;
@@ -391,7 +391,7 @@ pub async fn rename_project_path(
         .await
         .map_err(|e| {
             format!(
-                "Failed to rename '{}' to '{}': {e}",
+                "files.io_failed: Failed to rename '{}' to '{}': {e}",
                 resolved_old.display(),
                 resolved_new.display()
             )
@@ -404,17 +404,17 @@ pub async fn rename_project_path(
 pub async fn delete_project_path(project_root: String, path: String) -> Result<(), String> {
     let (canonical_root, resolved) = resolve_contained_path(&project_root, &path)?;
     if resolved == canonical_root {
-        return Err("Cannot delete the project root directory.".to_string());
+        return Err("files.cannot_delete_root: Cannot delete the project root directory.".to_string());
     }
     if tokio::fs::symlink_metadata(&resolved).await.is_err() {
-        return Err(format!("Path does not exist: '{}'", resolved.display()));
+        return Err(format!("files.not_found: Path does not exist: '{}'", resolved.display()));
     }
     tokio::task::spawn_blocking(move || {
         trash::delete(&resolved)
-            .map_err(|e| format!("Failed to move '{}' to trash: {e}", resolved.display()))
+            .map_err(|e| format!("files.trash_failed: Failed to move '{}' to trash: {e}", resolved.display()))
     })
     .await
-    .map_err(|e| format!("Trash task failed: {e}"))?
+    .map_err(|e| format!("files.task_failed: Trash task failed: {e}"))?
 }
 
 /// Duplicates a file or directory recursively within `project_root`.
@@ -427,23 +427,23 @@ pub async fn duplicate_project_path(
     let (canonical_root, resolved_src) = resolve_contained_path(&project_root, &src_path)?;
     let (_, resolved_dest) = resolve_contained_path(&project_root, &dest_path)?;
     if resolved_src == canonical_root || resolved_dest == canonical_root {
-        return Err("Cannot duplicate or overwrite the project root directory.".to_string());
+        return Err("files.cannot_modify_root: Cannot duplicate or overwrite the project root directory.".to_string());
     }
     let src_meta = tokio::fs::symlink_metadata(&resolved_src)
         .await
-        .map_err(|_| format!("Source path does not exist: '{}'", resolved_src.display()))?;
+        .map_err(|_| format!("files.not_found: Source path does not exist: '{}'", resolved_src.display()))?;
     if tokio::fs::symlink_metadata(&resolved_dest).await.is_ok() {
         return Err(format!(
-            "Destination path already exists: '{}'",
+            "files.already_exists: Destination path already exists: '{}'",
             resolved_dest.display()
         ));
     }
     if src_meta.is_dir() && resolved_dest.starts_with(&resolved_src) {
-        return Err("Cannot duplicate a directory into a subdirectory of itself.".to_string());
+        return Err("files.copy_into_self: Cannot duplicate a directory into a subdirectory of itself.".to_string());
     }
     tokio::task::spawn_blocking(move || copy_path_recursive(&resolved_src, &resolved_dest))
         .await
-        .map_err(|e| format!("Duplicate task failed: {e}"))?
+        .map_err(|e| format!("files.task_failed: Duplicate task failed: {e}"))?
 }
 
 #[cfg(target_os = "linux")]
@@ -467,13 +467,13 @@ fn encode_file_uri(path: &Path) -> String {
 #[command]
 pub async fn reveal_in_file_manager(path: String) -> Result<(), String> {
     if path.is_empty() || path.contains('\0') {
-        return Err("Path must be non-empty and cannot contain NUL bytes.".to_string());
+        return Err("files.invalid_path: Path must be non-empty and cannot contain NUL bytes.".to_string());
     }
 
     tokio::task::spawn_blocking(move || {
         let target = Path::new(&path);
         if !target.exists() {
-            return Err(format!("Path does not exist: '{path}'"));
+            return Err(format!("files.not_found: Path does not exist: '{path}'"));
         }
         let canonical = std::fs::canonicalize(target).unwrap_or_else(|_| target.to_path_buf());
         let path_str = canonical.to_string_lossy().to_string();
@@ -483,7 +483,7 @@ pub async fn reveal_in_file_manager(path: String) -> Result<(), String> {
             std::process::Command::new("explorer")
                 .arg(format!("/select,{path_str}"))
                 .spawn()
-                .map_err(|e| format!("Failed to reveal '{path_str}' in Explorer: {e}"))?;
+                .map_err(|e| format!("files.reveal_failed: Failed to reveal '{path_str}' in Explorer: {e}"))?;
             return Ok(());
         }
 
@@ -492,7 +492,7 @@ pub async fn reveal_in_file_manager(path: String) -> Result<(), String> {
             std::process::Command::new("open")
                 .args(["-R", &path_str])
                 .spawn()
-                .map_err(|e| format!("Failed to reveal '{path_str}' in Finder: {e}"))?;
+                .map_err(|e| format!("files.reveal_failed: Failed to reveal '{path_str}' in Finder: {e}"))?;
             return Ok(());
         }
 
@@ -521,7 +521,7 @@ pub async fn reveal_in_file_manager(path: String) -> Result<(), String> {
                 canonical.parent().unwrap_or(canonical.as_path())
             };
             open::that_detached(fallback_target)
-                .map_err(|e| format!("Failed to open file manager for '{path_str}': {e}"))?;
+                .map_err(|e| format!("files.reveal_failed: Failed to open file manager for '{path_str}': {e}"))?;
             return Ok(());
         }
 
@@ -533,12 +533,12 @@ pub async fn reveal_in_file_manager(path: String) -> Result<(), String> {
                 canonical.parent().unwrap_or(canonical.as_path())
             };
             open::that_detached(fallback_target)
-                .map_err(|e| format!("Failed to open file manager for '{path_str}': {e}"))?;
+                .map_err(|e| format!("files.reveal_failed: Failed to open file manager for '{path_str}': {e}"))?;
             Ok(())
         }
     })
     .await
-    .map_err(|e| format!("Reveal task failed: {e}"))?
+    .map_err(|e| format!("files.task_failed: Reveal task failed: {e}"))?
 }
 
 #[command]
@@ -555,10 +555,10 @@ pub fn open_external_url(url: String) -> Result<(), String> {
         || trimmed.starts_with("mailto:")
     {
         open::that_detached(trimmed)
-            .map_err(|err| format!("Failed to launch system browser: {err}"))?;
+            .map_err(|err| format!("files.open_url_failed: Failed to launch system browser: {err}"))?;
         Ok(())
     } else {
-        Err(format!("Unsupported or unsafe URL protocol: {trimmed}"))
+        Err(format!("files.unsafe_url: Unsupported or unsafe URL protocol: {trimmed}"))
     }
 }
 

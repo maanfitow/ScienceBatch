@@ -4,6 +4,8 @@ import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { toast } from 'sonner';
 import { CompileResponse, DiagnosticItem, ProgressPayload, EngineType, CompilationStatus, PdfSourceMap } from '../types';
 import type { WorkspaceCompileRequest } from '../types/automation';
+import i18n from '../i18n';
+import { translateBackendError, translateCompilerProgress } from '../i18n/backendMessages';
 
 export function useCompiler() {
   const [pdfBytes, setPdfBytes] = useState<Uint8Array | null>(null);
@@ -35,16 +37,22 @@ export function useCompiler() {
       try {
         const stopDesktop = await listen<ProgressPayload>('compilation-progress', (event) => {
           if (activeCompilationKindRef.current === 'workspace') return;
-          const { message, status } = event.payload;
+          const { status } = event.payload;
           if (status === 'Cancelled') {
             return;
           }
-          setStatusMessage(message);
+          setStatusMessage(translateCompilerProgress(event.payload));
         });
         if (disposed) stopDesktop(); else unlisten = stopDesktop;
-        const stopWorkspace = await listen<{ jobId: string; status: string; message: string }>('workspace-compilation-progress', event => {
+        const stopWorkspace = await listen<{
+          jobId: string;
+          status: string;
+          message: string;
+          code?: string | null;
+          params?: Record<string, string | number> | null;
+        }>('workspace-compilation-progress', event => {
           if (activeCompilationKindRef.current !== 'workspace' || event.payload.jobId !== workspaceJobIdRef.current) return;
-          setStatusMessage(event.payload.message);
+          setStatusMessage(translateCompilerProgress(event.payload));
         });
         if (disposed) stopWorkspace(); else unlistenWorkspace = stopWorkspace;
       } catch {
@@ -104,10 +112,13 @@ export function useCompiler() {
     if (activeToastIdRef.current) toast.dismiss(activeToastIdRef.current);
     const currentReqId = ++compilationIdRef.current;
     workspaceJobIdRef.current = request.jobId;
+    const engineLabel = request.engine === 'typst' ? i18n.t('common:engines.typst') : i18n.t('common:engines.latex');
     setIsCompiling(true);
     setCompilationStatus('compiling');
-    setStatusMessage(`Preparing in-memory ${request.engine.toUpperCase()} workspace snapshot...`);
-    const toastId = toast.loading(`Compiling ${request.engine.toUpperCase()} workspace...`, { description: 'Processing the current editor buffers in memory' });
+    setStatusMessage(i18n.t('editor:compiler.preparingWorkspace', { engine: engineLabel }));
+    const toastId = toast.loading(i18n.t('editor:compiler.compilingWorkspace', { engine: engineLabel }), {
+      description: i18n.t('editor:compiler.compilingWorkspaceDescription'),
+    });
     activeToastIdRef.current = toastId;
     try {
       const response = await invoke<CompileResponse>('compile_workspace_snapshot', { request });
@@ -119,18 +130,26 @@ export function useCompiler() {
         setPdfBytes(new Uint8Array(response.pdf_bytes));
         setSourceMap(response.source_map ?? null);
         setCompilationStatus('success');
-        setStatusMessage('PDF generated');
+        setStatusMessage(i18n.t('editor:compiler.pdfGenerated'));
         setActiveTab('preview');
-        toast.success(`${request.engine.toUpperCase()} compilation successful`, {
+        const warningsCount = response.warnings?.length ?? 0;
+        toast.success(i18n.t('editor:compiler.compileSuccessTitle', { engine: engineLabel }), {
           id: toastId,
-          description: response.warnings?.length ? `Rendered with ${response.warnings.length} warning(s).` : 'Document rendered and updated in viewer.',
+          description: warningsCount > 0
+            ? (warningsCount === 1
+                ? i18n.t('editor:compiler.compileSuccessWarningsSingular', { count: warningsCount })
+                : i18n.t('editor:compiler.compileSuccessWarningsPlural', { count: warningsCount }))
+            : i18n.t('editor:compiler.compileSuccessDescription'),
         });
         return { success: true, errors: response.errors || [], warnings: response.warnings || [], pdfBytes: response.pdf_bytes };
       } else {
+        const firstError = response.errors?.[0]?.message
+          ? translateBackendError(response.errors[0].message)
+          : i18n.t('editor:compiler.compilationFailed');
         setCompilationStatus('error');
-        setStatusMessage(response.errors?.[0]?.message || 'Compilation failed.');
+        setStatusMessage(firstError);
         setActiveTab('diagnostics');
-        toast.error(`${request.engine.toUpperCase()} Error`, { id: toastId, description: (response.errors?.[0]?.message || 'Compilation failed.').slice(0, 180) });
+        toast.error(i18n.t('editor:compiler.engineErrorTitle', { engine: engineLabel }), { id: toastId, description: firstError.slice(0, 180) });
         return { success: false, errors: response.errors || [], warnings: response.warnings || [], pdfBytes: [] };
       }
     } catch (err: unknown) {
@@ -141,9 +160,10 @@ export function useCompiler() {
       const nested = outer?.error && typeof outer.error === 'object' ? outer.error as Record<string, unknown> : outer;
       const rawMessage = typeof nested?.message === 'string'
         ? nested.message
-        : typeof err === 'string' ? err : err instanceof Error ? err.message : 'Unknown compilation error';
+        : typeof err === 'string' ? err : err instanceof Error ? err.message : i18n.t('errors:compiler.unknownError');
       const message = wasExplicitlyCancelled && !rawMessage.includes(':') ? 'operation.interrupted: Workspace compilation was cancelled.' : rawMessage;
       const code = typeof nested?.code === 'string' ? nested.code : message.match(/^([a-z][a-z0-9_.-]+):/)?.[1];
+      const displayMessage = translateBackendError(message, code, i18n.t('errors:compiler.unknownError'));
       const details = nested?.details ?? outer?.details;
       const diagnostics = Array.isArray(nested?.diagnostics) ? nested.diagnostics : Array.isArray(outer?.diagnostics) ? outer.diagnostics : undefined;
       const structuredDiagnostics: DiagnosticItem[] = diagnostics?.flatMap(item => {
@@ -156,19 +176,23 @@ export function useCompiler() {
           ...(typeof value.file === 'string' ? { file: value.file } : {}),
           ...(typeof value.line === 'number' ? { line: value.line } : {}),
           ...(typeof value.suggestion === 'string' ? { suggestion: value.suggestion } : {}),
+          ...(typeof value.suggestion_code === 'string' ? { suggestion_code: value.suggestion_code } : {}),
+          ...(value.suggestion_params && typeof value.suggestion_params === 'object'
+            ? { suggestion_params: value.suggestion_params as Record<string, string | number> }
+            : {}),
         }];
       }) ?? [];
-      const fallbackMessage = details === undefined ? message : `${message}\n${JSON.stringify(details, null, 2)}`;
-      const fallbackDiagnostic: DiagnosticItem = { severity: 'error', message: fallbackMessage, suggestion: 'Check the workspace diagnostics and retry compilation.' };
+      const fallbackMessage = details === undefined ? displayMessage : `${displayMessage}\n${JSON.stringify(details, null, 2)}`;
+      const fallbackDiagnostic: DiagnosticItem = { severity: 'error', message: fallbackMessage, suggestion: i18n.t('editor:compiler.checkWorkspaceDiagnosticsSuggestion') };
       const errorItems = structuredDiagnostics.filter(item => item.severity.toLowerCase() === 'error');
       const warningItems = structuredDiagnostics.filter(item => item.severity.toLowerCase() === 'warning');
       setCompilationStatus('error');
-      setStatusMessage(message);
+      setStatusMessage(displayMessage);
       setActiveTab('diagnostics');
       setRawLog(JSON.stringify({ code, message, details, diagnostics }, null, 2));
       setErrors(errorItems.length ? errorItems : [fallbackDiagnostic]);
       setWarnings(warningItems);
-      toast.error('Compilation Error', { id: toastId, description: message.slice(0, 180) });
+      toast.error(i18n.t('errors:compiler.compilationErrorTitle'), { id: toastId, description: displayMessage.slice(0, 180) });
       return { success: false, errors: errorItems.length ? errorItems : [fallbackDiagnostic], warnings: warningItems, pdfBytes: [], ...(code ? { error: { code, message, ...(details !== undefined ? { details } : {}), ...(diagnostics ? { diagnostics } : {}) } } : {}) };
     } finally {
       explicitlyCancelledWorkspaceJobsRef.current.delete(request.jobId);
@@ -228,12 +252,13 @@ export function useCompiler() {
     // Increment request generation ID to discard any earlier in-flight responses
     const currentReqId = ++compilationIdRef.current;
 
+    const engineLabel = engine === 'typst' ? i18n.t('common:engines.typst') : i18n.t('common:engines.latex');
     setIsCompiling(true);
     setCompilationStatus('compiling');
-    setStatusMessage(`Preparing in-memory ${engine.toUpperCase()} compiler...`);
+    setStatusMessage(i18n.t('editor:compiler.preparingCompiler', { engine: engineLabel }));
 
-    const toastId = toast.loading(`Compiling ${engine.toUpperCase()} document...`, {
-      description: 'Processing in RAM VFS',
+    const toastId = toast.loading(i18n.t('editor:compiler.compilingDocument', { engine: engineLabel }), {
+      description: i18n.t('editor:compiler.compilingDocumentDescription'),
     });
     activeToastIdRef.current = toastId;
 
@@ -265,22 +290,26 @@ export function useCompiler() {
         setPdfBytes(uint8);
         setSourceMap(response.source_map ?? null);
         setCompilationStatus('success');
-        setStatusMessage('PDF generated');
+        setStatusMessage(i18n.t('editor:compiler.pdfGenerated'));
         setActiveTab('preview');
 
-        toast.success(`${engine.toUpperCase()} compilation successful`, {
+        toast.success(i18n.t('editor:compiler.compileSuccessTitle', { engine: engineLabel }), {
           id: toastId,
           description: response.warnings.length > 0
-            ? `Rendered with ${response.warnings.length} warning(s).`
-            : 'Document rendered and updated in viewer.',
+            ? (response.warnings.length === 1
+                ? i18n.t('editor:compiler.compileSuccessWarningsSingular', { count: response.warnings.length })
+                : i18n.t('editor:compiler.compileSuccessWarningsPlural', { count: response.warnings.length }))
+            : i18n.t('editor:compiler.compileSuccessDescription'),
         });
       } else {
         setCompilationStatus('error');
-        const firstError = response.errors?.[0]?.message || 'Compilation failed.';
+        const firstError = response.errors?.[0]?.message
+          ? translateBackendError(response.errors[0].message)
+          : i18n.t('editor:compiler.compilationFailed');
         setStatusMessage(firstError);
         setActiveTab('diagnostics');
 
-        toast.error(`${engine.toUpperCase()} Error`, {
+        toast.error(i18n.t('editor:compiler.engineErrorTitle', { engine: engineLabel }), {
           id: toastId,
           description: firstError.slice(0, 180),
           duration: 6000,
@@ -290,14 +319,22 @@ export function useCompiler() {
       // Ignore errors if this compilation was aborted or superseded
       if (currentReqId !== compilationIdRef.current) return;
 
-      const errorMessage = typeof err === 'string' ? err : err instanceof Error ? err.message : 'Unknown compilation error';
+      const rawErrorMessage = typeof err === 'string' ? err : err instanceof Error ? err.message : i18n.t('errors:compiler.unknownError');
 
-      if (errorMessage.toLowerCase().includes('cancelled') || errorMessage.toLowerCase().includes('aborted')) {
+      const lowerError = rawErrorMessage.toLowerCase();
+      if (
+        lowerError.includes('operation.interrupted')
+        || lowerError.includes('compilation.cancelled')
+        || lowerError.includes('cancelled')
+        || lowerError.includes('aborted')
+      ) {
         setCompilationStatus('idle');
         setStatusMessage('');
         toast.dismiss(toastId);
         return;
       }
+
+      const errorMessage = translateBackendError(err, null, i18n.t('errors:compiler.unknownError'));
 
       setCompilationStatus('error');
       setStatusMessage(errorMessage);
@@ -306,10 +343,10 @@ export function useCompiler() {
       setErrors([{
         severity: 'error',
         message: errorMessage,
-        suggestion: 'Check console logs or retry compilation.',
+        suggestion: i18n.t('editor:compiler.checkLogsSuggestion'),
       }]);
 
-      toast.error('Compilation Error', {
+      toast.error(i18n.t('errors:compiler.compilationErrorTitle'), {
         id: toastId,
         description: errorMessage.slice(0, 180),
         duration: 6000,

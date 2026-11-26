@@ -14,12 +14,12 @@ pub fn export_project_to_zip(
     if let Some(parent) = dest_file_path.parent() {
         if !parent.exists() {
             std::fs::create_dir_all(parent)
-                .map_err(|e| format!("Failed to create destination folder: {e}"))?;
+                .map_err(|e| format!("export.io_failed: Failed to create destination folder: {e}"))?;
         }
     }
 
     let file = std::fs::File::create(&dest_file_path)
-        .map_err(|e| format!("Failed to create destination ZIP file: {e}"))?;
+        .map_err(|e| format!("export.io_failed: Failed to create destination ZIP file: {e}"))?;
     let mut zip = zip::ZipWriter::new(file);
     let options = SimpleFileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated);
@@ -37,7 +37,7 @@ pub fn export_project_to_zip(
                 options: SimpleFileOptions,
             ) -> Result<(), String> {
                 let read_dir = std::fs::read_dir(current_dir)
-                    .map_err(|e| format!("Failed to read directory {:?}: {e}", current_dir))?;
+                    .map_err(|e| format!("export.io_failed: Failed to read directory {:?}: {e}", current_dir))?;
 
                 for entry in read_dir.flatten() {
                     let path = entry.path();
@@ -58,21 +58,21 @@ pub fn export_project_to_zip(
 
                     let rel_path = path
                         .strip_prefix(base_dir)
-                        .map_err(|e| e.to_string())?
+                        .map_err(|e| format!("export.io_failed: {e}"))?
                         .to_string_lossy()
                         .replace('\\', "/");
 
                     if path.is_dir() {
                         zip.add_directory(&rel_path, options)
-                            .map_err(|e| format!("Failed to add directory '{rel_path}' to zip: {e}"))?;
+                            .map_err(|e| format!("export.io_failed: Failed to add directory '{rel_path}' to zip: {e}"))?;
                         add_dir_to_zip(zip, base_dir, &path, canonical_dest, options)?;
                     } else if path.is_file() {
                         zip.start_file(&rel_path, options)
-                            .map_err(|e| format!("Failed to add file '{rel_path}' to zip: {e}"))?;
+                            .map_err(|e| format!("export.io_failed: Failed to add file '{rel_path}' to zip: {e}"))?;
                         let data = std::fs::read(&path)
-                            .map_err(|e| format!("Failed to read file {:?}: {e}", path))?;
+                            .map_err(|e| format!("export.io_failed: Failed to read file {:?}: {e}", path))?;
                         zip.write_all(&data)
-                            .map_err(|e| format!("Failed to write '{rel_path}' to zip: {e}"))?;
+                            .map_err(|e| format!("export.io_failed: Failed to write '{rel_path}' to zip: {e}"))?;
                     }
                 }
                 Ok(())
@@ -80,7 +80,7 @@ pub fn export_project_to_zip(
 
             add_dir_to_zip(&mut zip, dir_path, dir_path, canonical_dest.as_ref(), options)?;
             zip.finish()
-                .map_err(|e| format!("Failed to finalize ZIP archive: {e}"))?;
+                .map_err(|e| format!("export.io_failed: Failed to finalize ZIP archive: {e}"))?;
             return Ok(());
         }
     }
@@ -91,12 +91,12 @@ pub fn export_project_to_zip(
     let content = source_content.unwrap_or_default();
 
     zip.start_file(main_filename, options)
-        .map_err(|e| format!("Failed to add '{main_filename}' to zip: {e}"))?;
+        .map_err(|e| format!("export.io_failed: Failed to add '{main_filename}' to zip: {e}"))?;
     zip.write_all(content.as_bytes())
-        .map_err(|e| format!("Failed to write '{main_filename}' to zip: {e}"))?;
+        .map_err(|e| format!("export.io_failed: Failed to write '{main_filename}' to zip: {e}"))?;
 
     zip.finish()
-        .map_err(|e| format!("Failed to finalize ZIP archive: {e}"))?;
+        .map_err(|e| format!("export.io_failed: Failed to finalize ZIP archive: {e}"))?;
     Ok(())
 }
 
@@ -107,12 +107,12 @@ pub fn import_project_from_zip(
 ) -> Result<String, String> {
     let zip_file_path = Path::new(zip_path);
     if !zip_file_path.exists() || !zip_file_path.is_file() {
-        return Err(format!("ZIP archive does not exist: {zip_path}"));
+        return Err(format!("export.zip_not_found: ZIP archive does not exist: {zip_path}"));
     }
 
     let parent_dir_path = Path::new(parent_dir);
     if !parent_dir_path.exists() || !parent_dir_path.is_dir() {
-        return Err(format!("Target directory does not exist: {parent_dir}"));
+        return Err(format!("export.target_dir_not_found: Target directory does not exist: {parent_dir}"));
     }
 
     let folder_name = match project_name.filter(|s| !s.trim().is_empty()) {
@@ -125,17 +125,17 @@ pub fn import_project_from_zip(
 
     let dest_dir = parent_dir_path.join(&folder_name);
     std::fs::create_dir_all(&dest_dir)
-        .map_err(|e| format!("Failed to create project folder '{:?}': {e}", dest_dir))?;
+        .map_err(|e| format!("export.io_failed: Failed to create project folder '{:?}': {e}", dest_dir))?;
 
     let file = std::fs::File::open(&zip_file_path)
-        .map_err(|e| format!("Failed to open ZIP archive: {e}"))?;
+        .map_err(|e| format!("export.io_failed: Failed to open ZIP archive: {e}"))?;
     let mut archive = zip::ZipArchive::new(file)
-        .map_err(|e| format!("Failed to read ZIP archive: {e}"))?;
+        .map_err(|e| format!("export.invalid_zip: Failed to read ZIP archive: {e}"))?;
 
     // Extract all entries safely (protecting against zip-slip directory traversal)
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i)
-            .map_err(|e| format!("Failed to read ZIP entry #{i}: {e}"))?;
+            .map_err(|e| format!("export.invalid_zip: Failed to read ZIP entry #{i}: {e}"))?;
 
         let enclosed_name = match entry.enclosed_name() {
             Some(name) => name.to_owned(),
@@ -146,18 +146,18 @@ pub fn import_project_from_zip(
 
         if entry.is_dir() {
             std::fs::create_dir_all(&outpath)
-                .map_err(|e| format!("Failed to create directory '{:?}': {e}", outpath))?;
+                .map_err(|e| format!("export.io_failed: Failed to create directory '{:?}': {e}", outpath))?;
         } else {
             if let Some(parent) = outpath.parent() {
                 if !parent.exists() {
                     std::fs::create_dir_all(parent)
-                        .map_err(|e| format!("Failed to create parent directory '{:?}': {e}", parent))?;
+                        .map_err(|e| format!("export.io_failed: Failed to create parent directory '{:?}': {e}", parent))?;
                 }
             }
             let mut outfile = std::fs::File::create(&outpath)
-                .map_err(|e| format!("Failed to create file '{:?}': {e}", outpath))?;
+                .map_err(|e| format!("export.io_failed: Failed to create file '{:?}': {e}", outpath))?;
             std::io::copy(&mut entry, &mut outfile)
-                .map_err(|e| format!("Failed to write extracted file '{:?}': {e}", outpath))?;
+                .map_err(|e| format!("export.io_failed: Failed to write extracted file '{:?}': {e}", outpath))?;
         }
 
         #[cfg(unix)]

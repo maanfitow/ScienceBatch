@@ -1,5 +1,12 @@
 import type { PackageEditPlan, WritingChange } from '../../types/writing';
 
+type WritingTranslator = (key: string, fallback: string, params?: Record<string, string | number>) => string;
+const wt = (key: string, fallback: string, params?: Record<string, string | number>): string => {
+  const fn = (globalThis as { __sciencebatchTranslate?: WritingTranslator }).__sciencebatchTranslate;
+  if (fn) return fn(`writing:${key}`, fallback, params);
+  return params ? fallback.replace(/\{\{(\w+)\}\}/g, (_m, k) => String(params[k] ?? '')) : fallback;
+};
+
 export interface PackageEligibility { eligible: boolean; reason?: string; preambleStart?: number; preambleEnd?: number }
 interface PackageScan { loaded: Set<string>; uncertain: boolean }
 const COMMAND_REQUIREMENTS: Record<string, string[]> = {
@@ -78,12 +85,12 @@ export function inspectPackageEligibility(source: string): PackageEligibility {
   const documentStart = activeSource.search(/\\begin\s*\{document\}/);
   const classMatch = activeSource.match(/\\documentclass(?:\s*\[[^\]]*\])?\s*\{[^}]+\}/);
   if (documentStart < 0 || !classMatch || classMatch.index === undefined || classMatch.index > documentStart) {
-    return { eligible: false, reason: 'A recognizable main-document preamble is required to add packages.' };
+    return { eligible: false, reason: wt('packages.preambleRequired', 'A recognizable main-document preamble is required to add packages.') };
   }
   const className = classMatch[0].match(/\{([^}]+)\}$/)?.[1]?.trim();
-  if (className && !new Set(['article', 'report', 'book', 'letter', 'proc', 'slides']).has(className)) return { eligible: false, reason: 'The document class may load packages conditionally, so package additions cannot be verified safely.' };
+  if (className && !new Set(['article', 'report', 'book', 'letter', 'proc', 'slides']).has(className)) return { eligible: false, reason: wt('packages.documentClassConditional', 'The document class may load packages conditionally, so package additions cannot be verified safely.') };
   const preamble = source.slice(0, documentStart);
-  if (scanPackages(preamble).uncertain) return { eligible: false, reason: 'Package loading depends on conditional or macro logic that cannot be verified safely.' };
+  if (scanPackages(preamble).uncertain) return { eligible: false, reason: wt('packages.conditionalOrMacroLogic', 'Package loading depends on conditional or macro logic that cannot be verified safely.') };
   return { eligible: true, preambleStart: 0, preambleEnd: documentStart };
 }
 

@@ -1,4 +1,4 @@
-use super::suggestions::get_smart_suggestion;
+use super::suggestions::get_smart_suggestion_structured;
 use crate::types::DiagnosticItem;
 use std::path::Path;
 
@@ -226,7 +226,19 @@ pub fn parse_latex_log_with_snapshot(
 
         if trimmed.starts_with('!') {
             let msg = trimmed.to_string();
-            let suggestion = get_smart_suggestion(&msg);
+            let (suggestion, suggestion_code, suggestion_params) =
+                match get_smart_suggestion_structured(&msg) {
+                    Some(detail) => (
+                        Some(detail.message),
+                        Some(detail.code.to_string()),
+                        if detail.params.is_empty() {
+                            None
+                        } else {
+                            Some(detail.params)
+                        },
+                    ),
+                    None => (None, None, None),
+                };
 
             let mut detected_line = None;
             for next_line in log_lines.iter().skip(i + 1).take(12) {
@@ -273,12 +285,26 @@ pub fn parse_latex_log_with_snapshot(
                 line: detected_line,
                 file: current_file,
                 suggestion,
+                suggestion_code,
+                suggestion_params,
             });
         } else if trimmed.starts_with("LaTeX Warning:")
             || trimmed.starts_with("Package") && trimmed.contains("Warning:")
         {
             let msg = trimmed.to_string();
-            let suggestion = get_smart_suggestion(&msg);
+            let (suggestion, suggestion_code, suggestion_params) =
+                match get_smart_suggestion_structured(&msg) {
+                    Some(detail) => (
+                        Some(detail.message),
+                        Some(detail.code.to_string()),
+                        if detail.params.is_empty() {
+                            None
+                        } else {
+                            Some(detail.params)
+                        },
+                    ),
+                    None => (None, None, None),
+                };
 
             let mut detected_line = None;
             if let Some(pos) = msg.find("input line ") {
@@ -314,6 +340,8 @@ pub fn parse_latex_log_with_snapshot(
                 line: detected_line,
                 file: current_file,
                 suggestion,
+                suggestion_code,
+                suggestion_params,
             });
         }
 
@@ -451,5 +479,48 @@ mod snapshot_location_tests {
         );
         assert_eq!(errors[0].file.as_deref(), Some("paper.tex"));
         assert_eq!(errors[0].line, None);
+    }
+
+    #[test]
+    fn parser_populates_suggestion_code_and_params_on_diagnostics() {
+        let files = BTreeSet::from(["paper.tex".to_owned()]);
+        let log = "(paper.tex\n! LaTeX Error: File `missingpkg.sty' not found.\nl.3 \\usepackage{missingpkg}\nLaTeX Warning: Reference `sec:intro' on page 1 undefined on input line 5.\n)\n";
+        let (errors, warnings) = parse_latex_log_with_snapshot(
+            log,
+            0,
+            "paper.tex",
+            None,
+            Some("paper.tex"),
+            Some(&files),
+        );
+        assert_eq!(errors.len(), 1);
+        assert_eq!(
+            errors[0].suggestion_code.as_deref(),
+            Some("latex.sty_not_found")
+        );
+        assert_eq!(
+            errors[0]
+                .suggestion_params
+                .as_ref()
+                .and_then(|p| p.get("file"))
+                .map(String::as_str),
+            Some("missingpkg.sty")
+        );
+        assert!(errors[0].suggestion.is_some());
+
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(
+            warnings[0].suggestion_code.as_deref(),
+            Some("latex.undefined_reference")
+        );
+        assert_eq!(
+            warnings[0]
+                .suggestion_params
+                .as_ref()
+                .and_then(|p| p.get("key"))
+                .map(String::as_str),
+            Some("sec:intro")
+        );
+        assert!(warnings[0].suggestion.is_some());
     }
 }

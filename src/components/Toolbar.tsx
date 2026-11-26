@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { 
   Play, 
   Square,
@@ -58,6 +59,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onToggleSidebar,
   hasOpenProject,
 }) => {
+  const { t } = useTranslation(['menu', 'common']);
   const [isExportOpen, setIsExportOpen] = useState(false);
   const exportDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -79,6 +81,10 @@ export const Toolbar: React.FC<ToolbarProps> = ({
       document.removeEventListener('keydown', handleEscape);
     };
   }, []);
+
+  const engineLabel = t(engine === 'latex' ? 'common:engines.latex' : 'common:engines.typst');
+  const zoomPercent = Math.round(zoom * 100);
+
   return (
     <header className="toolbar">
       <div className="toolbar-left">
@@ -88,8 +94,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             type="button"
             className={`btn btn-icon ${sidebarOpen ? 'btn-sidebar-active' : ''}`}
             onClick={onToggleSidebar}
-            title="Toggle File Explorer (Ctrl + B)"
-            aria-label="Toggle File Explorer"
+            title={t('menu:toolbar.toggleExplorerTooltip')}
+            aria-label={t('menu:toolbar.toggleExplorerAria')}
             aria-pressed={sidebarOpen}
           >
             <Sidebar size={16} />
@@ -113,21 +119,21 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             type="button"
             className="btn btn-compile btn-stop"
             onClick={onCancelCompile}
-            title="Cancel compilation (Stop)"
-            aria-label="Stop compilation"
+            title={t('menu:toolbar.stopTooltip')}
+            aria-label={t('menu:toolbar.stopAria')}
           >
             <Square size={13} fill="currentColor" className="icon-stop" />
-            <span>Stop</span>
+            <span>{t('common:actions.stop')}</span>
           </button>
         ) : (
           <button
             type="button"
             className="btn btn-compile"
             onClick={onCompile}
-            title="Compile Document (Ctrl + S)"
+            title={t('menu:toolbar.compileTooltip')}
           >
             <Play size={16} fill="currentColor" />
-            <span>Compile</span>
+            <span>{t('common:actions.compile')}</span>
             <kbd className="shortcut-badge">Ctrl+S</kbd>
           </button>
         )}
@@ -137,19 +143,19 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           {compilationStatus === 'compiling' && (
             <span className="status-badge status-compiling">
               <Loader2 className="animate-spin" size={13} />
-              {statusMessage || 'Processing document...'}
+              {statusMessage || t('menu:toolbar.processingDocument')}
             </span>
           )}
           {compilationStatus === 'success' && (
             <span className="status-badge status-success">
               <CheckCircle2 size={13} />
-              {statusMessage || 'Ready'}
+              {statusMessage || t('menu:toolbar.ready')}
             </span>
           )}
           {compilationStatus === 'error' && (
             <span className="status-badge status-error" title={statusMessage}>
               <AlertCircle size={13} />
-              Compilation error
+              {t('menu:toolbar.compilationError')}
             </span>
           )}
         </div>
@@ -161,17 +167,17 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           type="button"
           className="btn btn-secondary btn-sm engine-toggle-btn"
           onClick={() => onSwitchEngine(engine === 'latex' ? 'typst' : 'latex')}
-          title={`Click to switch typesetting engine (Currently: ${engine === 'latex' ? 'LaTeX' : 'Typst'})`}
+          title={t('menu:toolbar.switchEngineTooltip', { engine: engineLabel })}
         >
           {engine === 'typst' ? (
             <>
               <FileCode size={13} className="icon-typst" />
-              <span>Engine: Typst</span>
+              <span>{t('menu:toolbar.engineLabel', { engine: engineLabel })}</span>
             </>
           ) : (
             <>
               <FileText size={13} className="icon-latex" />
-              <span>Engine: LaTeX</span>
+              <span>{t('menu:toolbar.engineLabel', { engine: engineLabel })}</span>
             </>
           )}
           <RefreshCw size={11} className="text-muted ml-1" />
@@ -183,8 +189,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             type="button"
             className="btn btn-icon"
             onClick={onZoomOut}
-            title="Zoom out"
-            aria-label="Zoom out"
+            title={t('menu:toolbar.zoomOut')}
+            aria-label={t('menu:toolbar.zoomOut')}
             disabled={!hasPdf}
           >
             <ZoomOut size={16} />
@@ -193,18 +199,18 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             type="button"
             className="btn btn-zoom-level"
             onClick={onZoomReset}
-            title="Reset zoom to 100%"
-            aria-label={`Zoom level ${Math.round(zoom * 100)}%, click to reset`}
+            title={t('menu:toolbar.zoomResetTooltip')}
+            aria-label={t('menu:toolbar.zoomLevelAria', { percent: zoomPercent })}
             disabled={!hasPdf}
           >
-            {Math.round(zoom * 100)}%
+            {zoomPercent}%
           </button>
           <button
             type="button"
             className="btn btn-icon"
             onClick={onZoomIn}
-            title="Zoom in"
-            aria-label="Zoom in"
+            title={t('menu:toolbar.zoomIn')}
+            aria-label={t('menu:toolbar.zoomIn')}
             disabled={!hasPdf}
           >
             <ZoomIn size={16} />
@@ -213,8 +219,8 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             type="button"
             className="btn btn-icon"
             onClick={onFitWidth}
-            title="Fit to width"
-            aria-label="Fit to width"
+            title={t('menu:toolbar.fitWidth')}
+            aria-label={t('menu:toolbar.fitWidth')}
             disabled={!hasPdf}
           >
             <Maximize2 size={16} />
@@ -227,12 +233,12 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             type="button"
             className={`btn btn-secondary export-btn ${isExportOpen ? 'btn-active' : ''}`}
             onClick={() => setIsExportOpen(!isExportOpen)}
-            title="Export document in various formats"
+            title={t('menu:toolbar.exportTooltip')}
             aria-haspopup="menu"
             aria-expanded={isExportOpen}
           >
             <Download size={15} />
-            <span>Export</span>
+            <span>{t('common:actions.export')}</span>
             <ChevronDown size={13} className={`export-caret ${isExportOpen ? 'export-caret-open' : ''}`} />
           </button>
 
@@ -247,13 +253,17 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                   }
                 }}
                 disabled={!hasPdf}
-                title={hasPdf ? "Export compiled PDF document" : "Compile document first to export PDF"}
+                title={
+                  hasPdf
+                    ? t('menu:file.exportPdfTooltipReady')
+                    : t('menu:file.exportPdfTooltipDisabled')
+                }
               >
                 <div className="toolbar-item-left">
                   <FileText size={15} className="icon-latex shrink-0" />
                   <div className="toolbar-item-text">
-                    <span className="toolbar-item-title">Download as PDF</span>
-                    <span className="toolbar-item-desc">Formatted document (.pdf)</span>
+                    <span className="toolbar-item-title">{t('menu:toolbar.downloadPdfTitle')}</span>
+                    <span className="toolbar-item-desc">{t('menu:toolbar.downloadPdfDesc')}</span>
                   </div>
                 </div>
               </button>
@@ -264,13 +274,13 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                   onExportZip();
                   setIsExportOpen(false);
                 }}
-                title="Package all project source files and assets into a ZIP archive"
+                title={t('menu:toolbar.downloadZipTooltip')}
               >
                 <div className="toolbar-item-left">
                   <Archive size={15} className="icon-archive shrink-0" />
                   <div className="toolbar-item-text">
-                    <span className="toolbar-item-title">Download as Source</span>
-                    <span className="toolbar-item-desc">Complete project archive (.zip)</span>
+                    <span className="toolbar-item-title">{t('menu:toolbar.downloadZipTitle')}</span>
+                    <span className="toolbar-item-desc">{t('menu:toolbar.downloadZipDesc')}</span>
                   </div>
                 </div>
               </button>

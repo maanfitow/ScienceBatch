@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Folder,
   FolderOpen,
@@ -79,6 +80,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
   engine,
   onClose,
 }) => {
+  const { t } = useTranslation(['sidebar', 'common']);
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({
     [projectRoot]: true,
   });
@@ -425,7 +427,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
       ref={renameInputRef}
       type="text"
       className="file-tree-rename-input"
-      aria-label="Rename item"
+      aria-label={t('sidebar:fileTree.renameInputAriaLabel')}
       value={renameValue}
       style={{
         flex: 1,
@@ -516,8 +518,8 @@ export const FileTree: React.FC<FileTreeProps> = ({
                 <button
                   type="button"
                   className="btn-tree-action"
-                  title="New file inside folder"
-                  aria-label={`New file inside ${item.name}`}
+                  title={t('sidebar:fileTree.newFileInsideFolder')}
+                  aria-label={t('sidebar:fileTree.newFileInsideAriaLabel', { name: item.name })}
                   onClick={(e) => handleStartCreate('file', item.path, e)}
                 >
                   <FilePlus size={13} />
@@ -525,8 +527,8 @@ export const FileTree: React.FC<FileTreeProps> = ({
                 <button
                   type="button"
                   className="btn-tree-action"
-                  title={`More actions for ${item.name}`}
-                  aria-label={`More actions for ${item.name}`}
+                  title={t('sidebar:fileTree.moreActionsFor', { name: item.name })}
+                  aria-label={t('sidebar:fileTree.moreActionsFor', { name: item.name })}
                   onClick={(e) => handleOpenActionMenuFromButton(e, item)}
                 >
                   <MoreHorizontal size={13} />
@@ -587,9 +589,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
         )}
 
         {!isRenaming && isMain && (
-          <span className="main-file-badge" title="Main Entrypoint File">
+          <span className="main-file-badge" title={t('sidebar:fileTree.mainEntrypointTitle')}>
             <Star size={11} fill="currentColor" />
-            <span>Main</span>
+            <span>{t('sidebar:fileTree.mainBadge')}</span>
           </span>
         )}
 
@@ -598,8 +600,8 @@ export const FileTree: React.FC<FileTreeProps> = ({
             <button
               type="button"
               className="btn-tree-action"
-              title={`More actions for ${item.name}`}
-              aria-label={`More actions for ${item.name}`}
+              title={t('sidebar:fileTree.moreActionsFor', { name: item.name })}
+              aria-label={t('sidebar:fileTree.moreActionsFor', { name: item.name })}
               onClick={(e) => handleOpenActionMenuFromButton(e, item)}
             >
               <MoreHorizontal size={13} />
@@ -616,26 +618,28 @@ export const FileTree: React.FC<FileTreeProps> = ({
       const isExpanded = !!expandedFolders[item.path];
       return [
         {
-          label: 'New File…',
+          label: t('sidebar:fileTree.contextMenu.newFile'),
           icon: <FilePlus size={14} />,
           onSelect: () => handleStartCreate('file', item.path),
         },
         {
-          label: 'New Folder…',
+          label: t('sidebar:fileTree.contextMenu.newFolder'),
           icon: <FolderPlus size={14} />,
           onSelect: () => handleStartCreate('folder', item.path),
         },
         ...(onImportFiles
           ? [
               {
-                label: 'Import Files Here…',
+                label: t('sidebar:fileTree.contextMenu.importFilesHere'),
                 icon: <FileUp size={14} />,
                 onSelect: () => onImportFiles(item.path),
               },
             ]
           : []),
         {
-          label: isExpanded ? 'Collapse Folder' : 'Expand Folder',
+          label: isExpanded
+            ? t('sidebar:fileTree.contextMenu.collapseFolder')
+            : t('sidebar:fileTree.contextMenu.expandFolder'),
           icon: isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />,
           separatorBefore: true,
           onSelect: () => toggleFolder(item.path),
@@ -643,7 +647,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
         ...(onRenamePath
           ? [
               {
-                label: 'Rename',
+                label: t('common:actions.rename'),
                 icon: <Pencil size={14} />,
                 shortcut: 'F2',
                 separatorBefore: true,
@@ -654,7 +658,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
         ...(onDuplicatePath
           ? [
               {
-                label: 'Duplicate',
+                label: t('sidebar:fileTree.contextMenu.duplicate'),
                 icon: <Files size={14} />,
                 separatorBefore: !onRenamePath,
                 onSelect: () => {
@@ -664,28 +668,28 @@ export const FileTree: React.FC<FileTreeProps> = ({
             ]
           : []),
         {
-          label: 'Copy Path',
+          label: t('sidebar:fileTree.contextMenu.copyPath'),
           icon: <Copy size={14} />,
           separatorBefore: true,
           onSelect: () => {
             void copyTextToClipboard(item.path)
-              .then(() => toast.success('Path copied'))
-              .catch(() => toast.error('Failed to copy path'));
+              .then(() => toast.success(t('sidebar:fileTree.toast.pathCopied')))
+              .catch(() => toast.error(t('sidebar:fileTree.toast.copyPathFailed')));
           },
         },
         {
-          label: 'Copy Relative Path',
+          label: t('sidebar:fileTree.contextMenu.copyRelativePath'),
           icon: <Copy size={14} />,
           onSelect: () => {
             void copyTextToClipboard(relPath)
-              .then(() => toast.success('Relative path copied'))
-              .catch(() => toast.error('Failed to copy path'));
+              .then(() => toast.success(t('sidebar:fileTree.toast.relativePathCopied')))
+              .catch(() => toast.error(t('sidebar:fileTree.toast.copyPathFailed')));
           },
         },
         ...(onRevealInFileManager
           ? [
               {
-                label: 'Reveal in File Manager',
+                label: t('sidebar:fileTree.contextMenu.revealInFileManager'),
                 icon: <ExternalLink size={14} />,
                 separatorBefore: true,
                 onSelect: () => {
@@ -697,7 +701,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
         ...(onDeletePath
           ? [
               {
-                label: 'Delete',
+                label: t('common:actions.delete'),
                 icon: <Trash2 size={14} />,
                 shortcut: 'Del',
                 danger: true,
@@ -724,7 +728,9 @@ export const FileTree: React.FC<FileTreeProps> = ({
 
     return [
       {
-        label: isMediaAsset ? 'Preview Asset' : 'Open File',
+        label: isMediaAsset
+          ? t('sidebar:fileTree.contextMenu.previewAsset')
+          : t('sidebar:fileTree.contextMenu.openFile'),
         icon: isMediaAsset ? <ImageIcon size={14} /> : <FileText size={14} />,
         onSelect: () => {
           if (isMediaAsset && onViewImage) {
@@ -737,7 +743,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
       ...(canSetMain
         ? [
             {
-              label: 'Set as Main Entrypoint',
+              label: t('sidebar:fileTree.contextMenu.setAsMain'),
               icon: <Star size={14} />,
               onSelect: () => onSetMainFile(item.path),
             },
@@ -746,7 +752,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
       ...(onRenamePath
         ? [
             {
-              label: 'Rename',
+              label: t('common:actions.rename'),
               icon: <Pencil size={14} />,
               shortcut: 'F2',
               separatorBefore: true,
@@ -757,7 +763,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
       ...(onDuplicatePath
         ? [
             {
-              label: 'Duplicate',
+              label: t('sidebar:fileTree.contextMenu.duplicate'),
               icon: <Files size={14} />,
               separatorBefore: !onRenamePath,
               onSelect: () => {
@@ -769,40 +775,42 @@ export const FileTree: React.FC<FileTreeProps> = ({
       ...(isMediaAsset
         ? [
             {
-              label: `Copy ${engine === 'typst' ? 'Typst' : 'LaTeX'} Figure Snippet`,
+              label: t('sidebar:fileTree.contextMenu.copyFigureSnippet', {
+                engine: t(`common:engines.${engine}`),
+              }),
               icon: <Code2 size={14} />,
               separatorBefore: true,
               onSelect: () => {
                 void copyTextToClipboard(figureSnippet)
-                  .then(() => toast.success('Figure snippet copied to clipboard'))
-                  .catch(() => toast.error('Failed to copy snippet'));
+                  .then(() => toast.success(t('sidebar:fileTree.toast.figureSnippetCopied')))
+                  .catch(() => toast.error(t('sidebar:fileTree.toast.copySnippetFailed')));
               },
             },
           ]
         : []),
       {
-        label: 'Copy Path',
+        label: t('sidebar:fileTree.contextMenu.copyPath'),
         icon: <Copy size={14} />,
         separatorBefore: true,
         onSelect: () => {
           void copyTextToClipboard(item.path)
-            .then(() => toast.success('Path copied'))
-            .catch(() => toast.error('Failed to copy path'));
+            .then(() => toast.success(t('sidebar:fileTree.toast.pathCopied')))
+            .catch(() => toast.error(t('sidebar:fileTree.toast.copyPathFailed')));
         },
       },
       {
-        label: 'Copy Relative Path',
+        label: t('sidebar:fileTree.contextMenu.copyRelativePath'),
         icon: <Copy size={14} />,
         onSelect: () => {
           void copyTextToClipboard(relPath)
-            .then(() => toast.success('Relative path copied'))
-            .catch(() => toast.error('Failed to copy path'));
+            .then(() => toast.success(t('sidebar:fileTree.toast.relativePathCopied')))
+            .catch(() => toast.error(t('sidebar:fileTree.toast.copyPathFailed')));
         },
       },
       ...(onRevealInFileManager
         ? [
             {
-              label: 'Reveal in File Manager',
+              label: t('sidebar:fileTree.contextMenu.revealInFileManager'),
               icon: <ExternalLink size={14} />,
               separatorBefore: true,
               onSelect: () => {
@@ -812,7 +820,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
           ]
         : []),
       {
-        label: 'Delete',
+        label: t('common:actions.delete'),
         icon: <Trash2 size={14} />,
         shortcut: 'Del',
         danger: true,
@@ -836,7 +844,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
       >
         <div className="file-tree-title">
           <span className="project-title truncate" title={projectRoot}>
-            {projectName || 'Project Explorer'}
+            {projectName || t('sidebar:fileTree.projectExplorer')}
           </span>
           <span className="project-engine-pill">{engine.toUpperCase()}</span>
         </div>
@@ -846,8 +854,8 @@ export const FileTree: React.FC<FileTreeProps> = ({
             <button
               type="button"
               className="btn-tree-header-action"
-              title="Import Files / Images"
-              aria-label="Import files or images"
+              title={t('sidebar:fileTree.header.importFilesTitle')}
+              aria-label={t('sidebar:fileTree.header.importFilesAriaLabel')}
               onClick={() => onImportFiles()}
             >
               <FileUp size={14} />
@@ -856,8 +864,8 @@ export const FileTree: React.FC<FileTreeProps> = ({
           <button
             type="button"
             className="btn-tree-header-action"
-            title="New File"
-            aria-label="New file"
+            title={t('sidebar:fileTree.header.newFile')}
+            aria-label={t('sidebar:fileTree.header.newFileAriaLabel')}
             onClick={(e) => handleStartCreate('file', projectRoot, e)}
           >
             <FilePlus size={14} />
@@ -865,8 +873,8 @@ export const FileTree: React.FC<FileTreeProps> = ({
           <button
             type="button"
             className="btn-tree-header-action"
-            title="New Folder"
-            aria-label="New folder"
+            title={t('sidebar:fileTree.header.newFolder')}
+            aria-label={t('sidebar:fileTree.header.newFolderAriaLabel')}
             onClick={(e) => handleStartCreate('folder', projectRoot, e)}
           >
             <FolderPlus size={14} />
@@ -874,8 +882,8 @@ export const FileTree: React.FC<FileTreeProps> = ({
           <button
             type="button"
             className="btn-tree-header-action"
-            title="Collapse All Folders"
-            aria-label="Collapse all folders"
+            title={t('sidebar:fileTree.header.collapseAll')}
+            aria-label={t('sidebar:fileTree.header.collapseAllAriaLabel')}
             onClick={handleCollapseAll}
           >
             <ChevronsDownUp size={14} />
@@ -884,8 +892,8 @@ export const FileTree: React.FC<FileTreeProps> = ({
             <button
               type="button"
               className="btn-tree-header-action"
-              title="Refresh Explorer"
-              aria-label="Refresh explorer"
+              title={t('sidebar:fileTree.header.refresh')}
+              aria-label={t('sidebar:fileTree.header.refreshAriaLabel')}
               onClick={() => {
                 void onRefreshFiles();
               }}
@@ -897,8 +905,8 @@ export const FileTree: React.FC<FileTreeProps> = ({
             <button
               type="button"
               className="btn-tree-header-action"
-              title="Close panel"
-              aria-label="Close panel"
+              title={t('sidebar:common.closePanel')}
+              aria-label={t('sidebar:common.closePanel')}
               onClick={onClose}
             >
               <X size={14} />
@@ -911,14 +919,18 @@ export const FileTree: React.FC<FileTreeProps> = ({
         <div className="file-tree-inline-create">
           {creatingParent !== projectRoot && (
             <div className="file-tree-create-target truncate" title={getRelativePath(creatingParent)}>
-              Inside: <code>{getRelativePath(creatingParent)}</code>
+              {t('sidebar:fileTree.createInsidePrefix')} <code>{getRelativePath(creatingParent)}</code>
             </div>
           )}
           <div className="file-tree-inline-input">
             <input
               ref={createInputRef}
               type="text"
-              placeholder={creatingType === 'file' ? 'filename.tex or filename.typ' : 'folder name'}
+              placeholder={
+                creatingType === 'file'
+                  ? t('sidebar:fileTree.createFilePlaceholder')
+                  : t('sidebar:fileTree.createFolderPlaceholder')
+              }
               value={newItemName}
               onChange={(e) => setNewItemName(e.target.value)}
               onKeyDown={(e) => {
@@ -927,7 +939,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
               }}
               autoFocus
             />
-            <button type="button" className="btn-confirm-create" aria-label="Confirm create" onClick={handleConfirmCreate}>
+            <button type="button" className="btn-confirm-create" aria-label={t('sidebar:fileTree.confirmCreateAriaLabel')} onClick={handleConfirmCreate}>
               <Plus size={13} />
             </button>
           </div>
@@ -946,7 +958,7 @@ export const FileTree: React.FC<FileTreeProps> = ({
           files.map((item) => renderItem(item, 0))
         ) : (
           <div className="file-tree-empty">
-            <span>No files in project folder</span>
+            <span>{t('sidebar:fileTree.emptyState')}</span>
           </div>
         )}
       </div>

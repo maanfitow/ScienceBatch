@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, startTransition } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { 
   Search, 
   Replace, 
@@ -66,6 +67,7 @@ export const GlobalSearchView: React.FC<GlobalSearchViewProps> = ({
   onSelectLine,
   onClose,
 }) => {
+  const { t } = useTranslation(['sidebar', 'common']);
   // Decoupled input value for zero typing lag (instant 60fps)
   const [inputValue, setInputValue] = useState('');
   const [activeQuery, setActiveQuery] = useState('');
@@ -112,10 +114,10 @@ export const GlobalSearchView: React.FC<GlobalSearchViewProps> = ({
       setRegexError(null);
       return new RegExp(pattern, flags);
     } catch (e: any) {
-      setRegexError(e?.message || 'Invalid regular expression');
+      setRegexError(e?.message || t('sidebar:search.invalidRegex'));
       return null;
     }
-  }, [isRegex, wholeWord, matchCase]);
+  }, [isRegex, wholeWord, matchCase, t]);
 
   // Execute Search
   const executeSearch = useCallback(async (searchQueryToRun: string) => {
@@ -312,10 +314,10 @@ export const GlobalSearchView: React.FC<GlobalSearchViewProps> = ({
         fileCacheRef.current.set(filePath, newContent);
       }
 
-      toast.success('Replacements applied in file');
+      toast.success(t('sidebar:search.toast.replacedInFile'));
       executeSearch(activeQuery || inputValue);
     } catch (err: any) {
-      toast.error('Failed to replace in file');
+      toast.error(t('sidebar:search.toast.replaceInFileFailed'));
       console.error(err);
     }
   };
@@ -355,7 +357,13 @@ export const GlobalSearchView: React.FC<GlobalSearchViewProps> = ({
       }
     }
 
-    toast.success(`Replaced ${totalReplacedMatches} occurrences across ${replacedFilesCount} file(s)`);
+    const filesLabel = t('sidebar:search.toast.replacedFileCount', { count: replacedFilesCount });
+    toast.success(
+      t('sidebar:search.toast.replacedSummary', {
+        count: totalReplacedMatches,
+        files: filesLabel,
+      })
+    );
     executeSearch(term);
   };
 
@@ -391,11 +399,11 @@ export const GlobalSearchView: React.FC<GlobalSearchViewProps> = ({
           fileCacheRef.current.set(filePath, newContent);
         }
 
-        toast.success(`Occurrence replaced at line ${match.line}`);
+        toast.success(t('sidebar:search.toast.replacedAtLine', { line: match.line }));
         executeSearch(activeQuery || inputValue);
       }
     } catch (err: any) {
-      toast.error('Failed to replace occurrence');
+      toast.error(t('sidebar:search.toast.replaceOccurrenceFailed'));
       console.error(err);
     }
   };
@@ -404,19 +412,21 @@ export const GlobalSearchView: React.FC<GlobalSearchViewProps> = ({
     <div className="search-view-container">
       {/* Panel Header */}
       <div className="search-view-header">
-        <span className="search-view-title">SEARCH</span>
+        <span className="search-view-title">{t('sidebar:search.title')}</span>
         <div className="search-view-header-actions">
           <button
             className={`btn-search-header-action ${showFilters ? 'active' : ''}`}
             onClick={() => setShowFilters((prev) => !prev)}
-            title="File inclusion/exclusion filters"
+            title={t('sidebar:search.filtersTooltip')}
+            aria-label={t('sidebar:search.filtersTooltip')}
           >
             <Filter size={13} />
           </button>
           <button
             className="btn-search-header-action"
             onClick={handleManualSearch}
-            title="Refresh search (Enter)"
+            title={t('sidebar:search.refreshTooltip')}
+            aria-label={t('sidebar:search.refreshTooltip')}
             disabled={!inputValue.trim()}
           >
             <RotateCw size={13} className={isSearching ? 'animate-spin' : ''} />
@@ -425,7 +435,8 @@ export const GlobalSearchView: React.FC<GlobalSearchViewProps> = ({
             <button
               className="btn-search-header-action"
               onClick={onClose}
-              title="Close panel"
+              title={t('sidebar:common.closePanel')}
+              aria-label={t('sidebar:common.closePanel')}
             >
               <X size={14} />
             </button>
@@ -440,7 +451,8 @@ export const GlobalSearchView: React.FC<GlobalSearchViewProps> = ({
           <button
             className="search-toggle-replace-btn"
             onClick={() => setShowReplace((prev) => !prev)}
-            title={showReplace ? 'Hide replace' : 'Show replace'}
+            title={showReplace ? t('sidebar:search.hideReplace') : t('sidebar:search.showReplace')}
+            aria-label={showReplace ? t('sidebar:search.hideReplace') : t('sidebar:search.showReplace')}
           >
             <ChevronRight size={13} className={`transition-transform ${showReplace ? 'rotate-90' : ''}`} />
           </button>
@@ -449,7 +461,8 @@ export const GlobalSearchView: React.FC<GlobalSearchViewProps> = ({
             <input
               type="text"
               className="search-field-input"
-              placeholder="Search..."
+              placeholder={t('sidebar:search.searchPlaceholder')}
+              aria-label={t('sidebar:search.searchAriaLabel')}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={(e) => {
@@ -465,7 +478,8 @@ export const GlobalSearchView: React.FC<GlobalSearchViewProps> = ({
                   setActiveQuery('');
                   setResults([]);
                 }}
-                title="Clear search"
+                title={t('sidebar:search.clearSearch')}
+                aria-label={t('sidebar:search.clearSearch')}
               >
                 <X size={12} />
               </button>
@@ -477,21 +491,24 @@ export const GlobalSearchView: React.FC<GlobalSearchViewProps> = ({
             <button
               className={`search-option-btn ${matchCase ? 'active' : ''}`}
               onClick={() => setMatchCase((prev) => !prev)}
-              title="Match Case (Alt+C)"
+              title={t('sidebar:search.matchCaseTooltip')}
+              aria-label={t('sidebar:search.matchCaseTooltip')}
             >
               Aa
             </button>
             <button
               className={`search-option-btn ${wholeWord ? 'active' : ''}`}
               onClick={() => setWholeWord((prev) => !prev)}
-              title="Match Whole Word (Alt+W)"
+              title={t('sidebar:search.wholeWordTooltip')}
+              aria-label={t('sidebar:search.wholeWordTooltip')}
             >
               \b
             </button>
             <button
               className={`search-option-btn ${isRegex ? 'active' : ''}`}
               onClick={() => setIsRegex((prev) => !prev)}
-              title="Use Regular Expression (Alt+R)"
+              title={t('sidebar:search.regexTooltip')}
+              aria-label={t('sidebar:search.regexTooltip')}
             >
               .*
             </button>
@@ -507,7 +524,8 @@ export const GlobalSearchView: React.FC<GlobalSearchViewProps> = ({
               <input
                 type="text"
                 className="search-field-input"
-                placeholder="Replace..."
+                placeholder={t('sidebar:search.replacePlaceholder')}
+                aria-label={t('sidebar:search.replaceAriaLabel')}
                 value={replaceQuery}
                 onChange={(e) => setReplaceQuery(e.target.value)}
               />
@@ -515,7 +533,8 @@ export const GlobalSearchView: React.FC<GlobalSearchViewProps> = ({
                 <button
                   className="search-clear-btn"
                   onClick={() => setReplaceQuery('')}
-                  title="Clear field"
+                  title={t('sidebar:search.clearField')}
+                  aria-label={t('sidebar:search.clearField')}
                 >
                   <X size={12} />
                 </button>
@@ -525,10 +544,10 @@ export const GlobalSearchView: React.FC<GlobalSearchViewProps> = ({
               className="btn-replace-all"
               onClick={handleReplaceAll}
               disabled={results.length === 0}
-              title="Replace all in project (Ctrl+Alt+Enter)"
+              title={t('sidebar:search.replaceAllTooltip')}
             >
               <CheckCheck size={13} />
-              <span>All</span>
+              <span>{t('sidebar:search.replaceAllButton')}</span>
             </button>
           </div>
         )}
@@ -537,21 +556,23 @@ export const GlobalSearchView: React.FC<GlobalSearchViewProps> = ({
         {showFilters && (
           <div className="search-filters-container">
             <div className="search-filter-row">
-              <label className="search-filter-label">Include:</label>
+              <label className="search-filter-label">{t('sidebar:search.includeLabel')}</label>
               <input
                 type="text"
                 className="search-filter-input"
-                placeholder="e.g. *.tex, *.typ, *.bib"
+                placeholder={t('sidebar:search.includePlaceholder')}
+                aria-label={t('sidebar:search.includeLabel')}
                 value={includePattern}
                 onChange={(e) => setIncludePattern(e.target.value)}
               />
             </div>
             <div className="search-filter-row">
-              <label className="search-filter-label">Exclude:</label>
+              <label className="search-filter-label">{t('sidebar:search.excludeLabel')}</label>
               <input
                 type="text"
                 className="search-filter-input"
-                placeholder="e.g. assets, dist"
+                placeholder={t('sidebar:search.excludePlaceholder')}
+                aria-label={t('sidebar:search.excludeLabel')}
                 value={excludePattern}
                 onChange={(e) => setExcludePattern(e.target.value)}
               />
@@ -572,17 +593,30 @@ export const GlobalSearchView: React.FC<GlobalSearchViewProps> = ({
       <div className="search-results-summary">
         {inputValue.trim() ? (
           isSearching ? (
-            <span className="text-muted">Searching in project...</span>
+            <span className="text-muted">{t('sidebar:search.searching')}</span>
           ) : results.length > 0 ? (
             <span>
-              <strong>{totalMatchesCount}</strong> result{totalMatchesCount !== 1 ? 's' : ''} across{' '}
-              <strong>{results.length}</strong> file{results.length !== 1 ? 's' : ''}
+              <Trans
+                ns="sidebar"
+                i18nKey="search.resultsPart"
+                count={totalMatchesCount}
+                values={{ count: totalMatchesCount }}
+                components={{ strong: <strong /> }}
+              />{' '}
+              {t('sidebar:search.acrossConnector')}{' '}
+              <Trans
+                ns="sidebar"
+                i18nKey="search.filesPart"
+                count={results.length}
+                values={{ count: results.length }}
+                components={{ strong: <strong /> }}
+              />
             </span>
           ) : (
-            <span className="text-muted">No results found</span>
+            <span className="text-muted">{t('sidebar:search.noResults')}</span>
           )
         ) : (
-          <span className="text-muted">Type to search in project files</span>
+          <span className="text-muted">{t('sidebar:search.emptyPrompt')}</span>
         )}
       </div>
 
@@ -618,7 +652,8 @@ export const GlobalSearchView: React.FC<GlobalSearchViewProps> = ({
                     <button
                       className="btn-replace-file-action"
                       onClick={(e) => handleReplaceInFile(fileResult.filePath, e)}
-                      title="Replace all occurrences in this file"
+                      title={t('sidebar:search.replaceInFileTooltip')}
+                      aria-label={t('sidebar:search.replaceInFileTooltip')}
                     >
                       <Replace size={12} />
                     </button>
@@ -639,7 +674,7 @@ export const GlobalSearchView: React.FC<GlobalSearchViewProps> = ({
                         key={`${fileResult.filePath}-${match.line}-${idx}`}
                         className="search-match-row"
                         onClick={() => handleSelectMatch(fileResult.filePath, match.line)}
-                        title={`Line ${match.line}: ${lineContent}`}
+                        title={t('sidebar:search.matchLineTooltip', { line: match.line, content: lineContent })}
                       >
                         <span className="search-match-line-badge">
                           {match.line}
@@ -651,7 +686,8 @@ export const GlobalSearchView: React.FC<GlobalSearchViewProps> = ({
                           <button
                             className="btn-replace-match-action"
                             onClick={(e) => handleReplaceSingleMatch(fileResult.filePath, match, e)}
-                            title="Replace this occurrence"
+                            title={t('sidebar:search.replaceMatchTooltip')}
+                            aria-label={t('sidebar:search.replaceMatchTooltip')}
                           >
                             <Check size={11} />
                           </button>
@@ -664,7 +700,9 @@ export const GlobalSearchView: React.FC<GlobalSearchViewProps> = ({
                       className="btn-show-more-matches"
                       onClick={(e) => toggleExpandMatches(fileResult.filePath, e)}
                     >
-                      + Show {fileResult.matches.length - INITIAL_MATCHES_PER_FILE_LIMIT} more matches...
+                      {t('sidebar:search.showMoreMatches', {
+                        count: fileResult.matches.length - INITIAL_MATCHES_PER_FILE_LIMIT,
+                      })}
                     </button>
                   )}
                 </div>

@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X, Folder, Sparkles, FileText, FileCode, Check, Archive } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
-import { DEFAULT_LATEX_SOURCE } from '../editor/latexData';
-import { DEFAULT_TYPST_SOURCE } from '../editor/typstData';
+import { getDefaultLatexSource } from '../editor/latexData';
+import { getDefaultTypstSource } from '../editor/typstData';
 
 interface NewProjectModalProps {
   isOpen: boolean;
@@ -28,6 +29,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
   onImportZipProject,
   initialTab = 'create',
 }) => {
+  const { t, i18n } = useTranslation(['menu', 'common']);
   const [activeTab, setActiveTab] = useState<'create' | 'import'>(initialTab);
   const [engine, setEngine] = useState<'latex' | 'typst'>('typst');
   const [projectName, setProjectName] = useState<string>('MySciencePaper');
@@ -60,7 +62,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
       const selected = await open({
         directory: true,
         multiple: false,
-        title: 'Select Destination Folder for Project',
+        title: t('menu:newProjectModal.selectDestinationDialogTitle'),
       });
 
       if (selected && typeof selected === 'string') {
@@ -75,8 +77,8 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
     try {
       const selected = await open({
         multiple: false,
-        title: 'Select LaTeX or Typst Project ZIP Archive',
-        filters: [{ name: 'ZIP Archives (*.zip)', extensions: ['zip'] }],
+        title: t('menu:newProjectModal.selectZipDialogTitle'),
+        filters: [{ name: t('menu:newProjectModal.zipFilterName'), extensions: ['zip'] }],
       });
 
       if (selected && typeof selected === 'string') {
@@ -114,7 +116,9 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
 
       setIsProcessing(true);
       try {
-        const templateContent = engine === 'typst' ? DEFAULT_TYPST_SOURCE : DEFAULT_LATEX_SOURCE;
+        const templateContent = engine === 'typst'
+          ? getDefaultTypstSource(i18n.language)
+          : getDefaultLatexSource(i18n.language);
         await onCreateProject(parentDir.trim(), projectName.trim(), engine, templateContent);
         onClose();
       } catch (err) {
@@ -135,9 +139,19 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
             ) : (
               <Sparkles size={18} className="modal-title-icon" />
             )}
-            <h3>{activeTab === 'import' ? 'Import Project from ZIP' : 'Create New Scientific Project'}</h3>
+            <h3>
+              {activeTab === 'import'
+                ? t('menu:newProjectModal.importTitle')
+                : t('menu:newProjectModal.createTitle')}
+            </h3>
           </div>
-          <button type="button" className="btn-modal-close" aria-label="Close dialog" disabled={isProcessing} onClick={onClose}>
+          <button
+            type="button"
+            className="btn-modal-close"
+            aria-label={t('menu:newProjectModal.closeAria')}
+            disabled={isProcessing}
+            onClick={onClose}
+          >
             <X size={18} />
           </button>
         </div>
@@ -150,7 +164,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
             onClick={() => setActiveTab('create')}
           >
             <Sparkles size={14} />
-            <span>New Blank Project</span>
+            <span>{t('menu:newProjectModal.tabCreate')}</span>
           </button>
           <button
             type="button"
@@ -158,7 +172,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
             onClick={() => setActiveTab('import')}
           >
             <Archive size={14} />
-            <span>Import from ZIP</span>
+            <span>{t('menu:newProjectModal.tabImport')}</span>
           </button>
         </div>
 
@@ -166,13 +180,13 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
           {activeTab === 'import' ? (
             /* ZIP Archive Picker */
             <div className="modal-field">
-              <label className="modal-label">Project ZIP Archive</label>
+              <label className="modal-label">{t('menu:newProjectModal.zipArchiveLabel')}</label>
               <div className="folder-picker-group">
                 <input
                   type="text"
                   className="modal-input folder-path-input truncate"
                   value={zipPath}
-                  placeholder="Click browse to select .zip archive..."
+                  placeholder={t('menu:newProjectModal.zipPlaceholder')}
                   readOnly
                   required
                 />
@@ -182,17 +196,17 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
                   onClick={handleSelectZip}
                 >
                   <Archive size={15} className="icon-archive" />
-                  <span>Browse ZIP...</span>
+                  <span>{t('menu:newProjectModal.browseZip')}</span>
                 </button>
               </div>
               <p className="modal-desc">
-                Select any LaTeX or Typst archive (.zip), including project packages exported from cloud services.
+                {t('menu:newProjectModal.zipDescription')}
               </p>
             </div>
           ) : (
             /* Engine Choice Cards */
             <div className="modal-field">
-              <label className="modal-label">Typesetting Engine</label>
+              <label className="modal-label">{t('menu:newProjectModal.engineLabel')}</label>
               <div className="engine-card-selector">
                 <div 
                   className={`engine-card ${engine === 'typst' ? 'engine-card-selected' : ''}`}
@@ -200,11 +214,11 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
                 >
                   <div className="engine-card-header">
                     <FileCode size={22} className="icon-typst" />
-                    <span className="engine-card-title">Typst</span>
+                    <span className="engine-card-title">{t('common:engines.typst')}</span>
                     {engine === 'typst' && <Check size={16} className="engine-card-check" />}
                   </div>
                   <p className="engine-card-desc">
-                    Modern Rust-native typesetting. Blazing fast (&lt;50ms), intuitive syntax and expressive layouts.
+                    {t('menu:newProjectModal.typstDesc')}
                   </p>
                 </div>
 
@@ -214,11 +228,11 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
                 >
                   <div className="engine-card-header">
                     <FileText size={22} className="icon-latex" />
-                    <span className="engine-card-title">LaTeX</span>
+                    <span className="engine-card-title">{t('common:engines.latex')}</span>
                     {engine === 'latex' && <Check size={16} className="engine-card-check" />}
                   </div>
                   <p className="engine-card-desc">
-                    Gold-standard academic typesetting with Tectonic RAM VFS. Complete CTAN packages and BibTeX.
+                    {t('menu:newProjectModal.latexDesc')}
                   </p>
                 </div>
               </div>
@@ -227,26 +241,26 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
 
           {/* Project Name */}
           <div className="modal-field">
-            <label className="modal-label">Project Folder Name</label>
+            <label className="modal-label">{t('menu:newProjectModal.projectNameLabel')}</label>
             <input
               type="text"
               className="modal-input"
               value={projectName}
               onChange={(e) => setProjectName(e.target.value)}
-              placeholder="e.g. QuantumComputingPaper"
+              placeholder={t('menu:newProjectModal.projectNamePlaceholder')}
               required
             />
           </div>
 
           {/* Location Folder */}
           <div className="modal-field">
-            <label className="modal-label">Destination Folder</label>
+            <label className="modal-label">{t('menu:newProjectModal.destinationLabel')}</label>
             <div className="folder-picker-group">
               <input
                 type="text"
                 className="modal-input folder-path-input truncate"
                 value={parentDir}
-                placeholder="Click browse to select directory..."
+                placeholder={t('menu:newProjectModal.destinationPlaceholder')}
                 readOnly
                 required
               />
@@ -256,7 +270,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
                 onClick={handleSelectFolder}
               >
                 <Folder size={15} />
-                <span>Browse...</span>
+                <span>{t('menu:newProjectModal.browseFolder')}</span>
               </button>
             </div>
           </div>
@@ -264,7 +278,7 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
           {/* Modal Footer Actions */}
           <div className="modal-footer">
             <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isProcessing}>
-              Cancel
+              {t('common:actions.cancel')}
             </button>
             <button
               type="submit"
@@ -276,8 +290,12 @@ export const NewProjectModal: React.FC<NewProjectModalProps> = ({
               }
             >
               {isProcessing
-                ? activeTab === 'import' ? 'Importing Archive...' : 'Creating Project...'
-                : activeTab === 'import' ? 'Import & Open Project' : 'Create & Open Project'}
+                ? activeTab === 'import'
+                  ? t('menu:newProjectModal.importing')
+                  : t('menu:newProjectModal.creating')
+                : activeTab === 'import'
+                  ? t('menu:newProjectModal.submitImport')
+                  : t('menu:newProjectModal.submitCreate')}
             </button>
           </div>
         </form>

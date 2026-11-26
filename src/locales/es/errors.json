@@ -1,0 +1,279 @@
+{
+  "clipboard": {
+    "copyFailed": "Error al copiar",
+    "textUnavailable": "El acceso al portapapeles no está disponible en este contexto del navegador.",
+    "invalidImageDimensions": "Dimensiones de imagen no válidas para copiar al portapapeles.",
+    "invalidImageBuffer": "El tamaño del búfer RGBA de la imagen no coincide con el ancho y el alto.",
+    "imageUnavailable": "El acceso al portapapeles de imágenes no está disponible en este contexto del navegador.",
+    "canvasContextFailed": "No se pudo crear el contexto de lienzo 2D para copiar la imagen.",
+    "emptyCanvas": "El lienzo no tiene datos de imagen renderizados para copiar.",
+    "imageNotLoaded": "La imagen aún no se ha cargado por completo."
+  },
+  "pdf": {
+    "openLinkFailed": "No se pudo abrir el enlace",
+    "copyImageFailed": "No se pudo copiar la imagen"
+  },
+  "diagnostics": {
+    "copyFailed": "No se pudo copiar al portapapeles",
+    "copyRawLogFailed": "No se pudo copiar el registro completo"
+  },
+  "project": {
+    "gitRefreshDirtyTitle": "No se puede actualizar tras la operación de Git",
+    "gitRefreshDirtyDescription": "Guarda o descarta los cambios sin guardar del editor y vuelve a actualizar el proyecto.",
+    "gitRefreshInterruptedTitle": "Se interrumpió la actualización del proyecto",
+    "gitRefreshInterruptedDescription": "Aparecieron cambios sin guardar durante la actualización y se conservaron. Vuelve a actualizar después de guardarlos.",
+    "gitRefreshReadFailedTitle": "No se pudo actualizar el proyecto tras la operación de Git",
+    "gitRefreshReadFailedDescription": "No se pudo leer el contenido del proyecto desde el disco.",
+    "saveFailed": "No se pudo guardar el archivo en el disco",
+    "importFilesFailed": "No se pudieron importar los archivos al proyecto",
+    "folderNotFoundTitle": "Carpeta del proyecto no encontrada",
+    "folderNotFoundDescription": "La carpeta \"{{path}}\" ya no existe en el disco. Se eliminó de proyectos recientes.",
+    "openFolderFailed": "No se pudo abrir la carpeta del proyecto",
+    "createFolderError": "Error al crear la carpeta del proyecto",
+    "extractFailedFallback": "No se pudo extraer el proyecto",
+    "importZipFailedTitle": "Error al importar",
+    "openFileFailed": "No se pudo abrir el archivo",
+    "createFileFailed": "No se pudo crear el archivo",
+    "createFolderFailed": "No se pudo crear la carpeta",
+    "invalidNameTitle": "Nombre no válido",
+    "invalidNameDescription": "El nombre no puede estar vacío, ser \".\" ni \"..\", ni contener separadores de ruta.",
+    "renameFailed": "No se pudo renombrar",
+    "moveFailed": "No se pudo mover",
+    "moveToTrashFailed": "No se pudo mover a la papelera",
+    "duplicateFailed": "No se pudo duplicar",
+    "revealFailed": "No se pudo mostrar en el explorador de archivos"
+  },
+  "compiler": {
+    "noSourceTitle": "No hay ningún documento fuente abierto",
+    "noSourceDescription": "Abre o crea un documento fuente antes de compilar.",
+    "missingResourcesTitle": "La compilación puede necesitar recursos del proyecto",
+    "missingResourcesDescription": "Revisa el recurso faltante y prepáralo explícitamente.",
+    "compilationErrorTitle": "Error de compilación",
+    "unknownError": "Error de compilación desconocido"
+  },
+  "export": {
+    "noPdf": "No hay ningún PDF compilado disponible para exportar",
+    "pdfExportFailed": "No se pudo exportar el PDF",
+    "zipExportFailed": "No se pudo exportar el archivo ZIP"
+  },
+  "resources": {
+    "operationFailed": "La operación de recursos falló.",
+    "changedDuringAnalysis": "El espacio de trabajo o la selección cambiaron durante el análisis de recursos. Vuelve a comprobarlo.",
+    "changedDuringPlanning": "El espacio de trabajo o la selección cambiaron durante la planificación de recursos. Vuelve a comprobarlo.",
+    "jobNotFound": "La preparación de recursos ya no está activa.",
+    "cacheCannotRemove": "Los archivos seleccionados no se pueden eliminar en este momento.",
+    "cacheProtectedOrMissing": "Algunos archivos seleccionados están protegidos o ya no están disponibles."
+  },
+  "updates": {
+    "checkFailed": "No se pudieron comprobar las actualizaciones."
+  },
+  "git": {
+    "operationFailed": "La operación de Git falló.",
+    "repositoryRequired": "Abre un repositorio de Git antes de ejecutar esta operación.",
+    "alreadyRunning": "Ya hay otra operación de Git en curso.",
+    "clonedOpenFailed": "El repositorio se clonó, pero ScienceBatch no pudo abrir el proyecto."
+  },
+  "backend": {
+    "gitProgress": {
+      "operation_starting": "Iniciando operación de Git.",
+      "operation_completed": "Operación de Git completada."
+    },
+    "gitErrors": {
+      "Busy": "Ya hay otra operación de Git en curso para este repositorio.",
+      "UnsupportedSSHCommand": "El comando SSH configurado no puede garantizar la autenticación no interactiva ni la verificación estricta del host.",
+      "EmptyMessage": "Ingresa un mensaje de commit.",
+      "OperationInProgress": "Hay una operación de Git en curso.",
+      "NothingStaged": "No hay cambios preparados para hacer commit.",
+      "Diverged": "Los historiales local y remoto han divergido y Git no puede avanzar esta rama con fast-forward.",
+      "AuthenticationFailed": "Git no pudo autenticarse con el servicio remoto.",
+      "PushRefreshRequired": "El último push agotó el tiempo de espera y su resultado es incierto.",
+      "DirtyWorktree": "Hacer pull requiere un árbol de trabajo limpio, incluidos los cambios preparados.",
+      "NoCommits": "No hay commits para hacer push.",
+      "MultiplePushUrls": "Este remoto tiene varias URL de push, por lo que Git publicaría en múltiples destinos.",
+      "InvalidRemote": "El nombre del remoto no es válido.",
+      "InvalidBranch": "El nombre de la rama no es válido.",
+      "CredentialsInUrl": "Las URL de repositorio HTTPS no deben contener información de usuario, parámetros de consulta ni fragmentos.",
+      "DetachedHeadCommit": "Los commits están deshabilitados mientras HEAD está desacoplado.",
+      "DetachedHeadPull": "Hacer pull requiere tener una rama actual seleccionada.",
+      "DetachedHeadPush": "Hacer push requiere tener una rama local seleccionada.",
+      "InvalidIdentityInput": "Ingresa un nombre no vacío y una dirección de correo válida.",
+      "InvalidIdentityConfig": "El nombre y correo del autor y del committer de Git deben ser válidos.",
+      "NoUpstreamPull": "La rama actual no tiene un upstream configurado.",
+      "NoUpstreamPush": "La rama actual no tiene ningún upstream configurado.",
+      "InvalidRemoteUrl": "Ingresa una URL de repositorio HTTPS o SSH válida.",
+      "InvalidRemoteUrlSsh": "Ingresa una URL de repositorio SSH válida sin contraseña.",
+      "InvalidRemoteUrlProtocol": "Solo se admiten URL de repositorio HTTPS y SSH.",
+      "Timeout": "La operación de Git agotó el tiempo de espera tras cinco minutos.",
+      "TimeoutWithOp": "La operación Git {{operation}} agotó el tiempo de espera tras cinco minutos.",
+      "UnknownRemoteNamed": "El remoto de Git '{{remote}}' no existe.",
+      "UnknownRemoteNoFetchUrl": "El remoto de Git no tiene una URL de fetch.",
+      "InvalidDestinationFolderName": "El nombre de la carpeta debe ser un nombre de carpeta nuevo sin separadores de ruta.",
+      "InvalidDestinationParentMissing": "La carpeta principal seleccionada no existe o no es un directorio.",
+      "GitFailedNoDetail": "La operación Git {{operation}} falló.",
+      "GitInspectChangesFailed": "Git no pudo inspeccionar los cambios del repositorio."
+    },
+    "gitRecovery": {
+      "busy": "Espera a que termine y luego actualiza el estado del repositorio.",
+      "unsupportedSshCommand": "Configura OpenSSH como comando SSH de Git o usa un gestor de credenciales.",
+      "timeoutUnknownPush": "Es posible que el remoto haya recibido el push. Ejecuta Fetch para conciliar el estado del repositorio antes de reintentar.",
+      "timeout": "Reintenta después de comprobar el estado del repositorio y de la red.",
+      "diverged": "Resuelve el historial con Git fuera de ScienceBatch, luego haz fetch y reintenta.",
+      "authenticationFailed": "Configura un gestor de credenciales HTTPS o claves SSH y hosts conocidos fuera de ScienceBatch y vuelve a intentarlo.",
+      "gitFailed": "Comprueba el estado del repositorio y las credenciales configuradas, luego reintenta.",
+      "detachedHeadCommit": "Cambia a una rama antes de hacer commit.",
+      "detachedHeadPull": "Cambia a una rama con upstream antes de hacer pull.",
+      "detachedHeadPush": "Cambia a una rama local antes de publicar commits.",
+      "operationInProgressCommit": "Completa o cancela la operación activa en Git antes de hacer commit.",
+      "operationInProgressPull": "Completa o cancela la operación activa en Git antes de hacer pull.",
+      "invalidIdentity": "Configura valores válidos de nombre y correo en este repositorio.",
+      "nothingStaged": "Prepara los archivos que deseas incluir e inténtalo de nuevo.",
+      "credentialsInUrl": "Usa un gestor de credenciales HTTPS o configura la autenticación SSH fuera de ScienceBatch.",
+      "dirtyWorktree": "Haz commit o descarta los cambios locales antes de hacer pull.",
+      "noUpstreamPull": "Configura una rama upstream antes de hacer pull.",
+      "noUpstreamPush": "Habilita configurar upstream en el primer push.",
+      "pushRefreshRequired": "Haz fetch desde el mismo destino remoto de push para conciliar el resultado antes de reintentar.",
+      "multiplePushUrls": "Configura una única URL de push para este remoto y vuelve a intentarlo."
+    },
+    "codes": {
+      "updates": {
+        "invalid_endpoint": "URL del punto de conexión de actualizaciones no válida.",
+        "missing_host": "La URL HTTPS del punto de conexión de actualizaciones no tiene host.",
+        "unsupported_endpoint": "Protocolo o host del punto de conexión de actualizaciones no compatible.",
+        "unsupported_endpoint_detailed": "Protocolo o host del punto de conexión de actualizaciones no compatible: {{endpoint}}",
+        "parse_failed": "No se pudo analizar la respuesta de versión de GitHub.",
+        "missing_tag": "A la respuesta de versión de GitHub le falta tag_name.",
+        "client_init_failed": "No se pudo inicializar el cliente HTTP de actualizaciones.",
+        "request_failed": "No se pudieron comprobar las actualizaciones.",
+        "http_error": "El servidor de actualizaciones devolvió un error HTTP.",
+        "http_error_detailed": "El servidor de actualizaciones devolvió HTTP {{status}} ({{reason}}).",
+        "response_too_large": "La respuesta de actualización superó el límite de tamaño de 512 KiB.",
+        "read_failed": "No se pudo leer el cuerpo de la respuesta de actualización.",
+        "invalid_utf8": "La respuesta de actualización no es UTF-8 válido."
+      },
+      "git_auth": {
+        "unsupported_provider": "Proveedor de Git no compatible. Se esperaba GitHub o GitLab.",
+        "unsupported_provider_detailed": "Proveedor de Git no compatible '{{provider}}'. Se esperaba 'github' o 'gitlab'.",
+        "keyring_failed": "No se pudo acceder al almacén de credenciales del sistema.",
+        "session_corrupted": "La sesión OAuth almacenada en el almacén de credenciales está dañada.",
+        "http_init_failed": "No se pudo inicializar el cliente HTTP de OAuth.",
+        "random_failed": "No se pudieron generar bytes aleatorios criptográficamente seguros.",
+        "device_flow_request_failed": "No se pudo conectar con el punto de conexión de dispositivo OAuth de GitHub.",
+        "device_flow_failed": "Falló el flujo de dispositivo de GitHub.",
+        "missing_device_code": "El código device_code de GitHub no puede estar vacío.",
+        "poll_failed": "No se pudo consultar el punto de conexión de token OAuth de GitHub.",
+        "oauth_error": "Falló la autorización OAuth de GitHub.",
+        "profile_fetch_failed": "No se pudo obtener el perfil de usuario del proveedor de Git.",
+        "browser_open_failed": "No se pudo abrir el navegador del sistema para iniciar sesión.",
+        "callback_bind_failed": "No se pudo vincular el receptor local de retorno OAuth.",
+        "callback_timeout": "El inicio de sesión de GitLab agotó el tiempo de espera tras 180 segundos esperando la respuesta del navegador.",
+        "token_exchange_failed": "No se pudo intercambiar el código de autorización de GitLab.",
+        "authorization_failed": "Falló la autorización de GitLab.",
+        "state_mismatch": "La respuesta OAuth de GitLab falló la verificación de estado.",
+        "missing_code": "La respuesta OAuth de GitLab no incluyó un código de autorización.",
+        "token_refresh_failed": "No se pudo renovar el token OAuth de GitLab.",
+        "list_repos_failed": "No se pudieron listar los repositorios del proveedor de Git.",
+        "empty_repo_name": "El nombre del repositorio no puede estar vacío.",
+        "create_repo_failed": "No se pudo crear el repositorio en el proveedor de Git.",
+        "credential_helper_failed": "No se pudo preparar el asistente de credenciales de Git."
+      },
+      "files": {
+        "path_traversal": "La ruta atraviesa por encima de la raíz del sistema de archivos.",
+        "empty_path": "La ruta no puede estar vacía ni contener bytes NUL.",
+        "invalid_project_root": "La raíz del proyecto no es válida.",
+        "not_a_directory": "La raíz del proyecto no es un directorio.",
+        "path_escapes_root": "La ruta escapa de la raíz del proyecto.",
+        "no_ancestor": "La ruta no tiene ningún ancestro existente dentro de la raíz del proyecto.",
+        "read_dir_failed": "El directorio no existe o no se pudo leer.",
+        "read_failed": "No se pudo leer el archivo.",
+        "write_failed": "No se pudo escribir el archivo.",
+        "source_missing": "El archivo de origen no existe.",
+        "invalid_file_name": "Nombre de archivo no válido.",
+        "copy_failed": "No se pudo copiar el archivo.",
+        "invalid_project_name": "El nombre del proyecto debe ser un nombre de carpeta seguro de como máximo 100 caracteres.",
+        "unsupported_engine": "El motor debe ser latex o typst.",
+        "folder_already_exists": "La carpeta del proyecto ya existe.",
+        "create_folder_failed": "No se pudo crear la carpeta del proyecto.",
+        "cannot_create_at_root": "No se puede crear un archivo en la ruta raíz del proyecto.",
+        "file_already_exists": "El archivo ya existe.",
+        "create_file_failed": "No se pudo crear el archivo.",
+        "file_exists_at_dir_path": "No se puede crear el directorio: ya existe un archivo en esa ruta.",
+        "cannot_rename_root": "No se puede renombrar ni sobrescribir el directorio raíz del proyecto.",
+        "source_not_found": "La ruta de origen no existe.",
+        "destination_exists": "La ruta de destino ya existe.",
+        "cannot_move_into_self": "No se puede mover un directorio dentro de un subdirectorio de sí mismo.",
+        "rename_failed": "No se pudo renombrar la ruta.",
+        "cannot_delete_root": "No se puede eliminar el directorio raíz del proyecto.",
+        "path_not_found": "La ruta no existe.",
+        "trash_failed": "No se pudo mover la ruta a la papelera.",
+        "cannot_duplicate_root": "No se puede duplicar ni sobrescribir el directorio raíz del proyecto.",
+        "cannot_duplicate_into_self": "No se puede duplicar un directorio dentro de un subdirectorio de sí mismo.",
+        "duplicate_failed": "No se pudo duplicar la ruta.",
+        "reveal_failed": "No se pudo mostrar la ruta en el explorador de archivos.",
+        "unsupported_url": "Protocolo de URL no compatible o inseguro.",
+        "browser_open_failed": "No se pudo abrir el navegador del sistema."
+      },
+      "export": {
+        "create_folder_failed": "No se pudo crear la carpeta de destino.",
+        "create_zip_failed": "No se pudo crear el archivo ZIP de destino.",
+        "read_dir_failed": "No se pudo leer el directorio del proyecto.",
+        "zip_write_failed": "No se pudo escribir la entrada en el archivo ZIP.",
+        "zip_finalize_failed": "No se pudo finalizar el archivo ZIP.",
+        "zip_not_found": "El archivo ZIP no existe.",
+        "invalid_dest_dir": "El directorio de destino no existe.",
+        "open_zip_failed": "No se pudo abrir el archivo ZIP.",
+        "read_zip_failed": "No se pudo leer el archivo ZIP.",
+        "extract_failed": "No se pudo extraer el archivo ZIP.",
+        "save_pdf_failed": "No se pudo guardar el archivo PDF."
+      },
+      "git": {
+        "locked": "Ya hay otra operación de Git en curso para este repositorio.",
+        "not_a_repo": "El proyecto no es un repositorio de Git.",
+        "invalid_branch": "El nombre de la rama no es válido.",
+        "branch_list_failed": "Git no pudo listar las ramas locales.",
+        "branch_switch_failed": "No se pudo cambiar de rama de Git.",
+        "stage_failed": "No se pudieron preparar los archivos en Git.",
+        "unstage_failed": "No se pudieron quitar los archivos de stage en Git.",
+        "empty_file_path": "La ruta del archivo no puede estar vacía.",
+        "absolute_path_not_allowed": "No se permiten rutas absolutas.",
+        "parent_traversal_not_allowed": "No se permite el recorrido hacia el directorio padre ('..').",
+        "path_escapes_repo": "La ruta escapa del directorio del proyecto.",
+        "diff_failed": "No se pudo calcular el diff de Git.",
+        "initialize_failed": "No se pudo inicializar el repositorio de Git.",
+        "unknown_remote": "El remoto de Git no existe.",
+        "unknown_remote_detailed": "El remoto de Git '{{remote}}' no existe."
+      },
+      "operation": {
+        "interrupted": "La operación fue cancelada.",
+        "shutting_down": "La aplicación se está cerrando.",
+        "kind_mismatch": "El tipo de operación no coincide con la tarea activa."
+      },
+      "worker": {
+        "busy": "Ya hay otra operación en curso.",
+        "capture_failed": "No se pudo preparar la instantánea del espacio de trabajo.",
+        "crashed": "El proceso auxiliar del compilador se detuvo inesperadamente."
+      },
+      "project": {
+        "main_missing": "No se encontró el archivo principal del proyecto.",
+        "main_engine_mismatch": "El motor seleccionado no coincide con el archivo principal del espacio de trabajo."
+      },
+      "dependency": {
+        "external_tool_unsupported": "Este documento solicita una herramienta externa de bibliografía como Biber. ScienceBatch admite BibTeX en memoria; usa backend=bibtex o proporciona un flujo de bibliografía compatible."
+      },
+      "path": {
+        "outside_roots": "El proyecto está fuera de las raíces autorizadas.",
+        "symlink_rejected": "La ruta del proyecto debe ser un directorio real sin enlaces simbólicos que escapen."
+      },
+      "io": {
+        "project_unavailable": "El directorio del proyecto no está disponible.",
+        "output_failed": "No se pudo escribir la salida de la compilación."
+      },
+      "resource": {
+        "limit_exceeded": "El tamaño del proyecto supera el límite permitido."
+      },
+      "resources": {
+        "template_grant_invalid": "La concesión de recursos de plantilla no es válida para este espacio de trabajo.",
+        "catalog_invalid": "El catálogo de recursos integrado no es válido."
+      }
+    }
+  }
+}

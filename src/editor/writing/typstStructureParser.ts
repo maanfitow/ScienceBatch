@@ -8,6 +8,13 @@ import type {
 } from '../../types/typstWriting';
 import { validateTypstMatrixCell, validateTypstTableCell } from './typstStructureValidation';
 
+type WritingTranslator = (key: string, fallback: string, params?: Record<string, string | number>) => string;
+const wt = (key: string, fallback: string, params?: Record<string, string | number>): string => {
+  const fn = (globalThis as { __sciencebatchTranslate?: WritingTranslator }).__sciencebatchTranslate;
+  if (fn) return fn(`writing:${key}`, fallback, params);
+  return params ? fallback.replace(/\{\{(\w+)\}\}/g, (_m, k) => String(params[k] ?? '')) : fallback;
+};
+
 type Group = { start: number; end: number; bodyStart: number; bodyEnd: number };
 type Argument = { source: string; start: number; end: number };
 type Call = { name: string; start: number; open: number; end: number; bodyStart: number; bodyEnd: number; args: Argument[] };
@@ -455,7 +462,7 @@ function parseTable(call: Call): TypstTableOptions | null {
   try {
     cells.forEach((cell) => {
       if (cell.isTypst) validateTypstTableCell(cell.content);
-      else if (/[\r\n\u2028\u2029]/u.test(cell.content)) throw new Error('Line breaks are unsupported in table text cells.');
+      else if (/[\r\n\u2028\u2029]/u.test(cell.content)) throw new Error(wt('typstParser.tableTextCellLineBreaks', 'Line breaks are unsupported in table text cells.'));
     });
   } catch { return null; }
   return {
@@ -686,7 +693,7 @@ function parseFigureWrapper(source: string, figure: Call, cursor: number): Parse
   const tableInFigure = parseCallAt(source, firstOffset, 'table');
   if (!tableInFigure || tableInFigure.end !== firstEnd) return null;
   const tableValue = parseTable(tableInFigure);
-  if (!tableValue) return { kind: 'table', start: tableInFigure.start, end: tableInFigure.end, compatible: false, reason: 'This table uses dynamic dimensions, custom tracks, merged cells, or unsupported cell options. Edit this structure directly in the source.' };
+  if (!tableValue) return { kind: 'table', start: tableInFigure.start, end: tableInFigure.end, compatible: false, reason: wt('typstParser.unsupportedTableOptions', 'This table uses dynamic dimensions, custom tracks, merged cells, or unsupported cell options. Edit this structure directly in the source.') };
   let caption: string | undefined;
   let kind: string | undefined;
   let wrapperCompatible = true;
@@ -737,17 +744,17 @@ function parseCandidate(source: string, start: number, name: string, cursor: num
   if (!call) {
     const opening = source.indexOf('(', start + name.length);
     if (opening < 0 || cursor < start || cursor > source.length) return null;
-    const reason = 'This structure has an unclosed call. Edit this structure directly in the source.';
+    const reason = wt('typstParser.unclosedCall', 'This structure has an unclosed call. Edit this structure directly in the source.');
     return { kind, start, end: source.length, compatible: false, reason };
   }
   if (kind === 'table' && (cursor < call.start || cursor > call.end)) return null;
   const containsComment = hasComment(source.slice(call.start, call.end), groupMode);
   if (containsComment) return cursor >= call.start && cursor <= call.end
-    ? { kind, start: call.start, end: call.end, compatible: false, reason: 'This structure contains comments or unsupported syntax. Edit this structure directly in the source.' }
+    ? { kind, start: call.start, end: call.end, compatible: false, reason: wt('typstParser.containsCommentsOrUnsupported', 'This structure contains comments or unsupported syntax. Edit this structure directly in the source.') }
     : null;
   if (kind === 'table') {
     const value = parseTable(call);
-    if (!value) return { kind, start: call.start, end: call.end, compatible: false, reason: 'This table uses dynamic dimensions, custom tracks, merged cells, or unsupported cell options. Edit this structure directly in the source.' };
+    if (!value) return { kind, start: call.start, end: call.end, compatible: false, reason: wt('typstParser.unsupportedTableOptions', 'This table uses dynamic dimensions, custom tracks, merged cells, or unsupported cell options. Edit this structure directly in the source.') };
     const figureStart = source.lastIndexOf('#figure', call.start);
     if (figureStart >= 0) {
       const figure = parseCallAt(source, figureStart + 1, 'figure');
@@ -769,7 +776,7 @@ function parseCandidate(source: string, start: number, name: string, cursor: num
   }
   const value = parseMatrix(call);
   if (!value) return cursor >= call.start && cursor <= call.end
-    ? { kind, start: call.start, end: call.end, compatible: false, reason: 'This matrix uses unsupported arguments or unbalanced cell content. Edit this structure directly in the source.' }
+    ? { kind, start: call.start, end: call.end, compatible: false, reason: wt('typstParser.unsupportedMatrixArguments', 'This matrix uses unsupported arguments or unbalanced cell content. Edit this structure directly in the source.') }
     : null;
   let startOffset = call.start;
   let endOffset = call.end;

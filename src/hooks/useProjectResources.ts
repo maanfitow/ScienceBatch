@@ -11,6 +11,7 @@ import type {
   ResourceListPage,
   InstalledResourcePage,
 } from '../types/projectResources';
+import i18n from '../i18n';
 
 const RESOURCE_BUDGET = 512 * 1024 * 1024;
 type ResourceWorkspaceLabel = { projectName: string };
@@ -18,18 +19,21 @@ type AnalysisTarget = { workspace: ProjectResourceSnapshot; selection: ResourceS
 
 function labelFor(workspace: ProjectResourceSnapshot): ResourceWorkspaceLabel {
   return {
-    projectName: typeof workspace.workspaceIdentity.projectName === 'string' ? workspace.workspaceIdentity.projectName : 'Untitled workspace',
+    projectName: typeof workspace.workspaceIdentity.projectName === 'string'
+      ? workspace.workspaceIdentity.projectName
+      : i18n.t('editor:resources.untitledWorkspace'),
   };
 }
 
 function failureFrom(error: unknown): ProjectResourceFailure {
+  const defaultFailureMessage = i18n.t('errors:resources.operationFailed');
   if (error && typeof error === 'object') {
     const value = error as Record<string, unknown>;
     const nested = value.error && typeof value.error === 'object' ? value.error as Record<string, unknown> : null;
     if (nested) {
       return {
         code: typeof nested.code === 'string' ? nested.code : 'resources.operation_failed',
-        message: typeof nested.message === 'string' ? nested.message : 'The resource operation failed.',
+        message: typeof nested.message === 'string' ? nested.message : defaultFailureMessage,
         ...((nested.details ?? value.details) !== undefined ? { details: nested.details ?? value.details } : {}),
         ...(Array.isArray(nested.diagnostics ?? value.diagnostics) ? { diagnostics: (nested.diagnostics ?? value.diagnostics) as unknown[] } : {}),
       };
@@ -37,14 +41,14 @@ function failureFrom(error: unknown): ProjectResourceFailure {
     if (typeof value.code === 'string' || typeof value.message === 'string') {
       return {
         code: typeof value.code === 'string' ? value.code : 'resources.operation_failed',
-        message: typeof value.message === 'string' ? value.message : 'The resource operation failed.',
+        message: typeof value.message === 'string' ? value.message : defaultFailureMessage,
         ...(value.details !== undefined ? { details: value.details } : {}),
         ...(Array.isArray(value.diagnostics) ? { diagnostics: value.diagnostics } : {}),
       };
     }
   }
 
-  const message = typeof error === 'string' ? error : error instanceof Error ? error.message : 'The resource operation failed.';
+  const message = typeof error === 'string' ? error : error instanceof Error ? error.message : defaultFailureMessage;
   const match = message.match(/^([a-z][a-z0-9_.-]+):\s*(.*)$/s);
   return { code: match?.[1] ?? 'resources.operation_failed', message: match?.[2] || message };
 }
@@ -231,13 +235,13 @@ export function useProjectResources(
       selection: currentSelection.length ? currentSelection : undefined,
     };
     const analyzed = await call<ResourcePlanSummary>(analyzeRequest);
-    if (!analysisTargetIsCurrent(target)) throw { code: 'resources.input_changed', message: 'The workspace or selection changed during resource analysis. Check it again.' };
+    if (!analysisTargetIsCurrent(target)) throw { code: 'resources.input_changed', message: i18n.t('errors:resources.changedDuringAnalysis') };
     const planned = await call<ResourcePlanSummary>({
       ...analyzeRequest,
       operation: 'resources.plan',
       expectedInputDigest: analyzed.inputDigest,
     });
-    if (!analysisTargetIsCurrent(target)) throw { code: 'resources.input_changed', message: 'The workspace or selection changed during resource planning. Check it again.' };
+    if (!analysisTargetIsCurrent(target)) throw { code: 'resources.input_changed', message: i18n.t('errors:resources.changedDuringPlanning') };
     setPlan(planned);
     setPlannedFingerprint(workspace.fingerprint);
     setPlannedSelection(JSON.stringify(currentSelection.slice().sort((a, b) => `${a.kind}:${a.id}`.localeCompare(`${b.kind}:${b.id}`))));
@@ -333,7 +337,7 @@ export function useProjectResources(
     setCompletedPaths([]);
     setActiveJobId(jobId);
     setActiveWorkspaceLabel(labelFor(snapshot));
-    setProgress({ jobId, status: 'Started', message: 'Preparing selected known resources.' });
+    setProgress({ jobId, status: 'Started', message: i18n.t('editor:resources.preparingKnown') });
     setError(null);
     setErrorAction(null);
     try {
@@ -349,7 +353,7 @@ export function useProjectResources(
         // The result belongs to an older view of the project. Refresh on reopen or
         // after the active job settles instead of showing a stale-plan error.
         refreshAfterJobRef.current = true;
-        setProgress(current => current ? { ...current, status: 'Finished', message: 'Detected resources are ready.' } : current);
+        setProgress(current => current ? { ...current, status: 'Finished', message: i18n.t('editor:resources.detectedReady') } : current);
         return true;
       }
       if (result.plan && typeof result.plan === 'object') {
@@ -358,13 +362,13 @@ export function useProjectResources(
         setPlannedFingerprint(snapshot.fingerprint);
         setPlannedSelection(JSON.stringify(selected.slice().sort((a, b) => `${a.kind}:${a.id}`.localeCompare(`${b.kind}:${b.id}`))));
       }
-      setProgress(current => current ? { ...current, status: 'Finished', message: 'Detected resources are ready.' } : current);
+      setProgress(current => current ? { ...current, status: 'Finished', message: i18n.t('editor:resources.detectedReady') } : current);
       return true;
     } catch (operationError) {
       if (cancelRequestedRef.current === jobId) {
         setError(null);
         setErrorAction(null);
-        setProgress(current => current ? { ...current, status: 'Cancelled', message: 'The download was paused. You can resume it when ready.' } : current);
+        setProgress(current => current ? { ...current, status: 'Cancelled', message: i18n.t('editor:resources.downloadPaused') } : current);
         refreshAfterJobRef.current = true;
         return false;
       }
@@ -386,12 +390,12 @@ export function useProjectResources(
   const cancelJob = useCallback(async (jobId: string) => {
     if (!jobId || activeJobRef.current !== jobId) return false;
     cancelRequestedRef.current = jobId;
-    setProgress(current => current?.jobId === jobId ? { ...current, status: 'Cancelling', message: 'Stopping and collecting the resource worker...' } : current);
+    setProgress(current => current?.jobId === jobId ? { ...current, status: 'Cancelling', message: i18n.t('editor:resources.cancelling') } : current);
     try {
       const cancelled = await invoke<boolean>('cancel_project_resources', { jobId });
-      if (!cancelled) throw { code: 'job.not_found', message: 'The resource preparation is no longer active.' };
+      if (!cancelled) throw { code: 'job.not_found', message: i18n.t('errors:resources.jobNotFound') };
       if (activeJobRef.current === jobId && completedJobRef.current !== jobId) {
-        setProgress(current => current?.jobId === jobId ? { ...current, status: 'Cancelled', message: 'The download was paused. You can resume it when ready.' } : current);
+        setProgress(current => current?.jobId === jobId ? { ...current, status: 'Cancelled', message: i18n.t('editor:resources.downloadPaused') } : current);
       }
       return true;
     } catch (cancelError) {
@@ -403,7 +407,7 @@ export function useProjectResources(
       const failure = failureFrom(cancelError);
       setError(failure);
       setErrorAction('prepare');
-      setProgress(current => current?.jobId === jobId ? { ...current, status: current.phase ?? 'downloading', message: 'The download is still running.' } : current);
+      setProgress(current => current?.jobId === jobId ? { ...current, status: current.phase ?? 'downloading', message: i18n.t('editor:resources.downloadStillRunning') } : current);
       return false;
     }
   }, []);
@@ -420,7 +424,7 @@ export function useProjectResources(
     setCompletedPaths([]);
     setActiveJobId(jobId);
     setActiveWorkspaceLabel(labelFor(workspace));
-    setProgress({ jobId, status: 'Started', message: 'Preparing selected known resources.' });
+    setProgress({ jobId, status: 'Started', message: i18n.t('editor:resources.preparingKnown') });
     return true;
   }, []);
 
@@ -509,12 +513,12 @@ export function useProjectResources(
   const removeCachedResources = useCallback(async (paths: string[]) => {
     if (!snapshot || !plan || !isPlanFresh || !cachePage || paths.length === 0) return;
     if (cacheRemovalRef.current || activeJobRef.current || paths.length > 200) {
-      setCacheError({ code: activeJobRef.current ? 'resources.cache_busy' : 'resources.cache_selection_invalid', message: 'Selected files cannot be removed right now.' });
+      setCacheError({ code: activeJobRef.current ? 'resources.cache_busy' : 'resources.cache_selection_invalid', message: i18n.t('errors:resources.cacheCannotRemove') });
       return;
     }
     const allowed = new Set(cachePage.items.filter(item => item.removable && !item.requiredByProject).map(item => item.path));
     if (paths.some(path => !allowed.has(path))) {
-      setCacheError({ code: 'resources.cache_selection_invalid', message: 'Some selected files are protected or no longer available.' });
+      setCacheError({ code: 'resources.cache_selection_invalid', message: i18n.t('errors:resources.cacheProtectedOrMissing') });
       return;
     }
     const targetFingerprint = snapshot.fingerprint;

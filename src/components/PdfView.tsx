@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/core';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -82,6 +83,7 @@ export const PdfView: React.FC<PdfViewProps> = ({
   onSelectLine,
   engine = 'latex',
 }) => {
+  const { t } = useTranslation(['editor', 'errors', 'common']);
   const containerRef = useRef<HTMLDivElement>(null);
   const pagesContainerRef = useRef<HTMLDivElement>(null);
   const [numPages, setNumPages] = useState<number>(0);
@@ -186,9 +188,9 @@ export const PdfView: React.FC<PdfViewProps> = ({
   const openExternalUrl = useCallback((url: string) => {
     void invoke('open_external_url', { url }).catch((err: unknown) => {
       const details = err instanceof Error ? err.message : String(err);
-      toast.error('Failed to open link', { description: details });
+      toast.error(t('errors:pdf.openLinkFailed'), { description: details });
     });
-  }, []);
+  }, [t]);
 
   const navigateToPage = useCallback((pageNum: number) => {
     const container = containerRef.current;
@@ -220,7 +222,7 @@ export const PdfView: React.FC<PdfViewProps> = ({
     const pagesContainer = pagesContainerRef.current;
     if (!pagesContainer) return;
 
-    const linkTitlePrefix = `${getPdfModifierLabel()}+Click to follow link`;
+    const linkTitlePrefix = t('editor:pdf.linkTitlePrefix', { modifier: getPdfModifierLabel() });
     const linkService = createPdfLinkService(pdfDoc, {
       onExternalLink: openExternalUrl,
       onInternalDestination: navigateToPage,
@@ -289,7 +291,7 @@ export const PdfView: React.FC<PdfViewProps> = ({
       }
       updateCurrentPage();
     }
-  }, [navigateToPage, openExternalUrl, updateCurrentPage]);
+  }, [navigateToPage, openExternalUrl, t, updateCurrentPage]);
 
   // Load PDF document ONLY when pdfBytes change
   useEffect(() => {
@@ -670,9 +672,9 @@ export const PdfView: React.FC<PdfViewProps> = ({
       await copySelectionInside(pagesContainerRef.current);
     } catch (err: unknown) {
       const details = err instanceof Error ? err.message : String(err);
-      toast.error('Copy failed', { description: details });
+      toast.error(t('errors:clipboard.copyFailed'), { description: details });
     }
-  }, []);
+  }, [t]);
 
   const resolveSourceAtPoint = useCallback((
     clientX: number,
@@ -797,11 +799,12 @@ export const PdfView: React.FC<PdfViewProps> = ({
     if (hit) {
       onSelectLine?.(hit.line, hit.file, hit.column);
     } else if (sourceMap) {
-      toast.info('No source mapping found at this location');
+      toast.info(t('editor:pdf.noSourceMapping'));
     }
-  }, [isPanning, onSelectLine, resolveSourceAtPoint, sourceMap]);
+  }, [isPanning, onSelectLine, resolveSourceAtPoint, sourceMap, t]);
 
   const handleViewerClickCapture = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const modifier = getPdfModifierLabel();
     handlePdfAnnotationLinkClickCapture({
       event: e,
       pointerDownPos: pointerDownPosRef.current,
@@ -812,13 +815,19 @@ export const PdfView: React.FC<PdfViewProps> = ({
       showInfoToast: (message, options) => {
         toast.info(message, options);
       },
+      messages: {
+        followExternalLink: t('editor:pdf.holdToFollowLink', { modifier }),
+        openLabel: t('common:actions.open'),
+        jumpInternalDestination: t('editor:pdf.holdToJumpDestination', { modifier }),
+        jumpLabel: t('editor:pdf.jumpAction'),
+      },
     });
     pointerDownPosRef.current = null;
-  }, [isPanning, openExternalUrl]);
+  }, [isPanning, openExternalUrl, t]);
 
   const contextMenuActions: ContextMenuAction[] = contextMenu ? [
     {
-      label: 'Copy',
+      label: t('common:actions.copy'),
       icon: <Copy size={14} />,
       shortcut: 'Ctrl+C',
       disabled: !contextMenu.hasSelection,
@@ -827,7 +836,7 @@ export const PdfView: React.FC<PdfViewProps> = ({
       },
     },
     ...(contextMenu.imageHit ? [{
-      label: 'Copy Image',
+      label: t('editor:pdf.contextMenu.copyImage'),
       icon: <ImageIcon size={14} />,
       onSelect: () => {
         const imageHit = contextMenu.imageHit;
@@ -839,16 +848,16 @@ export const PdfView: React.FC<PdfViewProps> = ({
           imageHit.pageHeightPt,
         )
           .then(() => {
-            toast.success('Image copied to clipboard');
+            toast.success(t('editor:pdf.imageCopied'));
           })
           .catch((err: unknown) => {
             const details = err instanceof Error ? err.message : String(err);
-            toast.error('Failed to copy image', { description: details });
+            toast.error(t('errors:pdf.copyImageFailed'), { description: details });
           });
       },
     }] : []),
     {
-      label: 'Select All',
+      label: t('editor:pdf.contextMenu.selectAll'),
       shortcut: 'Ctrl+A',
       disabled: numPages === 0,
       onSelect: () => {
@@ -856,9 +865,9 @@ export const PdfView: React.FC<PdfViewProps> = ({
       },
     },
     {
-      label: 'Go to Source',
+      label: t('editor:pdf.contextMenu.goToSource'),
       icon: <Code2 size={14} />,
-      shortcut: 'Double-click',
+      shortcut: t('editor:pdf.contextMenu.doubleClickShortcut'),
       separatorBefore: true,
       disabled: !contextMenu.hit,
       onSelect: () => {
@@ -868,7 +877,7 @@ export const PdfView: React.FC<PdfViewProps> = ({
       },
     },
     {
-      label: 'Zoom In',
+      label: t('editor:pdf.contextMenu.zoomIn'),
       icon: <ZoomIn size={14} />,
       shortcut: 'Ctrl++',
       separatorBefore: true,
@@ -879,7 +888,7 @@ export const PdfView: React.FC<PdfViewProps> = ({
       },
     },
     {
-      label: 'Zoom Out',
+      label: t('editor:pdf.contextMenu.zoomOut'),
       icon: <ZoomOut size={14} />,
       shortcut: 'Ctrl+-',
       disabled: numPages === 0,
@@ -889,7 +898,7 @@ export const PdfView: React.FC<PdfViewProps> = ({
       },
     },
     {
-      label: 'Fit to Width',
+      label: t('editor:pdf.contextMenu.fitToWidth'),
       icon: <Maximize2 size={14} />,
       disabled: numPages === 0,
       onSelect: () => {
@@ -898,7 +907,7 @@ export const PdfView: React.FC<PdfViewProps> = ({
       },
     },
     {
-      label: 'Reset Zoom (100%)',
+      label: t('editor:pdf.contextMenu.resetZoom'),
       icon: <RotateCcw size={14} />,
       shortcut: 'Ctrl+0',
       disabled: numPages === 0,
@@ -927,7 +936,7 @@ export const PdfView: React.FC<PdfViewProps> = ({
           onClick={() => onTabChange('preview')}
         >
           <Eye size={15} />
-          <span>PDF Preview</span>
+          <span>{t('editor:pdf.tabs.preview')}</span>
         </button>
 
         <button
@@ -935,7 +944,7 @@ export const PdfView: React.FC<PdfViewProps> = ({
           onClick={() => onTabChange('diagnostics')}
         >
           <AlertCircle size={15} />
-          <span>Logs & Issues</span>
+          <span>{t('editor:pdf.tabs.diagnostics')}</span>
 
           {(totalErrors > 0 || totalWarnings > 0) && (
             <div className="tab-badge-group">
@@ -987,7 +996,7 @@ export const PdfView: React.FC<PdfViewProps> = ({
             {isLoadingPdf && (
               <div className="pdf-loading-overlay">
                 <RefreshCw className="animate-spin" size={24} />
-                <span>Rendering PDF pages...</span>
+                <span>{t('editor:pdf.renderingPages')}</span>
               </div>
             )}
 
@@ -996,7 +1005,7 @@ export const PdfView: React.FC<PdfViewProps> = ({
                 <AlertCircle className="text-red-400" size={32} />
                 <p>{renderError}</p>
                 <button className="btn btn-secondary btn-sm mt-2" onClick={onRetryCompile}>
-                  Retry Rendering
+                  {t('editor:pdf.retryRendering')}
                 </button>
               </div>
             )}
@@ -1004,12 +1013,23 @@ export const PdfView: React.FC<PdfViewProps> = ({
             {!pdfBytes && !isLoadingPdf && !renderError && (
               <div className="pdf-empty-state">
                 <FileQuestion size={48} className="empty-icon" />
-                <h3>Document Not Compiled</h3>
-                <p>Press <strong>Ctrl + S</strong> or click <strong>Compile</strong> to preview the compiled PDF.</p>
+                <h3>{t('editor:pdf.emptyTitle')}</h3>
+                <p>
+                  <Trans
+                    ns="editor"
+                    i18nKey="pdf.emptyHint"
+                    values={{ shortcut: 'Ctrl + S', action: t('common:actions.compile') }}
+                    components={{ shortcutTag: <strong />, actionTag: <strong /> }}
+                  />
+                </p>
                 {isCompiling && (
                   <div className="empty-loading">
                     <RefreshCw className="animate-spin" size={18} />
-                    <span>Compiling with {engine === 'typst' ? 'Typst' : 'Tectonic'} in memory...</span>
+                    <span>
+                      {t('editor:pdf.compilingInMemory', {
+                        engine: engine === 'typst' ? t('common:engines.typst') : t('editor:pdf.tectonicEngine'),
+                      })}
+                    </span>
                   </div>
                 )}
               </div>
@@ -1041,8 +1061,8 @@ export const PdfView: React.FC<PdfViewProps> = ({
             {numPages > 0 && (
               <div
                 className="pdf-page-count-badge"
-                aria-label={`Page ${currentPage} of ${numPages}`}
-                title={`Page ${currentPage} of ${numPages}`}
+                aria-label={t('editor:pdf.pageOf', { current: currentPage, total: numPages })}
+                title={t('editor:pdf.pageOf', { current: currentPage, total: numPages })}
               >
                 {currentPage} / {numPages}
               </div>

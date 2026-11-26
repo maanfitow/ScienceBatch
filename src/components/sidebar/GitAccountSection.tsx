@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { useTranslation } from 'react-i18next';
 import { Check, Copy, ExternalLink, KeyRound, LoaderCircle, LogOut, X } from 'lucide-react';
 import type {
   GitAccountStatus,
@@ -8,6 +9,7 @@ import type {
   GitProvider,
 } from '../../types/git';
 import { GitProviderIcon } from './GitProviderIcon';
+import { translateBackendError } from '../../i18n/backendMessages';
 import './gitWorkflows.css';
 
 interface GitAccountSectionProps {
@@ -31,16 +33,6 @@ const PROVIDERS: GitProvider[] = ['github', 'gitlab'];
 const STORAGE_KEYS: Record<GitProvider, string> = {
   github: 'sciencebatch:oauth-client-id:github',
   gitlab: 'sciencebatch:oauth-client-id:gitlab',
-};
-
-const PROVIDER_LABELS: Record<GitProvider, string> = {
-  github: 'GitHub',
-  gitlab: 'GitLab',
-};
-
-const OAUTH_SETUP_NOTES: Record<GitProvider, string> = {
-  github: 'Public GitHub OAuth App with Device Flow enabled (no client secret needed).',
-  gitlab: 'Public GitLab Application with http://127.0.0.1/callback, PKCE enabled, and Confidential unchecked.',
 };
 
 const defaultAccount = (provider: GitProvider): GitAccountStatus => ({
@@ -80,19 +72,8 @@ const writeStoredClientId = (provider: GitProvider, value: string): string => {
 };
 
 const extractErrorMessage = (reason: unknown, fallback: string): string => {
-  if (typeof reason === 'string') {
-    try {
-      const parsed = JSON.parse(reason) as { message?: unknown };
-      if (typeof parsed?.message === 'string' && parsed.message.trim()) return parsed.message;
-    } catch {
-      if (reason.trim()) return reason;
-    }
-  }
-  if (reason && typeof reason === 'object' && 'message' in reason) {
-    const message = (reason as { message?: unknown }).message;
-    if (typeof message === 'string' && message.trim()) return message;
-  }
-  return fallback;
+  const translated = translateBackendError(reason, null, fallback);
+  return translated.trim() ? translated : fallback;
 };
 
 export const GitAccountSection: React.FC<GitAccountSectionProps> = ({
@@ -100,6 +81,7 @@ export const GitAccountSection: React.FC<GitAccountSectionProps> = ({
   compact = false,
   onAccountsChange,
 }) => {
+  const { t } = useTranslation(['git', 'common']);
   const [accounts, setAccounts] = useState<GitAccountStatus[]>(() => normalizeAccounts(null));
   const [loadingAccounts, setLoadingAccounts] = useState(true);
   const [busyProvider, setBusyProvider] = useState<GitProvider | null>(null);
@@ -204,7 +186,7 @@ export const GitAccountSection: React.FC<GitAccountSectionProps> = ({
       if (Date.now() >= expiresAtMs) {
         setActiveDeviceFlow(null);
         setBusyProvider(null);
-        setAuthError('GitHub authorization code expired. Try signing in again.');
+        setAuthError(t('git:account.errors.githubExpired'));
         return;
       }
 
@@ -245,26 +227,27 @@ export const GitAccountSection: React.FC<GitAccountSectionProps> = ({
         setActiveDeviceFlow(null);
         setBusyProvider(null);
         setAuthError(
-          result.error ||
-            (result.status === 'expired'
-              ? 'GitHub authorization code expired. Try signing in again.'
-              : 'GitHub authorization was denied.'),
+          result.error
+            ? translateBackendError(result.error)
+            : (result.status === 'expired'
+              ? t('git:account.errors.githubExpired')
+              : t('git:account.errors.githubDenied')),
         );
       } catch (reason) {
         if (!mountedRef.current || flowSessionRef.current !== session) return;
         clearPollTimer();
         setActiveDeviceFlow(null);
         setBusyProvider(null);
-        setAuthError(extractErrorMessage(reason, 'GitHub sign-in polling failed.'));
+        setAuthError(extractErrorMessage(reason, t('git:account.errors.githubPollingFailed')));
       }
     }, waitMs);
-  }, [clearPollTimer, refreshAccounts]);
+  }, [clearPollTimer, refreshAccounts, t]);
 
   const startGitHubSignIn = async (account: GitAccountStatus) => {
     const effectiveClientId = resolveClientIdForSignIn('github');
     if (!account.clientIdConfigured && !effectiveClientId) {
       setOpenClientConfig(current => ({ ...current, github: true }));
-      setAuthError('Enter a public GitHub OAuth App Client ID below before signing in.');
+      setAuthError(t('git:account.errors.githubMissingClientId'));
       return;
     }
 
@@ -294,7 +277,7 @@ export const GitAccountSection: React.FC<GitAccountSectionProps> = ({
     } catch (reason) {
       if (!mountedRef.current || flowSessionRef.current !== session) return;
       setBusyProvider(null);
-      setAuthError(extractErrorMessage(reason, 'Could not start GitHub sign-in.'));
+      setAuthError(extractErrorMessage(reason, t('git:account.errors.githubStartFailed')));
     }
   };
 
@@ -316,7 +299,7 @@ export const GitAccountSection: React.FC<GitAccountSectionProps> = ({
       await invoke('open_external_url', { url: activeDeviceFlow.verificationUri });
     } catch (reason) {
       if (mountedRef.current) {
-        setAuthError(extractErrorMessage(reason, 'Could not open GitHub in your browser.'));
+        setAuthError(extractErrorMessage(reason, t('git:account.errors.githubOpenBrowserFailed')));
       }
     }
   };
@@ -325,7 +308,7 @@ export const GitAccountSection: React.FC<GitAccountSectionProps> = ({
     const effectiveClientId = resolveClientIdForSignIn('gitlab');
     if (!account.clientIdConfigured && !effectiveClientId) {
       setOpenClientConfig(current => ({ ...current, gitlab: true }));
-      setAuthError('Enter a public GitLab Application Client ID below before signing in.');
+      setAuthError(t('git:account.errors.gitlabMissingClientId'));
       return;
     }
 
@@ -354,9 +337,12 @@ export const GitAccountSection: React.FC<GitAccountSectionProps> = ({
       if (!mountedRef.current || flowSessionRef.current !== session) return;
       setGitlabWaiting(false);
       setBusyProvider(null);
-      setAuthError(extractErrorMessage(reason, 'GitLab sign-in failed.'));
+      setAuthError(extractErrorMessage(reason, t('git:account.errors.gitlabSignInFailed')));
     }
   };
+
+  const providerLabel = (provider: GitProvider) =>
+    provider === 'github' ? t('git:providers.github') : t('git:providers.gitlab');
 
   const handleSignOut = async (provider: GitProvider) => {
     cancelActiveFlow();
@@ -379,7 +365,7 @@ export const GitAccountSection: React.FC<GitAccountSectionProps> = ({
       void refreshAccounts();
     } catch (reason) {
       if (!mountedRef.current) return;
-      setAuthError(extractErrorMessage(reason, `Could not sign out of ${PROVIDER_LABELS[provider]}.`));
+      setAuthError(extractErrorMessage(reason, t('git:account.errors.signOutFailed', { provider: providerLabel(provider) })));
     } finally {
       if (mountedRef.current) setBusyProvider(null);
     }
@@ -405,14 +391,14 @@ export const GitAccountSection: React.FC<GitAccountSectionProps> = ({
   if (compact) {
     if (!signedInAccounts.length) return null;
     return (
-      <div className="git-accounts-compact" aria-label="Connected Git accounts">
+      <div className="git-accounts-compact" aria-label={t('git:account.compactAria')}>
         {signedInAccounts.map(account => {
           const handle = account.username ? `@${account.username}` : account.displayName || account.host;
           return (
             <span
               key={account.provider}
               className="git-accounts-compact-pill"
-              title={`${PROVIDER_LABELS[account.provider]} signed in as ${handle}`}
+              title={t('git:account.compactTooltip', { provider: providerLabel(account.provider), handle })}
             >
               <GitProviderIcon provider={account.provider} />
               <span>{handle}</span>
@@ -426,20 +412,23 @@ export const GitAccountSection: React.FC<GitAccountSectionProps> = ({
   const flowBusy = Boolean(busyProvider) || Boolean(activeDeviceFlow) || gitlabWaiting;
 
   return (
-    <section className="git-accounts-section" aria-label="Git accounts">
+    <section className="git-accounts-section" aria-label={t('git:account.sectionAria')}>
       <div className="git-accounts-header">
-        <h3>Accounts</h3>
-        {loadingAccounts && <LoaderCircle size={13} className="animate-spin" aria-label="Loading Git accounts" />}
+        <h3>{t('git:account.title')}</h3>
+        {loadingAccounts && <LoaderCircle size={13} className="animate-spin" aria-label={t('git:account.loadingAria')} />}
       </div>
 
       <div className="git-accounts-list">
         {accounts.map(account => {
-          const label = PROVIDER_LABELS[account.provider];
+          const label = providerLabel(account.provider);
           const hasStoredClientId = Boolean(clientIds[account.provider]);
           const showClientConfig = openClientConfig[account.provider];
           const accountHandle = account.username
             ? `@${account.username}`
             : account.displayName || account.host;
+          const setupNote = account.provider === 'github'
+            ? t('git:account.setupNotes.github')
+            : t('git:account.setupNotes.gitlab');
 
           return (
             <div key={account.provider} className="git-account-card">
@@ -449,7 +438,7 @@ export const GitAccountSection: React.FC<GitAccountSectionProps> = ({
                   <div className="git-account-meta">
                     <span className="git-account-provider">{label}</span>
                     <span className="git-account-status-text">
-                      {account.signedIn ? accountHandle : 'Not signed in'}
+                      {account.signedIn ? accountHandle : t('git:account.notSignedIn')}
                     </span>
                   </div>
                 </div>
@@ -462,7 +451,7 @@ export const GitAccountSection: React.FC<GitAccountSectionProps> = ({
                     disabled={disabled || flowBusy}
                   >
                     <LogOut size={12} />
-                    {busyProvider === account.provider ? 'Signing out…' : 'Sign out'}
+                    {busyProvider === account.provider ? t('git:account.signingOut') : t('git:account.signOut')}
                   </button>
                 ) : account.provider === 'github' ? (
                   activeDeviceFlow ? (
@@ -473,7 +462,7 @@ export const GitAccountSection: React.FC<GitAccountSectionProps> = ({
                       disabled={disabled}
                     >
                       <X size={12} />
-                      Cancel
+                      {t('common:actions.cancel')}
                     </button>
                   ) : (
                     <button
@@ -483,7 +472,7 @@ export const GitAccountSection: React.FC<GitAccountSectionProps> = ({
                       disabled={disabled || flowBusy}
                     >
                       <GitProviderIcon provider="github" />
-                      {busyProvider === 'github' ? 'Starting…' : 'Sign in with GitHub'}
+                      {busyProvider === 'github' ? t('git:account.starting') : t('git:account.signInWithGithub')}
                     </button>
                   )
                 ) : gitlabWaiting ? (
@@ -494,7 +483,7 @@ export const GitAccountSection: React.FC<GitAccountSectionProps> = ({
                     disabled={disabled}
                   >
                     <X size={12} />
-                    Cancel
+                    {t('common:actions.cancel')}
                   </button>
                 ) : (
                   <button
@@ -504,14 +493,14 @@ export const GitAccountSection: React.FC<GitAccountSectionProps> = ({
                     disabled={disabled || flowBusy}
                   >
                     <GitProviderIcon provider="gitlab" />
-                    {busyProvider === 'gitlab' ? 'Waiting…' : 'Sign in with GitLab'}
+                    {busyProvider === 'gitlab' ? t('git:account.waiting') : t('git:account.signInWithGitlab')}
                   </button>
                 )}
               </div>
 
               {account.provider === 'github' && activeDeviceFlow && (
                 <div className="git-account-device-flow" role="status" aria-live="polite">
-                  <p>Enter this one-time code on GitHub to authorize ScienceBatch:</p>
+                  <p>{t('git:account.deviceCodePrompt')}</p>
                   <div className="git-account-code-row">
                     <code className="git-account-user-code">{activeDeviceFlow.userCode}</code>
                     <button
@@ -521,13 +510,13 @@ export const GitAccountSection: React.FC<GitAccountSectionProps> = ({
                       disabled={disabled}
                     >
                       {activeDeviceFlow.copied ? <Check size={12} /> : <Copy size={12} />}
-                      <span>Copy Code &amp; Open GitHub</span>
+                      <span>{t('git:account.copyCodeAndOpenGithub')}</span>
                       <ExternalLink size={11} />
                     </button>
                   </div>
                   <span className="git-account-polling-note">
                     <LoaderCircle size={12} className="animate-spin" />
-                    Waiting for GitHub authorization (checking every {activeDeviceFlow.intervalSec}s)…
+                    {t('git:account.waitingGithubAuth', { seconds: activeDeviceFlow.intervalSec })}
                   </span>
                 </div>
               )}
@@ -535,7 +524,7 @@ export const GitAccountSection: React.FC<GitAccountSectionProps> = ({
               {account.provider === 'gitlab' && gitlabWaiting && (
                 <div className="git-account-waiting" role="status" aria-live="polite">
                   <LoaderCircle size={12} className="animate-spin" />
-                  <span>Waiting for GitLab sign-in in your browser…</span>
+                  <span>{t('git:account.waitingGitlabSignIn')}</span>
                 </div>
               )}
 
@@ -551,26 +540,30 @@ export const GitAccountSection: React.FC<GitAccountSectionProps> = ({
                 >
                   <summary tabIndex={disabled ? -1 : undefined}>
                     <KeyRound size={11} />
-                    <span>OAuth App Client ID</span>
+                    <span>{t('git:account.oauthClientIdLabel')}</span>
                     {(account.clientIdConfigured || hasStoredClientId) && (
                       <span className="git-account-configured-badge">
-                        {hasStoredClientId ? 'Custom saved' : 'Built-in'}
+                        {hasStoredClientId ? t('git:account.clientIdCustomSaved') : t('git:account.clientIdBuiltIn')}
                       </span>
                     )}
                   </summary>
                   <div className="git-account-client-body">
-                    <p className="git-workflow-muted">{OAUTH_SETUP_NOTES[account.provider]}</p>
+                    <p className="git-workflow-muted">{setupNote}</p>
                     <div className="git-account-client-row">
                       <input
                         type="text"
-                        aria-label={`${label} OAuth App Client ID`}
+                        aria-label={t('git:account.oauthClientIdAria', { provider: label })}
                         value={draftClientIds[account.provider]}
                         onChange={event => {
                           const value = event.target.value;
                           setDraftClientIds(current => ({ ...current, [account.provider]: value }));
                           if (savedNotice === account.provider) setSavedNotice(null);
                         }}
-                        placeholder={account.clientIdConfigured ? 'Optional override Client ID' : `Paste ${label} public Client ID`}
+                        placeholder={
+                          account.clientIdConfigured
+                            ? t('git:account.oauthClientIdOverridePlaceholder')
+                            : t('git:account.oauthClientIdPastePlaceholder', { provider: label })
+                        }
                         disabled={disabled || flowBusy}
                         autoComplete="off"
                       />
@@ -580,7 +573,7 @@ export const GitAccountSection: React.FC<GitAccountSectionProps> = ({
                         onClick={() => handleSaveClientId(account.provider)}
                         disabled={disabled || flowBusy || draftClientIds[account.provider].trim() === clientIds[account.provider]}
                       >
-                        Save
+                        {t('common:actions.save')}
                       </button>
                       {hasStoredClientId && (
                         <button
@@ -589,12 +582,12 @@ export const GitAccountSection: React.FC<GitAccountSectionProps> = ({
                           onClick={() => handleClearClientId(account.provider)}
                           disabled={disabled || flowBusy}
                         >
-                          Clear
+                          {t('common:actions.clear')}
                         </button>
                       )}
                     </div>
                     {savedNotice === account.provider && (
-                      <span className="git-account-saved-note">Client ID saved locally (public identifier only).</span>
+                      <span className="git-account-saved-note">{t('git:account.clientIdSavedNote')}</span>
                     )}
                   </div>
                 </details>

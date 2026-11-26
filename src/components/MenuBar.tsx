@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/core';
 import {
   FolderPlus,
@@ -38,8 +39,10 @@ import {
   WrapText,
   Terminal,
   RefreshCw,
+  Globe,
 } from 'lucide-react';
 import { useTheme, THEME_OPTIONS } from '../themes/ThemeContext';
+import { normalizeLanguage, setAppLanguage, type SupportedLanguage } from '../i18n';
 import { RecentProject } from '../types';
 
 export type EditorMenuAction = 'cut' | 'copy' | 'paste' | 'comment' | 'commandPalette';
@@ -138,6 +141,8 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   onToggleAutoCheckUpdates,
   isCheckingForUpdates = false,
 }) => {
+  const { t, i18n } = useTranslation(['menu', 'common']);
+  const currentLanguage: SupportedLanguage = normalizeLanguage(i18n.language);
   const resolvedHasProjectFolder = hasProjectFolder ?? hasOpenProject;
   const resolvedHasPdf = hasPdf ?? true;
   const resolvedHasActiveSourceEditor = hasActiveSourceEditor ?? hasOpenProject;
@@ -172,7 +177,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
     };
   }, [activeMenu]);
 
-  const MENU_ORDER = ['file', 'edit', 'view', 'tools', 'theme', 'help'] as const;
+  const MENU_ORDER = ['file', 'edit', 'view', 'tools', 'theme', 'language', 'help'] as const;
 
   const handleMenuBarKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (!activeMenu) return;
@@ -284,11 +289,12 @@ export const MenuBar: React.FC<MenuBarProps> = ({
       <div className="menu-item-wrapper">
         <button
           type="button"
+          data-menu-id="file"
           className={`menu-button ${activeMenu === 'file' ? 'menu-button-active' : ''}`}
           onClick={() => handleMenuToggle('file')}
           onMouseEnter={() => handleMenuHover('file')}
         >
-          File
+          {t('menu:topLevel.file')}
         </button>
 
         {activeMenu === 'file' && (
@@ -298,7 +304,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <span className="menu-item-icon" aria-hidden="true">
                   <FolderPlus size={14} />
                 </span>
-                <span>New Project...</span>
+                <span>{t('menu:file.newProject')}</span>
               </div>
               <span className="menu-shortcut">Ctrl+N</span>
             </button>
@@ -308,7 +314,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <span className="menu-item-icon" aria-hidden="true">
                   <FolderOpen size={14} />
                 </span>
-                <span>Open Folder...</span>
+                <span>{t('menu:file.openFolder')}</span>
               </div>
               <span className="menu-shortcut">Ctrl+O</span>
             </button>
@@ -318,7 +324,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <span className="menu-item-icon" aria-hidden="true">
                   <Archive size={14} />
                 </span>
-                <span>Import from ZIP...</span>
+                <span>{t('menu:file.importZip')}</span>
               </div>
               <span className="menu-shortcut">Ctrl+I</span>
             </button>
@@ -333,7 +339,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <span className="menu-item-icon" aria-hidden="true">
                   <GitBranch size={14} />
                 </span>
-                <span>Clone Repository...</span>
+                <span>{t('menu:file.cloneRepository')}</span>
               </div>
             </button>
 
@@ -355,7 +361,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   <span className="menu-item-icon" aria-hidden="true">
                     <History size={14} />
                   </span>
-                  <span>Open Recent</span>
+                  <span>{t('menu:file.openRecent')}</span>
                 </div>
                 <ChevronRight size={13} />
               </button>
@@ -382,7 +388,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                     ))
                   ) : (
                     <div className="menu-dropdown-item menu-item-disabled">
-                      <span>No recent projects</span>
+                      <span>{t('menu:file.noRecentProjects')}</span>
                     </div>
                   )}
                 </div>
@@ -398,7 +404,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                     <span className="menu-item-icon" aria-hidden="true">
                       <Save size={14} />
                     </span>
-                    <span>Save &amp; Compile</span>
+                    <span>{t('menu:file.saveAndCompile')}</span>
                   </div>
                   <span className="menu-shortcut">Ctrl+S</span>
                 </button>
@@ -414,7 +420,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                       <span className="menu-item-icon" aria-hidden="true">
                         <FileUp size={14} />
                       </span>
-                      <span>Import Files...</span>
+                      <span>{t('menu:file.importFiles')}</span>
                     </div>
                   </button>
                 )}
@@ -437,7 +443,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                       <span className="menu-item-icon" aria-hidden="true">
                         <Download size={14} />
                       </span>
-                      <span>Export Document</span>
+                      <span>{t('menu:file.exportDocument')}</span>
                     </div>
                     <ChevronRight size={13} />
                   </button>
@@ -452,14 +458,18 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                         type="button"
                         className="menu-dropdown-item"
                         disabled={!resolvedHasPdf}
-                        title={resolvedHasPdf ? 'Export compiled PDF document' : 'Compile document first to export PDF'}
+                        title={
+                          resolvedHasPdf
+                            ? t('menu:file.exportPdfTooltipReady')
+                            : t('menu:file.exportPdfTooltipDisabled')
+                        }
                         onClick={() => { onExportPdf(); closeMenu(); }}
                       >
                         <div className="menu-item-left">
                           <span className="menu-item-icon" aria-hidden="true">
                             <FileText size={14} className="icon-latex" />
                           </span>
-                          <span>PDF Document (.pdf)</span>
+                          <span>{t('menu:file.exportPdf')}</span>
                         </div>
                       </button>
 
@@ -468,7 +478,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                           <span className="menu-item-icon" aria-hidden="true">
                             <Archive size={14} className="icon-archive" />
                           </span>
-                          <span>Source Archive (.zip)</span>
+                          <span>{t('menu:file.exportZip')}</span>
                         </div>
                       </button>
                     </div>
@@ -487,7 +497,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                     <span className="menu-item-icon" aria-hidden="true">
                       <X size={14} />
                     </span>
-                    <span>Close Tab</span>
+                    <span>{t('menu:file.closeTab')}</span>
                   </div>
                   <span className="menu-shortcut">Ctrl+W</span>
                 </button>
@@ -502,7 +512,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                     <span className="menu-item-icon" aria-hidden="true">
                       <XSquare size={14} />
                     </span>
-                    <span>Close All Unpinned</span>
+                    <span>{t('menu:file.closeAllUnpinned')}</span>
                   </div>
                   <span className="menu-shortcut">Ctrl+Shift+W</span>
                 </button>
@@ -512,7 +522,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                     <span className="menu-item-icon" aria-hidden="true">
                       <XSquare size={14} />
                     </span>
-                    <span>Close Project (Home)</span>
+                    <span>{t('menu:file.closeProject')}</span>
                   </div>
                 </button>
               </>
@@ -525,11 +535,12 @@ export const MenuBar: React.FC<MenuBarProps> = ({
       <div className="menu-item-wrapper">
         <button
           type="button"
+          data-menu-id="edit"
           className={`menu-button ${activeMenu === 'edit' ? 'menu-button-active' : ''}`}
           onClick={() => handleMenuToggle('edit')}
           onMouseEnter={() => handleMenuHover('edit')}
         >
-          Edit
+          {t('menu:topLevel.edit')}
         </button>
 
         {activeMenu === 'edit' && (
@@ -537,7 +548,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             <button
               type="button"
               className="menu-dropdown-item"
-              aria-label="Undo"
+              aria-label={t('menu:edit.undo')}
               disabled={!resolvedHasActiveSourceEditor}
               onClick={() => { onUndo?.(); closeMenu(); }}
             >
@@ -545,14 +556,14 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <span className="menu-item-icon" aria-hidden="true">
                   <Undo2 size={14} />
                 </span>
-                <span>Undo</span>
+                <span>{t('menu:edit.undo')}</span>
               </div>
               <span className="menu-shortcut">Ctrl+Z</span>
             </button>
             <button
               type="button"
               className="menu-dropdown-item"
-              aria-label="Redo"
+              aria-label={t('menu:edit.redo')}
               disabled={!resolvedHasActiveSourceEditor}
               onClick={() => { onRedo?.(); closeMenu(); }}
             >
@@ -560,7 +571,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <span className="menu-item-icon" aria-hidden="true">
                   <Redo2 size={14} />
                 </span>
-                <span>Redo</span>
+                <span>{t('menu:edit.redo')}</span>
               </div>
               <span className="menu-shortcut">Ctrl+Y</span>
             </button>
@@ -575,7 +586,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <span className="menu-item-icon" aria-hidden="true">
                   <Scissors size={14} />
                 </span>
-                <span>Cut</span>
+                <span>{t('menu:edit.cut')}</span>
               </div>
               <span className="menu-shortcut">Ctrl+X</span>
             </button>
@@ -589,7 +600,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <span className="menu-item-icon" aria-hidden="true">
                   <Copy size={14} />
                 </span>
-                <span>Copy</span>
+                <span>{t('menu:edit.copy')}</span>
               </div>
               <span className="menu-shortcut">Ctrl+C</span>
             </button>
@@ -603,7 +614,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <span className="menu-item-icon" aria-hidden="true">
                   <ClipboardPaste size={14} />
                 </span>
-                <span>Paste</span>
+                <span>{t('menu:edit.paste')}</span>
               </div>
               <span className="menu-shortcut">Ctrl+V</span>
             </button>
@@ -618,7 +629,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <span className="menu-item-icon" aria-hidden="true">
                   <Search size={14} />
                 </span>
-                <span>Find &amp; Replace</span>
+                <span>{t('menu:edit.findReplace')}</span>
               </div>
               <span className="menu-shortcut">Ctrl+F</span>
             </button>
@@ -632,7 +643,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <span className="menu-item-icon" aria-hidden="true">
                   <FolderSearch size={14} />
                 </span>
-                <span>Find in Files</span>
+                <span>{t('menu:edit.findInFiles')}</span>
               </div>
               <span className="menu-shortcut">Ctrl+Shift+F</span>
             </button>
@@ -646,7 +657,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <span className="menu-item-icon" aria-hidden="true">
                   <MessageSquareCode size={14} />
                 </span>
-                <span>Toggle Line Comment</span>
+                <span>{t('menu:edit.toggleLineComment')}</span>
               </div>
               <span className="menu-shortcut">Ctrl+/</span>
             </button>
@@ -658,11 +669,12 @@ export const MenuBar: React.FC<MenuBarProps> = ({
       <div className="menu-item-wrapper">
         <button
           type="button"
+          data-menu-id="view"
           className={`menu-button ${activeMenu === 'view' ? 'menu-button-active' : ''}`}
           onClick={() => handleMenuToggle('view')}
           onMouseEnter={() => handleMenuHover('view')}
         >
-          View
+          {t('menu:topLevel.view')}
         </button>
 
         {activeMenu === 'view' && (
@@ -677,7 +689,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <span className="menu-item-icon" aria-hidden="true">
                   <Sidebar size={14} />
                 </span>
-                <span>Toggle Sidebar</span>
+                <span>{t('menu:view.toggleSidebar')}</span>
               </div>
               <div className="menu-item-right">
                 <span className="menu-shortcut">Ctrl+B</span>
@@ -695,7 +707,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <span className="menu-item-icon" aria-hidden="true">
                   <FolderSearch size={14} />
                 </span>
-                <span>Search in Files</span>
+                <span>{t('menu:view.searchInFiles')}</span>
               </div>
               <span className="menu-shortcut">Ctrl+Shift+F</span>
             </button>
@@ -710,7 +722,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <span className="menu-item-icon" aria-hidden="true">
                   <ListTree size={14} />
                 </span>
-                <span>Outline</span>
+                <span>{t('menu:view.outline')}</span>
               </div>
               <span className="menu-shortcut">Alt+7</span>
             </button>
@@ -727,7 +739,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <span className="menu-item-icon" aria-hidden="true">
                   <Eye size={14} />
                 </span>
-                <span>PDF Preview</span>
+                <span>{t('menu:view.pdfPreview')}</span>
               </div>
               {hasOpenProject && activeTab === 'preview' && <Check size={14} className="menu-check-icon" />}
             </button>
@@ -742,7 +754,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <span className="menu-item-icon" aria-hidden="true">
                   <AlertTriangle size={14} />
                 </span>
-                <span>Logs &amp; Diagnostics</span>
+                <span>{t('menu:view.logsDiagnostics')}</span>
               </div>
               {hasOpenProject && activeTab === 'diagnostics' && <Check size={14} className="menu-check-icon" />}
             </button>
@@ -759,7 +771,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <span className="menu-item-icon" aria-hidden="true">
                   <ZoomIn size={14} />
                 </span>
-                <span>PDF Zoom In</span>
+                <span>{t('menu:view.pdfZoomIn')}</span>
               </div>
               <span className="menu-shortcut">Ctrl++</span>
             </button>
@@ -773,7 +785,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <span className="menu-item-icon" aria-hidden="true">
                   <ZoomOut size={14} />
                 </span>
-                <span>PDF Zoom Out</span>
+                <span>{t('menu:view.pdfZoomOut')}</span>
               </div>
               <span className="menu-shortcut">Ctrl+-</span>
             </button>
@@ -787,7 +799,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <span className="menu-item-icon" aria-hidden="true">
                   <Maximize2 size={14} />
                 </span>
-                <span>Fit PDF to Width</span>
+                <span>{t('menu:view.fitPdfWidth')}</span>
               </div>
             </button>
             <button
@@ -800,7 +812,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <span className="menu-item-icon" aria-hidden="true">
                   <RotateCcw size={14} />
                 </span>
-                <span>Reset PDF Zoom</span>
+                <span>{t('menu:view.resetPdfZoom')}</span>
               </div>
               <span className="menu-shortcut">Ctrl+0</span>
             </button>
@@ -816,7 +828,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <span className="menu-item-icon" aria-hidden="true">
                   <WrapText size={14} />
                 </span>
-                <span>Toggle Word Wrap</span>
+                <span>{t('menu:view.toggleWordWrap')}</span>
               </div>
               {wordWrap && <Check size={14} className="menu-check-icon" />}
             </button>
@@ -831,7 +843,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <span className="menu-item-icon" aria-hidden="true">
                   <Terminal size={14} />
                 </span>
-                <span>Command Palette...</span>
+                <span>{t('menu:view.commandPalette')}</span>
               </div>
               <span className="menu-shortcut">F1</span>
             </button>
@@ -843,11 +855,12 @@ export const MenuBar: React.FC<MenuBarProps> = ({
       <div className="menu-item-wrapper">
         <button
           type="button"
+          data-menu-id="tools"
           className={`menu-button ${activeMenu === 'tools' ? 'menu-button-active' : ''}`}
           onClick={() => handleMenuToggle('tools')}
           onMouseEnter={() => handleMenuHover('tools')}
         >
-          Tools
+          {t('menu:topLevel.tools')}
         </button>
 
         {activeMenu === 'tools' && (
@@ -862,7 +875,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   <span className="menu-item-icon" aria-hidden="true">
                     <Square size={14} fill="currentColor" />
                   </span>
-                  <span>Stop Compilation</span>
+                  <span>{t('menu:tools.stopCompilation')}</span>
                 </div>
               </button>
             ) : (
@@ -876,7 +889,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   <span className="menu-item-icon" aria-hidden="true">
                     <Play size={14} fill="currentColor" />
                   </span>
-                  <span>Compile Document</span>
+                  <span>{t('menu:tools.compileDocument')}</span>
                 </div>
                 <span className="menu-shortcut">Ctrl+S</span>
               </button>
@@ -888,14 +901,14 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                   <span className="menu-item-icon" aria-hidden="true">
                     <Package size={14} />
                   </span>
-                  <span>Project Resources…</span>
+                  <span>{t('menu:tools.projectResources')}</span>
                 </div>
               </button>
             )}
 
             <div className="menu-divider" />
 
-            <div className="menu-section-label">Active Typesetting Engine</div>
+            <div className="menu-section-label">{t('menu:tools.activeEngineSection')}</div>
             <button
               type="button"
               className={`menu-dropdown-item ${engine === 'latex' ? 'menu-dropdown-item-checked' : ''}`}
@@ -906,7 +919,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <span className="menu-item-icon" aria-hidden="true">
                   <FileText size={14} className="icon-latex" />
                 </span>
-                <span>LaTeX (Tectonic RAM VFS)</span>
+                <span>{t('menu:tools.engineLatex')}</span>
               </div>
               {engine === 'latex' && <Check size={14} className="menu-check-icon" />}
             </button>
@@ -920,7 +933,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <span className="menu-item-icon" aria-hidden="true">
                   <FileCode size={14} className="icon-typst" />
                 </span>
-                <span>Typst (Rust Native in-memory)</span>
+                <span>{t('menu:tools.engineTypst')}</span>
               </div>
               {engine === 'typst' && <Check size={14} className="menu-check-icon" />}
             </button>
@@ -932,23 +945,24 @@ export const MenuBar: React.FC<MenuBarProps> = ({
       <div className="menu-item-wrapper">
         <button
           type="button"
+          data-menu-id="theme"
           className={`menu-button ${activeMenu === 'theme' ? 'menu-button-active' : ''}`}
           onClick={() => handleMenuToggle('theme')}
           onMouseEnter={() => handleMenuHover('theme')}
         >
-          Theme
+          {t('menu:topLevel.theme')}
         </button>
 
         {activeMenu === 'theme' && (
           <div className="menu-dropdown menu-dropdown-themes" role="menu">
-            <div className="menu-section-label">Dark Themes</div>
+            <div className="menu-section-label">{t('menu:theme.darkThemes')}</div>
             {DARK_THEME_OPTIONS.map((option) => (
               <button
                 type="button"
                 key={option.id}
                 className={`menu-dropdown-item ${theme === option.id ? 'menu-dropdown-item-checked' : ''}`}
                 onClick={() => { setTheme(option.id); closeMenu(); }}
-                title={option.description}
+                title={t(option.descriptionKey)}
               >
                 <div className="menu-item-left">
                   <span className="theme-swatch-group" aria-hidden="true">
@@ -956,21 +970,21 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                       <span key={index} className="theme-swatch-dot" style={{ backgroundColor: hex }} />
                     ))}
                   </span>
-                  <span>{option.label}</span>
+                  <span>{t(option.labelKey)}</span>
                 </div>
                 {theme === option.id && <Check size={14} className="menu-check-icon" />}
               </button>
             ))}
 
             <div className="menu-divider" />
-            <div className="menu-section-label">Light Themes</div>
+            <div className="menu-section-label">{t('menu:theme.lightThemes')}</div>
             {LIGHT_THEME_OPTIONS.map((option) => (
               <button
                 type="button"
                 key={option.id}
                 className={`menu-dropdown-item ${theme === option.id ? 'menu-dropdown-item-checked' : ''}`}
                 onClick={() => { setTheme(option.id); closeMenu(); }}
-                title={option.description}
+                title={t(option.descriptionKey)}
               >
                 <div className="menu-item-left">
                   <span className="theme-swatch-group" aria-hidden="true">
@@ -978,7 +992,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                       <span key={index} className="theme-swatch-dot" style={{ backgroundColor: hex }} />
                     ))}
                   </span>
-                  <span>{option.label}</span>
+                  <span>{t(option.labelKey)}</span>
                 </div>
                 {theme === option.id && <Check size={14} className="menu-check-icon" />}
               </button>
@@ -987,15 +1001,61 @@ export const MenuBar: React.FC<MenuBarProps> = ({
         )}
       </div>
 
+      {/* Language Menu */}
+      <div className="menu-item-wrapper">
+        <button
+          type="button"
+          data-menu-id="language"
+          className={`menu-button ${activeMenu === 'language' ? 'menu-button-active' : ''}`}
+          onClick={() => handleMenuToggle('language')}
+          onMouseEnter={() => handleMenuHover('language')}
+        >
+          {t('menu:topLevel.language')}
+        </button>
+
+        {activeMenu === 'language' && (
+          <div className="menu-dropdown" role="menu">
+            <div className="menu-section-label">{t('menu:language.sectionLabel')}</div>
+            <button
+              type="button"
+              className={`menu-dropdown-item ${currentLanguage === 'en' ? 'menu-dropdown-item-checked' : ''}`}
+              onClick={() => { void setAppLanguage('en'); closeMenu(); }}
+            >
+              <div className="menu-item-left">
+                <span className="menu-item-icon" aria-hidden="true">
+                  <Globe size={14} />
+                </span>
+                <span>{t('menu:language.english')}</span>
+              </div>
+              {currentLanguage === 'en' && <Check size={14} className="menu-check-icon" />}
+            </button>
+            <button
+              type="button"
+              className={`menu-dropdown-item ${currentLanguage === 'es' ? 'menu-dropdown-item-checked' : ''}`}
+              onClick={() => { void setAppLanguage('es'); closeMenu(); }}
+            >
+              <div className="menu-item-left">
+                <span className="menu-item-icon" aria-hidden="true">
+                  <Globe size={14} />
+                </span>
+                <span>{t('menu:language.spanish')}</span>
+              </div>
+              {currentLanguage === 'es' && <Check size={14} className="menu-check-icon" />}
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* Help Menu */}
       <div className="menu-item-wrapper">
         <button
           type="button"
+          data-menu-id="help"
           className={`menu-button ${activeMenu === 'help' ? 'menu-button-active' : ''}`}
           onClick={() => handleMenuToggle('help')}
           onMouseEnter={() => handleMenuHover('help')}
         >
-          Help
+          {t('menu:topLevel.help')}
         </button>
 
         {activeMenu === 'help' && (
@@ -1009,7 +1069,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <span className="menu-item-icon" aria-hidden="true">
                   <ExternalLink size={14} />
                 </span>
-                <span>LaTeX Documentation</span>
+                <span>{t('menu:help.latexDocs')}</span>
               </div>
             </button>
             <button
@@ -1021,7 +1081,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <span className="menu-item-icon" aria-hidden="true">
                   <ExternalLink size={14} />
                 </span>
-                <span>Typst Documentation</span>
+                <span>{t('menu:help.typstDocs')}</span>
               </div>
             </button>
             <div className="menu-divider" />
@@ -1035,7 +1095,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 <span className="menu-item-icon" aria-hidden="true">
                   <RefreshCw size={14} className={isCheckingForUpdates ? 'spin' : undefined} />
                 </span>
-                <span>Check for Updates...</span>
+                <span>{t('menu:help.checkUpdates')}</span>
               </div>
             </button>
             <button
@@ -1046,7 +1106,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             >
               <div className="menu-item-left">
                 <span className="menu-item-icon" aria-hidden="true" />
-                <span>Check for Updates on Startup</span>
+                <span>{t('menu:help.autoCheckUpdates')}</span>
               </div>
               {autoCheckUpdates && <Check size={14} className="menu-check-icon" />}
             </button>
@@ -1054,7 +1114,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({
             <div className="menu-dropdown-item menu-item-disabled">
               <div className="menu-item-left">
                 <span className="menu-item-icon" aria-hidden="true" />
-                <span>ScienceBatch Studio v0.1.0</span>
+                <span>{t('common:appVersion')}</span>
               </div>
             </div>
           </div>

@@ -7,6 +7,8 @@ export type CompilationStatus = 'idle' | 'compiling' | 'success' | 'error';
 export interface ProgressPayload {
   status: string;
   message: string;
+  code?: string | null;
+  params?: Record<string, string | number> | null;
 }
 
 export interface PdfSourceBox {

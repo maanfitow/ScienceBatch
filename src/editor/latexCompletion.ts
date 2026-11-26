@@ -8,6 +8,41 @@ import {
   getProjectSubfiles,
   getProjectCustomCommands
 } from './projectContext';
+import i18n from '../i18n';
+
+const SPECIAL_COMMAND_KEYS: Record<string, string> = {
+  '\\item[]': 'item_opt',
+  '\\left(': 'left_paren',
+  '\\left[': 'left_bracket',
+  '\\left\\{': 'left_brace',
+  '\\left|': 'left_bar',
+  '\\left\\|': 'left_double_bar',
+  '\\entry*': 'entry_star',
+};
+
+function getLatexCommandKey(name: string): string {
+  return SPECIAL_COMMAND_KEYS[name] ?? name.replace(/^\\/, '').replace(/[^a-zA-Z0-9_]/g, '_');
+}
+
+function getLatexEnvironmentKey(name: string): string {
+  return name.replace(/\*/g, '_star').replace(/[^a-zA-Z0-9_]/g, '_');
+}
+
+function localizedCommandText(cmd: { name: string; detail: string; documentation: string }) {
+  const key = getLatexCommandKey(cmd.name);
+  return {
+    detail: i18n.t(`editor:latexCommands.${key}.detail` as never, { defaultValue: cmd.detail } as never) as unknown as string,
+    documentation: i18n.t(`editor:latexCommands.${key}.documentation` as never, { defaultValue: cmd.documentation } as never) as unknown as string,
+  };
+}
+
+function localizedEnvironmentText(env: { name: string; detail: string; documentation: string }) {
+  const key = getLatexEnvironmentKey(env.name);
+  return {
+    detail: i18n.t(`editor:latexEnvironments.${key}.detail` as never, { defaultValue: env.detail } as never) as unknown as string,
+    documentation: i18n.t(`editor:latexEnvironments.${key}.documentation` as never, { defaultValue: env.documentation } as never) as unknown as string,
+  };
+}
 
 let completionProviderDisposable: IDisposable | null = null;
 let hoverProviderDisposable: IDisposable | null = null;
@@ -105,8 +140,8 @@ export function registerLatexLanguageSupport(monaco: Monaco): void {
           label: lbl,
           kind: monaco.languages.CompletionItemKind.Reference,
           insertText: lbl,
-          detail: 'Detected \\label anchor',
-          documentation: `Cross-reference anchor: ${lbl}`,
+          detail: i18n.t('editor:completion.latex.refDetail'),
+          documentation: i18n.t('editor:completion.latex.refDocumentation', { label: lbl }),
           range: refRange,
           sortText: `00_ref_${String(idx).padStart(3, '0')}_${lbl}`,
           filterText: lbl,
@@ -141,8 +176,8 @@ export function registerLatexLanguageSupport(monaco: Monaco): void {
           label: cit,
           kind: monaco.languages.CompletionItemKind.Value,
           insertText: cit,
-          detail: 'BibTeX citation entry',
-          documentation: `Citation key: ${cit}`,
+          detail: i18n.t('editor:completion.latex.citeDetail'),
+          documentation: i18n.t('editor:completion.latex.citeDocumentation', { key: cit }),
           range: citeRange,
           sortText: `00_cite_${String(idx).padStart(3, '0')}_${cit}`,
           filterText: cit,
@@ -167,8 +202,8 @@ export function registerLatexLanguageSupport(monaco: Monaco): void {
           label: imgPath,
           kind: monaco.languages.CompletionItemKind.File,
           insertText: imgPath,
-          detail: 'Project Image Asset',
-          documentation: `Relative path: ${imgPath}`,
+          detail: i18n.t('editor:completion.latex.imageDetail'),
+          documentation: i18n.t('editor:completion.latex.imageDocumentation', { path: imgPath }),
           range: imgRange,
           sortText: `00_img_${String(idx).padStart(3, '0')}_${imgPath}`,
           filterText: imgPath,
@@ -196,8 +231,8 @@ export function registerLatexLanguageSupport(monaco: Monaco): void {
             label: bPath,
             kind: monaco.languages.CompletionItemKind.File,
             insertText: insertValue,
-            detail: 'Project Bibliography File',
-            documentation: `Path: ${bPath}`,
+            detail: i18n.t('editor:completion.latex.bibDetail'),
+            documentation: i18n.t('editor:completion.latex.bibDocumentation', { path: bPath }),
             range: bibRange,
             sortText: `00_bib_${String(idx).padStart(3, '0')}_${bPath}`,
             filterText: bPath,
@@ -225,8 +260,8 @@ export function registerLatexLanguageSupport(monaco: Monaco): void {
             label: className,
             kind: monaco.languages.CompletionItemKind.Class,
             insertText: className,
-            detail: 'Custom Document Class (.cls)',
-            documentation: `Local class file: ${cPath}`,
+            detail: i18n.t('editor:completion.latex.clsDetail'),
+            documentation: i18n.t('editor:completion.latex.clsDocumentation', { path: cPath }),
             range: clsRange,
             sortText: `00_cls_${String(idx).padStart(3, '0')}_${className}`,
             filterText: className,
@@ -254,8 +289,8 @@ export function registerLatexLanguageSupport(monaco: Monaco): void {
           label: sFile,
           kind: monaco.languages.CompletionItemKind.File,
           insertText: sFile,
-          detail: 'LaTeX Submodule File',
-          documentation: `Include LaTeX file: ${sFile}`,
+          detail: i18n.t('editor:completion.latex.subfileDetail'),
+          documentation: i18n.t('editor:completion.latex.subfileDocumentation', { path: sFile }),
           range: inputRange,
           sortText: `00_sub_${String(idx).padStart(3, '0')}_${sFile}`,
           filterText: sFile,
@@ -270,6 +305,7 @@ export function registerLatexLanguageSupport(monaco: Monaco): void {
       // Case C: Standard LaTeX Commands & Functions (Rank exact prefix matches highest)
       const commandSuggestions = LATEX_COMMANDS.map((cmd) => {
         const cmdNameNoSlash = cmd.name.replace(/^\\/, '').toLowerCase();
+        const localized = localizedCommandText(cmd);
         
         // Exact prefix matching boosts score to top
         let priority = '20';
@@ -290,9 +326,9 @@ export function registerLatexLanguageSupport(monaco: Monaco): void {
           kind: monaco.languages.CompletionItemKind.Function,
           insertText: cmd.insertText,
           insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-          detail: cmd.detail,
+          detail: localized.detail,
           documentation: {
-            value: `### \`${cmd.name}\`\n\n${cmd.documentation}`,
+            value: `### \`${cmd.name}\`\n\n${localized.documentation}`,
           },
           range,
           sortText: `${priority}_${cmd.name}`,
@@ -303,6 +339,7 @@ export function registerLatexLanguageSupport(monaco: Monaco): void {
       // Case D: LaTeX Environments
       const envSuggestions = LATEX_ENVIRONMENTS.map((env) => {
         const envNameLower = env.name.toLowerCase();
+        const localized = localizedEnvironmentText(env);
         
         // Prioritize \begin{...} primarily when typing \begin or \beg
         let envPriority = '60';
@@ -317,9 +354,9 @@ export function registerLatexLanguageSupport(monaco: Monaco): void {
           kind: monaco.languages.CompletionItemKind.Snippet,
           insertText: env.snippet,
           insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-          detail: `Environment: ${env.detail}`,
+          detail: i18n.t('editor:completion.latex.environmentDetail', { detail: localized.detail }),
           documentation: {
-            value: `### Environment \`\\begin{${env.name}}\`\n\n${env.documentation}\n\n\`\`\`latex\n${env.snippet}\n\`\`\``,
+            value: `### ${i18n.t('editor:completion.latex.environmentHeading')} \`\\begin{${env.name}}\`\n\n${localized.documentation}\n\n\`\`\`latex\n${env.snippet}\n\`\`\``,
           },
           range,
           sortText: `${envPriority}_env_${env.name}`,
@@ -335,9 +372,9 @@ export function registerLatexLanguageSupport(monaco: Monaco): void {
           label: fullCmd,
           kind: monaco.languages.CompletionItemKind.Function,
           insertText: fullCmd,
-          detail: 'Project Macro (Class/Package)',
+          detail: i18n.t('editor:completion.latex.customMacroDetail'),
           documentation: {
-            value: `### \`${fullCmd}\`\n\nCustom command defined in workspace class (.cls) or style (.sty) file.`,
+            value: `### \`${fullCmd}\`\n\n${i18n.t('editor:completion.latex.customMacroDocumentation')}`,
           },
           range,
           sortText: `15_${cName}`,
@@ -363,6 +400,7 @@ export function registerLatexLanguageSupport(monaco: Monaco): void {
       if (queryName) {
         const foundCmd = LATEX_COMMANDS.find((c) => c.name === queryName);
         if (foundCmd) {
+          const localized = localizedCommandText(foundCmd);
           return {
             range: new monaco.Range(
               position.lineNumber,
@@ -371,9 +409,9 @@ export function registerLatexLanguageSupport(monaco: Monaco): void {
               position.column
             ),
             contents: [
-              { value: `**LaTeX Command: \`${foundCmd.name}\`**` },
-              { value: `*${foundCmd.detail}*` },
-              { value: foundCmd.documentation },
+              { value: `**${i18n.t('editor:completion.latex.hoverCommandHeading')}: \`${foundCmd.name}\`**` },
+              { value: `*${localized.detail}*` },
+              { value: localized.documentation },
             ],
           };
         }
@@ -383,12 +421,13 @@ export function registerLatexLanguageSupport(monaco: Monaco): void {
       if (word) {
         const foundEnv = LATEX_ENVIRONMENTS.find((e) => e.name === word.word);
         if (foundEnv) {
+          const localized = localizedEnvironmentText(foundEnv);
           return {
             range: new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn),
             contents: [
-              { value: `**LaTeX Environment: \`\\begin{${foundEnv.name}}\`**` },
-              { value: `*${foundEnv.detail}*` },
-              { value: foundEnv.documentation },
+              { value: `**${i18n.t('editor:completion.latex.hoverEnvironmentHeading')}: \`\\begin{${foundEnv.name}}\`**` },
+              { value: `*${localized.detail}*` },
+              { value: localized.documentation },
             ],
           };
         }

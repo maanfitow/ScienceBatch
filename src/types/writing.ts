@@ -40,7 +40,7 @@ export interface WritingEditorBridge {
 }
 
 export type MathContext = 'text' | 'math-inline' | 'math-display' | 'math-environment' | 'blocked';
-export type WritingCategory = 'Greek letters' | 'Operators' | 'Relations' | 'Arrows' | 'Sets and logic' | 'Miscellaneous';
+export type WritingCategory = 'greek' | 'operators' | 'relations' | 'arrows' | 'logic' | 'misc';
 
 export interface SymbolEntry {
   command: string;

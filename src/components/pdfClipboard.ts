@@ -1,6 +1,7 @@
 import { isTauri } from '@tauri-apps/api/core';
 import { Image as TauriImage } from '@tauri-apps/api/image';
 import { writeImage, writeText } from '@tauri-apps/plugin-clipboard-manager';
+import i18n from '../i18n';
 
 function isNodeInside(container: HTMLElement, node: Node | null): boolean {
   return node !== null && (node === container || container.contains(node));
@@ -49,7 +50,7 @@ export async function copyTextToClipboard(text: string): Promise<void> {
   }
 
   if (!navigator.clipboard?.writeText) {
-    throw new Error('Clipboard access is unavailable in this browser context.');
+    throw new Error(i18n.t('errors:clipboard.textUnavailable'));
   }
 
   await navigator.clipboard.writeText(text);
@@ -128,10 +129,10 @@ export async function copyRgbaImageToClipboard(
   pngBlob?: Blob | null,
 ): Promise<void> {
   if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
-    throw new Error('Invalid image dimensions for clipboard copy.');
+    throw new Error(i18n.t('errors:clipboard.invalidImageDimensions'));
   }
   if (rgba.byteLength !== width * height * 4) {
-    throw new Error('Image RGBA buffer size does not match width and height.');
+    throw new Error(i18n.t('errors:clipboard.invalidImageBuffer'));
   }
 
   if (isTauri()) {
@@ -154,7 +155,7 @@ export async function copyRgbaImageToClipboard(
     return;
   }
 
-  throw new Error('Image clipboard access is unavailable in this browser context.');
+  throw new Error(i18n.t('errors:clipboard.imageUnavailable'));
 }
 
 async function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob | null> {
@@ -169,7 +170,7 @@ async function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob | null> 
 async function copyOffscreenCanvasToClipboard(offscreen: HTMLCanvasElement): Promise<void> {
   const ctx = offscreen.getContext('2d');
   if (!ctx) {
-    throw new Error('Failed to create 2D canvas context for image copy.');
+    throw new Error(i18n.t('errors:clipboard.canvasContextFailed'));
   }
 
   const imageData = ctx.getImageData(0, 0, offscreen.width, offscreen.height);
@@ -189,7 +190,7 @@ export async function canvasRegionToClipboardImage(
   sh = canvas.height,
 ): Promise<void> {
   if (canvas.width <= 0 || canvas.height <= 0) {
-    throw new Error('Canvas has no rendered image data to copy.');
+    throw new Error(i18n.t('errors:clipboard.emptyCanvas'));
   }
 
   const startX = Math.max(0, Math.min(canvas.width - 1, Math.floor(sx)));
@@ -204,7 +205,7 @@ export async function canvasRegionToClipboardImage(
   offscreen.height = cropH;
   const ctx = offscreen.getContext('2d');
   if (!ctx) {
-    throw new Error('Failed to create 2D canvas context for image copy.');
+    throw new Error(i18n.t('errors:clipboard.canvasContextFailed'));
   }
 
   ctx.drawImage(canvas, startX, startY, cropW, cropH, 0, 0, cropW, cropH);
@@ -216,7 +217,7 @@ export async function canvasRegionToClipboardImage(
  */
 export async function imageElementToClipboardImage(img: HTMLImageElement): Promise<void> {
   if (!img.complete || (img.naturalWidth <= 0 && img.clientWidth <= 0)) {
-    throw new Error('Image is not fully loaded yet.');
+    throw new Error(i18n.t('errors:clipboard.imageNotLoaded'));
   }
 
   const width = img.naturalWidth > 0 ? img.naturalWidth : Math.max(img.clientWidth, 1) * 2;
@@ -227,7 +228,7 @@ export async function imageElementToClipboardImage(img: HTMLImageElement): Promi
   offscreen.height = Math.max(1, Math.round(height));
   const ctx = offscreen.getContext('2d');
   if (!ctx) {
-    throw new Error('Failed to create 2D canvas context for image copy.');
+    throw new Error(i18n.t('errors:clipboard.canvasContextFailed'));
   }
 
   ctx.drawImage(img, 0, 0, offscreen.width, offscreen.height);

@@ -9,6 +9,13 @@ import {
 } from '../../types/typstWriting';
 import { encodeTypstString, validateTypstMatrixCell, validateTypstTableCell } from './typstStructureValidation';
 
+type WritingTranslator = (key: string, fallback: string, params?: Record<string, string | number>) => string;
+const wt = (key: string, fallback: string, params?: Record<string, string | number>): string => {
+  const fn = (globalThis as { __sciencebatchTranslate?: WritingTranslator }).__sciencebatchTranslate;
+  if (fn) return fn(`writing:${key}`, fallback, params);
+  return params ? fallback.replace(/\{\{(\w+)\}\}/g, (_m, k) => String(params[k] ?? '')) : fallback;
+};
+
 const tableAlignments = new Set<TypstAlignment>(['left', 'center', 'right']);
 const tableFormats = new Set<TypstTableFormat>(['plain', 'grid', 'booktabs']);
 const matrixDelimiters = new Set<TypstMatrixDelimiter>(['none', 'parentheses', 'brackets', 'braces', 'single-bars', 'double-bars']);
@@ -17,26 +24,26 @@ const matrixDelimiters = new Set<TypstMatrixDelimiter>(['none', 'parentheses', '
 export function generateTypstTable(options: TypstTableOptions, placement: 'markup' | 'code' = 'markup'): string {
   validateDimensions(options.rows, options.columns, 20, 10, 'table');
   validateGrid(options.cells, options.rows, options.columns);
-  validateOptionalGrid(options.cellTypst, options.rows, options.columns, 'Typst cell modes');
-  validateOptionalGrid(options.sourceCells, options.rows, options.columns, 'table source cells');
+  validateOptionalGrid(options.cellTypst, options.rows, options.columns, 'typstGenerate.typstCellModesDimensionMismatch', 'Typst cell modes do not match the selected structure dimensions.');
+  validateOptionalGrid(options.sourceCells, options.rows, options.columns, 'typstGenerate.tableSourceCellsDimensionMismatch', 'table source cells do not match the selected structure dimensions.');
 
   const alignments = options.alignment ?? Array<TypstAlignment>(options.columns).fill('left');
   if (alignments.length !== options.columns || alignments.some((alignment) => !tableAlignments.has(alignment))) {
-    throw new TypstStructureError('Choose left, center, or right alignment for each table column.');
+    throw new TypstStructureError(wt('typstGenerate.columnAlignmentRequired', 'Choose left, center, or right alignment for each table column.'));
   }
   const format = options.format ?? 'plain';
-  if (!tableFormats.has(format)) throw new TypstStructureError('Choose Plain, Grid, or Booktabs table formatting.');
+  if (!tableFormats.has(format)) throw new TypstStructureError(wt('typstGenerate.tableFormatRequired', 'Choose Plain, Grid, or Booktabs table formatting.'));
   const header = options.header ?? false;
   const wrapped = options.wrapInFigure ?? false;
   const caption = options.caption ?? '';
   const label = options.label?.trim() ?? '';
 
-  if (label && (!wrapped || !caption.trim())) throw new TypstStructureError('A table label requires a caption and the figure wrapper.');
+  if (label && (!wrapped || !caption.trim())) throw new TypstStructureError(wt('typstGenerate.labelRequiresCaptionAndFigure', 'A table label requires a caption and the figure wrapper.'));
   if (label && !/^[A-Za-z][A-Za-z0-9_-]*$/u.test(label)) {
-    throw new TypstStructureError('Labels must start with a letter and use only letters, numbers, hyphens, or underscores.');
+    throw new TypstStructureError(wt('typstGenerate.labelCharacters', 'Labels must start with a letter and use only letters, numbers, hyphens, or underscores.'));
   }
-  if (placement === 'code' && label) throw new TypstStructureError('Labels can only be attached to a table figure in markup.');
-  validateSingleLine(caption, 'Captions');
+  if (placement === 'code' && label) throw new TypstStructureError(wt('typstGenerate.labelsMarkupOnly', 'Labels can only be attached to a table figure in markup.'));
+  validateSingleLine(caption, 'typstGenerate.captionsSingleLine', 'Captions must stay on one line.');
 
   const values: string[] = [];
   if (format === 'booktabs') values.push('table.hline(y: 0, stroke: 0.8pt)');
@@ -76,13 +83,13 @@ export function generateTypstMatrix(
 ): string {
   validateDimensions(options.rows, options.columns, 12, 12, 'matrix');
   validateGrid(options.cells, options.rows, options.columns);
-  validateOptionalGrid(options.sourceCells, options.rows, options.columns, 'matrix source cells');
+  validateOptionalGrid(options.sourceCells, options.rows, options.columns, 'typstGenerate.matrixSourceCellsDimensionMismatch', 'matrix source cells do not match the selected structure dimensions.');
   if (context === 'blocked' || context === 'math-environment') {
-    throw new TypstStructureError('The current editor context does not support matrix insertion.');
+    throw new TypstStructureError(wt('typstGenerate.matrixInsertionUnsupported', 'The current editor context does not support matrix insertion.'));
   }
 
   const delimiter = options.delimiter ?? 'parentheses';
-  if (!matrixDelimiters.has(delimiter)) throw new TypstStructureError('Choose a supported matrix delimiter.');
+  if (!matrixDelimiters.has(delimiter)) throw new TypstStructureError(wt('typstGenerate.matrixDelimiterRequired', 'Choose a supported matrix delimiter.'));
   const rows = options.cells.map((row, rowIndex) => row.map((content, columnIndex) => renderMatrixCell(options, rowIndex, columnIndex, content)).join(', '));
   const delimiterSource = {
     // `none` is a value supplied from code context while the matrix's
@@ -98,7 +105,7 @@ export function generateTypstMatrix(
   if (context === 'text') return `$ ${expression} $`;
   if (!boundary) return expression;
   if (boundary.start < 0 || boundary.end < boundary.start || boundary.end > boundary.source.length) {
-    throw new TypstStructureError('The matrix insertion range is outside the current document.');
+    throw new TypstStructureError(wt('typstGenerate.matrixRangeOutsideDocument', 'The matrix insertion range is outside the current document.'));
   }
   const before = boundary.source[boundary.start - 1];
   const after = boundary.source[boundary.end];
@@ -110,7 +117,7 @@ function renderTableCell(options: TypstTableOptions, row: number, column: number
   const sourceCell = options.sourceCells?.[row]?.[column];
   const isTypst = options.cellTypst?.[row]?.[column] ?? sourceCell?.isTypst ?? false;
 
-  validateSingleLine(content, 'Table cells');
+  validateSingleLine(content, 'typstGenerate.tableCellsSingleLine', 'Table cells must stay on one line.');
   if (isTypst) validateTypstTableCell(content);
   const unchanged = sourceCell && sourceCell.content === content && sourceCell.isTypst === isTypst && sourceCell.header === header;
   if (unchanged) return validateAndReuseTableArgument(sourceCell.source);
@@ -121,7 +128,7 @@ function renderTableCell(options: TypstTableOptions, row: number, column: number
 
 function validateAndReuseTableArgument(source: string): string {
   if (!source.startsWith('[') || !source.endsWith(']')) {
-    throw new TypstStructureError('A parsed table cell no longer has a supported content argument.');
+    throw new TypstStructureError(wt('typstGenerate.parsedTableCellUnsupported', 'A parsed table cell no longer has a supported content argument.'));
   }
   validateTypstTableCell(source.slice(1, -1));
   return source;
@@ -129,7 +136,7 @@ function validateAndReuseTableArgument(source: string): string {
 
 function renderMatrixCell(options: TypstMatrixOptions, row: number, column: number, content: string): string {
   const sourceCell = options.sourceCells?.[row]?.[column];
-  validateSingleLine(content, 'Matrix cells');
+  validateSingleLine(content, 'typstGenerate.matrixCellsSingleLine', 'Matrix cells must stay on one line.');
   validateTypstMatrixCell(content);
   if (sourceCell && sourceCell.content === content) return validateAndReuseMatrixArgument(sourceCell.source);
   // An empty cell must retain its place in the matrix's row and column shape.
@@ -137,29 +144,33 @@ function renderMatrixCell(options: TypstMatrixOptions, row: number, column: numb
 }
 
 function validateAndReuseMatrixArgument(source: string): string {
-  if (!source.trim()) throw new TypstStructureError('A parsed matrix cell has an empty source argument.');
+  if (!source.trim()) throw new TypstStructureError(wt('typstGenerate.parsedMatrixCellEmpty', 'A parsed matrix cell has an empty source argument.'));
   validateTypstMatrixCell(source);
   return source;
 }
 
 function validateDimensions(rows: number, columns: number, maxRows: number, maxColumns: number, structure: string): void {
   if (!Number.isInteger(rows) || rows < 1 || rows > maxRows || !Number.isInteger(columns) || columns < 1 || columns > maxColumns) {
-    throw new TypstStructureError(`${structure === 'table' ? 'Tables' : 'Matrices'} must have ${structure === 'table' ? '1–20 rows and 1–10 columns' : '1–12 rows and columns'}.`);
+    throw new TypstStructureError(
+      structure === 'table'
+        ? wt('typstGenerate.tablesDimensionRange', 'Tables must have 1–20 rows and 1–10 columns.')
+        : wt('typstGenerate.matricesDimensionRange', 'Matrices must have 1–12 rows and columns.'),
+    );
   }
 }
 
 function validateGrid(grid: string[][], rows: number, columns: number): void {
   if (!Array.isArray(grid) || grid.length !== rows || grid.some((row) => !Array.isArray(row) || row.length !== columns || row.some((value) => typeof value !== 'string'))) {
-    throw new TypstStructureError('The cell content does not match the selected structure dimensions.');
+    throw new TypstStructureError(wt('typstGenerate.gridDimensionMismatch', 'The cell content does not match the selected structure dimensions.'));
   }
 }
 
-function validateOptionalGrid(grid: unknown[][] | undefined, rows: number, columns: number, label: string): void {
+function validateOptionalGrid(grid: unknown[][] | undefined, rows: number, columns: number, key: string, fallback: string): void {
   if (grid && (grid.length !== rows || grid.some((row) => !Array.isArray(row) || row.length !== columns))) {
-    throw new TypstStructureError(`${label} do not match the selected structure dimensions.`);
+    throw new TypstStructureError(wt(key, fallback));
   }
 }
 
-function validateSingleLine(value: string, label: string): void {
-  if (/[\r\n\u2028\u2029]/u.test(value)) throw new TypstStructureError(`${label} must stay on one line.`);
+function validateSingleLine(value: string, key: string, fallback: string): void {
+  if (/[\r\n\u2028\u2029]/u.test(value)) throw new TypstStructureError(wt(key, fallback));
 }

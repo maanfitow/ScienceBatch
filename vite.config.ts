@@ -61,9 +61,64 @@ function pdfjsCmapsPlugin(): Plugin {
   };
 }
 
+/**
+ * Redirects Monaco Editor's internal `nls.js` module imports to the local
+ * offline NLS shim (`src/editor/monacoNls.ts`) so interactive Monaco UI labels
+ * localize without network or CDN requests.
+ */
+function monacoOfflineNlsPlugin(): Plugin {
+  const localNlsPath = path.resolve(__dirname, 'src/editor/monacoNls.ts');
+
+  return {
+    name: 'sciencebatch-monaco-offline-nls',
+    enforce: 'pre',
+    config() {
+      return {
+        optimizeDeps: {
+          esbuildOptions: {
+            plugins: [
+              {
+                name: 'sciencebatch-monaco-offline-nls-esbuild',
+                setup(build) {
+                  build.onResolve({ filter: /(?:^|\/)nls\.js$/ }, (args) => {
+                    const normalizedImporter = args.importer.replace(/\\/g, '/');
+                    if (
+                      args.path === 'monaco-editor/esm/vs/nls.js' ||
+                      normalizedImporter.includes('monaco-editor')
+                    ) {
+                      return { path: localNlsPath };
+                    }
+                    return null;
+                  });
+                },
+              },
+            ],
+          },
+        },
+      };
+    },
+    resolveId(source, importer) {
+      const normalizedSource = source.replace(/\\/g, '/');
+      if (normalizedSource === 'monaco-editor/esm/vs/nls.js') {
+        return localNlsPath;
+      }
+      if (
+        importer &&
+        (normalizedSource === 'nls.js' || normalizedSource.endsWith('/nls.js'))
+      ) {
+        const normalizedImporter = importer.replace(/\\/g, '/');
+        if (normalizedImporter.includes('monaco-editor')) {
+          return localNlsPath;
+        }
+      }
+      return null;
+    },
+  };
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react(), pdfjsCmapsPlugin()],
+  plugins: [monacoOfflineNlsPlugin(), react(), pdfjsCmapsPlugin()],
   worker: {
     format: 'es',
   },

@@ -4,6 +4,8 @@ import { save } from '@tauri-apps/plugin-dialog';
 import { join, documentDir } from '@tauri-apps/api/path';
 import { toast } from 'sonner';
 import { EngineType } from '../types';
+import i18n from '../i18n';
+import { translateBackendError } from '../i18n/backendMessages';
 
 export function useExport() {
   const resolveDefaultExportPath = useCallback(async (projectRoot: string | null, defaultFileName: string): Promise<string> => {
@@ -31,7 +33,7 @@ export function useExport() {
     projectRoot: string | null,
   ) => {
     if (!pdfBytes || pdfBytes.length === 0) {
-      toast.error('No compiled PDF available to export');
+      toast.error(i18n.t('errors:export.noPdf'));
       return;
     }
 
@@ -39,9 +41,9 @@ export function useExport() {
       const defaultName = projectName ? `${projectName}.pdf` : 'document.pdf';
       const initialPath = await resolveDefaultExportPath(projectRoot, defaultName);
       const filePath = await save({
-        title: 'Save PDF Document As...',
+        title: i18n.t('editor:export.savePdfTitle'),
         defaultPath: initialPath,
-        filters: [{ name: 'PDF Document', extensions: ['pdf'] }],
+        filters: [{ name: i18n.t('editor:export.pdfFilterName'), extensions: ['pdf'] }],
       });
 
       if (!filePath) return;
@@ -51,7 +53,7 @@ export function useExport() {
         bytes: Array.from(pdfBytes),
       });
 
-      toast.success('PDF saved successfully', { description: filePath });
+      toast.success(i18n.t('editor:export.pdfSaved'), { description: filePath });
     } catch (err: unknown) {
       console.warn('Native save dialog error, falling back:', err);
       try {
@@ -64,9 +66,9 @@ export function useExport() {
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
-        toast.success('PDF downloaded');
+        toast.success(i18n.t('editor:export.pdfDownloaded'));
       } catch {
-        toast.error('Failed to export PDF');
+        toast.error(i18n.t('errors:export.pdfExportFailed'));
       }
     }
   }, [resolveDefaultExportPath]);
@@ -81,14 +83,14 @@ export function useExport() {
       const defaultName = projectName ? `${projectName}_source.zip` : 'project_source.zip';
       const initialPath = await resolveDefaultExportPath(projectRoot, defaultName);
       const filePath = await save({
-        title: 'Export Project as ZIP Archive',
+        title: i18n.t('editor:export.exportZipTitle'),
         defaultPath: initialPath,
-        filters: [{ name: 'ZIP Archive', extensions: ['zip'] }],
+        filters: [{ name: i18n.t('editor:export.zipFilterName'), extensions: ['zip'] }],
       });
 
       if (!filePath) return;
 
-      toast.loading('Packaging project archive...', { id: 'export-zip' });
+      toast.loading(i18n.t('editor:export.packagingZip'), { id: 'export-zip' });
       await invoke('export_project_to_zip', {
         destPath: filePath,
         projectDir: projectRoot,
@@ -96,15 +98,15 @@ export function useExport() {
         engine,
       });
 
-      toast.success('Project archive exported successfully', {
+      toast.success(i18n.t('editor:export.zipExported'), {
         id: 'export-zip',
         description: filePath,
       });
     } catch (err: unknown) {
       console.error('Failed to export ZIP:', err);
-      toast.error('Failed to export ZIP archive', {
+      toast.error(i18n.t('errors:export.zipExportFailed'), {
         id: 'export-zip',
-        description: String(err),
+        description: translateBackendError(err),
       });
     }
   }, [resolveDefaultExportPath]);

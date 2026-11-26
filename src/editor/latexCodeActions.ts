@@ -1,5 +1,6 @@
 import type * as monacoType from 'monaco-editor';
 import type { Monaco } from '@monaco-editor/react';
+import i18n from '../i18n';
 
 let codeActionProviderDisposable: monacoType.IDisposable | null = null;
 
@@ -34,7 +35,7 @@ export function registerLatexCodeActions(monaco: Monaco): void {
 
         suggestedCmds.forEach((cmd, idx) => {
           actions.push({
-            title: `Change to '\\${cmd}'`,
+            title: i18n.t('editor:codeActions.changeToCommand', { command: cmd }),
             kind: 'quickfix',
             isPreferred: idx === 0,
             diagnostics: [marker],
@@ -56,7 +57,7 @@ export function registerLatexCodeActions(monaco: Monaco): void {
         // 2. Unescaped Underscore Quick Fix: _ -> \_ or $_$
         if (code === 'latex:unescaped-underscore' || marker.message.includes("Unescaped underscore '_'")) {
           actions.push({
-            title: "Escape as '\\_'",
+            title: i18n.t('editor:codeActions.escapeUnderscore'),
             kind: 'quickfix',
             isPreferred: true,
             diagnostics: [marker],
@@ -75,7 +76,7 @@ export function registerLatexCodeActions(monaco: Monaco): void {
           });
 
           actions.push({
-            title: "Wrap in math mode '$_$'",
+            title: i18n.t('editor:codeActions.wrapMathUnderscore'),
             kind: 'quickfix',
             isPreferred: false,
             diagnostics: [marker],
@@ -97,7 +98,7 @@ export function registerLatexCodeActions(monaco: Monaco): void {
         // 3. Misplaced Ampersand Quick Fix: & -> \&
         if (code === 'latex:misplaced-ampersand' || marker.message.includes("Misplaced alignment tab character '&'")) {
           actions.push({
-            title: "Escape as '\\&'",
+            title: i18n.t('editor:codeActions.escapeAmpersand'),
             kind: 'quickfix',
             isPreferred: true,
             diagnostics: [marker],

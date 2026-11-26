@@ -1,0 +1,201 @@
+{
+  "common": {
+    "closePanel": "Cerrar panel"
+  },
+  "activityBar": {
+    "ariaLabel": "Barra de actividad del espacio de trabajo",
+    "separatorTooltip": "Separador de grupos de herramientas (arrastra un icono aquí para moverlo entre grupos)",
+    "toolTooltip": "{{label}} - Arrastrar para mover",
+    "toolTooltipWithShortcut": "{{label}} ({{shortcut}}) - Arrastrar para mover",
+    "tools": {
+      "files": "Archivos del proyecto",
+      "search": "Buscar en archivos",
+      "git": "Control de versiones (Git)",
+      "dependencies": "Dependencias",
+      "outline": "Esquema y estructura"
+    },
+    "contextMenu": {
+      "moveToBottom": "Mover al grupo inferior",
+      "moveToTop": "Mover al grupo superior",
+      "resetLayout": "Restablecer diseño predeterminado"
+    }
+  },
+  "workspace": {
+    "openProjectDependencies": "Abre un proyecto para ver las dependencias."
+  },
+  "fileTree": {
+    "projectExplorer": "Explorador del proyecto",
+    "renameInputAriaLabel": "Renombrar elemento",
+    "newFileInsideFolder": "Nuevo archivo dentro de la carpeta",
+    "newFileInsideAriaLabel": "Nuevo archivo dentro de {{name}}",
+    "moreActionsFor": "Más acciones para {{name}}",
+    "mainEntrypointTitle": "Archivo principal de entrada",
+    "mainBadge": "Principal",
+    "createInsidePrefix": "Dentro de:",
+    "createFilePlaceholder": "archivo.tex o archivo.typ",
+    "createFolderPlaceholder": "nombre de carpeta",
+    "confirmCreateAriaLabel": "Confirmar creación",
+    "emptyState": "No hay archivos en la carpeta del proyecto",
+    "header": {
+      "importFilesTitle": "Importar archivos / imágenes",
+      "importFilesAriaLabel": "Importar archivos o imágenes",
+      "newFile": "Nuevo archivo",
+      "newFileAriaLabel": "Nuevo archivo",
+      "newFolder": "Nueva carpeta",
+      "newFolderAriaLabel": "Nueva carpeta",
+      "collapseAll": "Contraer todas las carpetas",
+      "collapseAllAriaLabel": "Contraer todas las carpetas",
+      "refresh": "Actualizar explorador",
+      "refreshAriaLabel": "Actualizar explorador"
+    },
+    "contextMenu": {
+      "newFile": "Nuevo archivo…",
+      "newFolder": "Nueva carpeta…",
+      "importFilesHere": "Importar archivos aquí…",
+      "collapseFolder": "Contraer carpeta",
+      "expandFolder": "Expandir carpeta",
+      "duplicate": "Duplicar",
+      "copyPath": "Copiar ruta",
+      "copyRelativePath": "Copiar ruta relativa",
+      "revealInFileManager": "Mostrar en el explorador de archivos",
+      "previewAsset": "Previsualizar recurso",
+      "openFile": "Abrir archivo",
+      "setAsMain": "Establecer como archivo principal",
+      "copyFigureSnippet": "Copiar fragmento de figura {{engine}}"
+    },
+    "toast": {
+      "pathCopied": "Ruta copiada",
+      "relativePathCopied": "Ruta relativa copiada",
+      "copyPathFailed": "No se pudo copiar la ruta",
+      "figureSnippetCopied": "Fragmento de figura copiado al portapapeles",
+      "copySnippetFailed": "No se pudo copiar el fragmento"
+    }
+  },
+  "tabs": {
+    "openFilesAriaLabel": "Archivos abiertos",
+    "selectEditableSource": "Selecciona un archivo fuente {{engine}} editable.",
+    "pinnedTab": "Pestaña fijada",
+    "pinnedTabTooltip": "{{path}}\nPestaña fijada",
+    "unsavedChanges": "Cambios sin guardar",
+    "closeTabAriaLabel": "Cerrar {{name}}",
+    "closeTabTitle": "Cerrar {{name}} (Ctrl/Cmd+W)",
+    "emptyState": "Abre un archivo fuente o un recurso del proyecto para comenzar.",
+    "contextMenu": {
+      "pin": "Fijar",
+      "unpin": "Desfijar",
+      "closeOthers": "Cerrar otras",
+      "closeAllUnpinned": "Cerrar todas las no fijadas"
+    },
+    "diff": {
+      "openProjectError": "Abre una carpeta de proyecto para ver esta diferencia.",
+      "loading": "Cargando diferencias…",
+      "ariaLabel": "Diferencias de {{path}}"
+    },
+    "asset": {
+      "loading": "Cargando vista previa…",
+      "previewError": "No se pudo previsualizar este archivo: {{error}}",
+      "imageUnavailable": "Esta imagen fue eliminada o no está disponible en el proyecto actual.",
+      "imageAltFallback": "Imagen del proyecto",
+      "pdfLinkTitlePrefix": "{{modifier}}+Clic para seguir el enlace",
+      "pdfPageAriaLabel": "Página {{page}} del PDF",
+      "previousPage": "Anterior",
+      "pageIndicator": "Página {{current}} de {{total}}",
+      "nextPage": "Siguiente",
+      "contextMenu": {
+        "copyImage": "Copiar imagen",
+        "selectAll": "Seleccionar todo"
+      },
+      "toast": {
+        "openLinkFailed": "No se pudo abrir el enlace",
+        "copyFailed": "Error al copiar",
+        "imageCopied": "Imagen copiada al portapapeles",
+        "copyImageFailed": "No se pudo copiar la imagen"
+      }
+    }
+  },
+  "search": {
+    "title": "BUSCAR",
+    "filtersTooltip": "Filtros de inclusión/exclusión de archivos",
+    "refreshTooltip": "Actualizar búsqueda (Enter)",
+    "showReplace": "Mostrar reemplazo",
+    "hideReplace": "Ocultar reemplazo",
+    "searchPlaceholder": "Buscar...",
+    "searchAriaLabel": "Buscar en los archivos del proyecto",
+    "clearSearch": "Limpiar búsqueda",
+    "matchCaseTooltip": "Coincidir mayúsculas y minúsculas (Alt+C)",
+    "wholeWordTooltip": "Solo palabras completas (Alt+W)",
+    "regexTooltip": "Usar expresión regular (Alt+R)",
+    "replacePlaceholder": "Reemplazar...",
+    "replaceAriaLabel": "Texto de reemplazo",
+    "clearField": "Limpiar campo",
+    "replaceAllTooltip": "Reemplazar todo en el proyecto (Ctrl+Alt+Enter)",
+    "replaceAllButton": "Todo",
+    "includeLabel": "Incluir:",
+    "includePlaceholder": "ej. *.tex, *.typ, *.bib",
+    "excludeLabel": "Excluir:",
+    "excludePlaceholder": "ej. assets, dist",
+    "invalidRegex": "Expresión regular no válida",
+    "searching": "Buscando en el proyecto...",
+    "resultsPart_one": "<strong>{{count}}</strong> resultado",
+    "resultsPart_other": "<strong>{{count}}</strong> resultados",
+    "acrossConnector": "en",
+    "filesPart_one": "<strong>{{count}}</strong> archivo",
+    "filesPart_other": "<strong>{{count}}</strong> archivos",
+    "noResults": "No se encontraron resultados",
+    "emptyPrompt": "Escribe para buscar en los archivos del proyecto",
+    "replaceInFileTooltip": "Reemplazar todas las coincidencias en este archivo",
+    "matchLineTooltip": "Línea {{line}}: {{content}}",
+    "replaceMatchTooltip": "Reemplazar esta coincidencia",
+    "showMoreMatches_one": "+ Mostrar {{count}} coincidencia más...",
+    "showMoreMatches_other": "+ Mostrar {{count}} coincidencias más...",
+    "toast": {
+      "replacedInFile": "Reemplazos aplicados en el archivo",
+      "replaceInFileFailed": "No se pudo reemplazar en el archivo",
+      "replacedSummary_one": "Se reemplazó {{count}} coincidencia en {{files}}",
+      "replacedSummary_other": "Se reemplazaron {{count}} coincidencias en {{files}}",
+      "replacedFileCount_one": "{{count}} archivo",
+      "replacedFileCount_other": "{{count}} archivos",
+      "replacedAtLine": "Coincidencia reemplazada en la línea {{line}}",
+      "replaceOccurrenceFailed": "No se pudo reemplazar la coincidencia"
+    }
+  },
+  "outline": {
+    "title": "ESQUEMA",
+    "documentFallback": "Documento",
+    "detectedSectionsTooltip": "Secciones detectadas en el esquema",
+    "clearFilterToToggle": "Limpia el filtro para contraer o expandir secciones",
+    "expandAllTooltip": "Expandir todas las secciones",
+    "collapseAllTooltip": "Contraer todas las secciones",
+    "closePanel": "Cerrar panel de esquema",
+    "filterPlaceholder": "Filtrar encabezados...",
+    "filterAriaLabel": "Filtrar encabezados",
+    "clearFilter": "Limpiar filtro",
+    "treeAriaLabel": "Esquema del documento",
+    "noMatchingHeadings": "No se encontraron encabezados coincidentes",
+    "noHeadingsDetected": "No se detectaron secciones ni encabezados",
+    "emptyHintTypst": "Agrega = Encabezado en tu documento",
+    "emptyHintLatex": "Usa \\section{...} o \\chapter{...}",
+    "itemTooltip": "{{title}} (Línea {{line}})",
+    "collapseSection": "Contraer sección",
+    "expandSection": "Expandir sección",
+    "labelTooltip": "Etiqueta: {{label}}",
+    "kinds": {
+      "part": "Parte",
+      "chapter": "Capítulo",
+      "frame": "Diapositiva",
+      "headingLevel": "Encabezado de nivel {{level}}"
+    },
+    "contextMenu": {
+      "jumpToSection": "Ir a la sección",
+      "copyTitle": "Copiar título del encabezado",
+      "copyReference": "Copiar referencia",
+      "expandAll": "Expandir todo",
+      "collapseAll": "Contraer todo"
+    },
+    "toast": {
+      "copyFailed": "No se pudo copiar al portapapeles",
+      "titleCopied": "Título del encabezado copiado",
+      "referenceCopied": "Referencia copiada"
+    }
+  }
+}

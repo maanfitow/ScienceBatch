@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ListTree,
   Search,
@@ -117,6 +118,7 @@ export const DocumentOutlineView: React.FC<DocumentOutlineViewProps> = ({
   onSelectLine,
   onClose,
 }) => {
+  const { t } = useTranslation(['sidebar', 'common']);
   const [filterQuery, setFilterQuery] = useState('');
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
   const [focusedId, setFocusedId] = useState<string | null>(null);
@@ -153,9 +155,10 @@ export const DocumentOutlineView: React.FC<DocumentOutlineViewProps> = ({
   const effectiveCursorLine = activeCursorLine ?? eventCursorLine;
 
   const activeFileName = useMemo(() => {
-    if (!activeFilePath) return 'Document';
-    return activeFilePath.split(/[/\\]/).pop() || 'Document';
-  }, [activeFilePath]);
+    const fallbackName = t('sidebar:outline.documentFallback');
+    if (!activeFilePath) return fallbackName;
+    return activeFilePath.split(/[/\\]/).pop() || fallbackName;
+  }, [activeFilePath, t]);
 
   const outlineItems = useMemo(() => {
     if (!activeFilePath) return [];
@@ -311,25 +314,25 @@ export const DocumentOutlineView: React.FC<DocumentOutlineViewProps> = ({
       await navigator.clipboard.writeText(text);
       toast.success(successMessage);
     } catch {
-      toast.error('Failed to copy to clipboard');
+      toast.error(t('sidebar:outline.toast.copyFailed'));
     }
-  }, []);
+  }, [t]);
 
   const contextMenuActions: ContextMenuAction[] = useMemo(() => {
     if (!contextMenu) return [];
     const { item } = contextMenu;
     const actions: ContextMenuAction[] = [
       {
-        label: 'Jump to Section',
+        label: t('sidebar:outline.contextMenu.jumpToSection'),
         icon: <ArrowRight size={13} />,
         shortcut: `L${item.line}`,
         onSelect: () => handleItemClick(item),
       },
       {
-        label: 'Copy Heading Title',
+        label: t('sidebar:outline.contextMenu.copyTitle'),
         icon: <Copy size={13} />,
         onSelect: () => {
-          void copyToClipboard(item.title, 'Heading title copied');
+          void copyToClipboard(item.title, t('sidebar:outline.toast.titleCopied'));
         },
       },
     ];
@@ -337,11 +340,11 @@ export const DocumentOutlineView: React.FC<DocumentOutlineViewProps> = ({
     if (item.label) {
       const refText = engine === 'typst' ? `@${item.label}` : `\\ref{${item.label}}`;
       actions.push({
-        label: 'Copy Reference',
+        label: t('sidebar:outline.contextMenu.copyReference'),
         icon: <Link2 size={13} />,
         shortcut: refText,
         onSelect: () => {
-          void copyToClipboard(refText, 'Reference copied');
+          void copyToClipboard(refText, t('sidebar:outline.toast.referenceCopied'));
         },
       });
     }
@@ -349,14 +352,14 @@ export const DocumentOutlineView: React.FC<DocumentOutlineViewProps> = ({
     if (hasExpandableNodes && !isFiltering) {
       actions.push(
         {
-          label: 'Expand All',
+          label: t('sidebar:outline.contextMenu.expandAll'),
           icon: <ChevronsUpDown size={13} />,
           separatorBefore: true,
           disabled: collapsedIds.size === 0,
           onSelect: expandAll,
         },
         {
-          label: 'Collapse All',
+          label: t('sidebar:outline.contextMenu.collapseAll'),
           icon: <ChevronsDownUp size={13} />,
           disabled: allCollapsed,
           onSelect: collapseAll,
@@ -376,6 +379,7 @@ export const DocumentOutlineView: React.FC<DocumentOutlineViewProps> = ({
     allCollapsed,
     expandAll,
     collapseAll,
+    t,
   ]);
 
   const tabStopId = useMemo(() => {
@@ -393,14 +397,14 @@ export const DocumentOutlineView: React.FC<DocumentOutlineViewProps> = ({
       {/* Header */}
       <div className="outline-view-header">
         <div className="outline-header-left">
-          <span className="outline-view-title">OUTLINE</span>
+          <span className="outline-view-title">{t('sidebar:outline.title')}</span>
           <span className="outline-active-file-pill" title={activeFilePath || ''}>
             <FileText size={11} className="outline-file-icon" aria-hidden="true" />
             <span className="truncate">{activeFileName}</span>
           </span>
         </div>
         <div className="outline-view-header-actions">
-          <span className="outline-count-badge" title="Detected outline sections">
+          <span className="outline-count-badge" title={t('sidebar:outline.detectedSectionsTooltip')}>
             {outlineItems.length}
           </span>
           <button
@@ -410,12 +414,16 @@ export const DocumentOutlineView: React.FC<DocumentOutlineViewProps> = ({
             disabled={!hasExpandableNodes || isFiltering}
             title={
               isFiltering
-                ? 'Clear filter to collapse or expand sections'
+                ? t('sidebar:outline.clearFilterToToggle')
                 : allCollapsed
-                  ? 'Expand all sections'
-                  : 'Collapse all sections'
+                  ? t('sidebar:outline.expandAllTooltip')
+                  : t('sidebar:outline.collapseAllTooltip')
             }
-            aria-label={allCollapsed ? 'Expand all sections' : 'Collapse all sections'}
+            aria-label={
+              allCollapsed
+                ? t('sidebar:outline.expandAllTooltip')
+                : t('sidebar:outline.collapseAllTooltip')
+            }
           >
             {allCollapsed ? <ChevronsUpDown size={14} /> : <ChevronsDownUp size={14} />}
           </button>
@@ -424,8 +432,8 @@ export const DocumentOutlineView: React.FC<DocumentOutlineViewProps> = ({
               type="button"
               className="btn-outline-header-action"
               onClick={onClose}
-              title="Close outline panel"
-              aria-label="Close outline panel"
+              title={t('sidebar:outline.closePanel')}
+              aria-label={t('sidebar:outline.closePanel')}
             >
               <X size={14} />
             </button>
@@ -440,8 +448,8 @@ export const DocumentOutlineView: React.FC<DocumentOutlineViewProps> = ({
           <input
             type="text"
             className="outline-filter-input"
-            placeholder="Filter headings..."
-            aria-label="Filter headings"
+            placeholder={t('sidebar:outline.filterPlaceholder')}
+            aria-label={t('sidebar:outline.filterAriaLabel')}
             value={filterQuery}
             onChange={(e) => setFilterQuery(e.target.value)}
           />
@@ -450,8 +458,8 @@ export const DocumentOutlineView: React.FC<DocumentOutlineViewProps> = ({
               type="button"
               className="outline-clear-filter-btn"
               onClick={() => setFilterQuery('')}
-              title="Clear filter"
-              aria-label="Clear filter"
+              title={t('sidebar:outline.clearFilter')}
+              aria-label={t('sidebar:outline.clearFilter')}
             >
               <X size={12} />
             </button>
@@ -460,17 +468,19 @@ export const DocumentOutlineView: React.FC<DocumentOutlineViewProps> = ({
       </div>
 
       {/* Outline Tree */}
-      <div className="outline-items-list" role="tree" aria-label="Document outline">
+      <div className="outline-items-list" role="tree" aria-label={t('sidebar:outline.treeAriaLabel')}>
         {visibleRows.length === 0 ? (
           <div className="outline-empty-state">
             <ListTree size={28} className="outline-empty-icon" aria-hidden="true" />
             <p className="outline-empty-text">
-              {isFiltering ? 'No matching headings found' : 'No sections or headings detected'}
+              {isFiltering
+                ? t('sidebar:outline.noMatchingHeadings')
+                : t('sidebar:outline.noHeadingsDetected')}
             </p>
             <span className="outline-empty-hint">
               {engine === 'typst'
-                ? 'Add = Heading in your document'
-                : 'Use \\section{...} or \\chapter{...}'}
+                ? t('sidebar:outline.emptyHintTypst')
+                : t('sidebar:outline.emptyHintLatex')}
             </span>
           </div>
         ) : (
@@ -480,6 +490,17 @@ export const DocumentOutlineView: React.FC<DocumentOutlineViewProps> = ({
             const isActive = item.id === activeItemId;
             const levelClass = `level-${Math.min(Math.max(item.level, 0), 6)}`;
             const kindLabel = item.kindLabel || getFallbackLevelLabel(item.level);
+            const headingMatch = /^H(\d+)$/.exec(kindLabel);
+            const kindTitle =
+              kindLabel === 'Part' || kindLabel === 'P'
+                ? t('sidebar:outline.kinds.part')
+                : kindLabel === 'Ch' || kindLabel === 'C'
+                  ? t('sidebar:outline.kinds.chapter')
+                  : kindLabel === 'Frame'
+                    ? t('sidebar:outline.kinds.frame')
+                    : headingMatch
+                      ? t('sidebar:outline.kinds.headingLevel', { level: headingMatch[1] })
+                      : kindLabel;
 
             return (
               <div
@@ -507,7 +528,7 @@ export const DocumentOutlineView: React.FC<DocumentOutlineViewProps> = ({
                   setFocusedId(item.id);
                   setContextMenu({ x: e.clientX, y: e.clientY, item });
                 }}
-                title={`${item.title} (Line ${item.line})`}
+                title={t('sidebar:outline.itemTooltip', { title: item.title, line: item.line })}
               >
                 {hasChildren ? (
                   <button
@@ -521,13 +542,17 @@ export const DocumentOutlineView: React.FC<DocumentOutlineViewProps> = ({
                         toggleNodeCollapsed(item.id);
                       }
                     }}
-                    aria-label={isExpanded ? 'Collapse section' : 'Expand section'}
+                    aria-label={
+                      isExpanded
+                        ? t('sidebar:outline.collapseSection')
+                        : t('sidebar:outline.expandSection')
+                    }
                     title={
                       isFiltering
-                        ? 'Clear filter to collapse or expand sections'
+                        ? t('sidebar:outline.clearFilterToToggle')
                         : isExpanded
-                          ? 'Collapse section'
-                          : 'Expand section'
+                          ? t('sidebar:outline.collapseSection')
+                          : t('sidebar:outline.expandSection')
                     }
                   >
                     {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
@@ -535,10 +560,15 @@ export const DocumentOutlineView: React.FC<DocumentOutlineViewProps> = ({
                 ) : (
                   <span className="outline-chevron-spacer" aria-hidden="true" />
                 )}
-                <span className={`outline-level-badge ${levelClass}`}>{kindLabel}</span>
+                <span className={`outline-level-badge ${levelClass}`} title={kindTitle}>
+                  {kindLabel}
+                </span>
                 <span className="outline-item-title">{item.title}</span>
                 {item.label && (
-                  <span className="outline-item-label-tag" title={`Label: ${item.label}`}>
+                  <span
+                    className="outline-item-label-tag"
+                    title={t('sidebar:outline.labelTooltip', { label: item.label })}
+                  >
                     @{item.label}
                   </span>
                 )}

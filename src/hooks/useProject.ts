@@ -8,12 +8,14 @@ import {
   setProjectCustomCommands,
   extractMacrosFromSource
 } from '../editor/projectContext';
-import { DEFAULT_LATEX_SOURCE } from '../editor/latexData';
-import { DEFAULT_TYPST_SOURCE } from '../editor/typstData';
+import { getDefaultLatexSource, isDefaultLatexSource } from '../editor/latexData';
+import { getDefaultTypstSource, isDefaultTypstSource } from '../editor/typstData';
 import { WorkspaceTab, isProjectAsset, tabIsDirty } from '../types/workspace';
 import type { GitRepositoryInfo } from '../types/git';
 import { reloadWorkspaceTabs } from './gitWorkspaceRefresh';
 import { WorkspaceExportLease } from '../editor/workspaceExportLease';
+import i18n from '../i18n';
+import { translateBackendError } from '../i18n/backendMessages';
 
 interface UseProjectOptions {
   compile: (source: string, engine: EngineType, projectDir?: string | null, mainFile?: string | null) => Promise<void>;
@@ -108,7 +110,7 @@ export function useProject({
   const [templateAssets, setTemplateAssets] = useState<'starter-latex' | 'starter-typst' | null>(null);
   const [projectFiles, setProjectFiles] = useState<FileItem[]>([]);
   const [engine, setEngine] = useState<EngineType>('latex');
-  const [sourceCode, setSourceCodeState] = useState<string>(DEFAULT_LATEX_SOURCE);
+  const [sourceCode, setSourceCodeState] = useState<string>(() => getDefaultLatexSource(i18n.language));
   const [tabs, setTabsState] = useState<WorkspaceTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const tabsRef = useRef<WorkspaceTab[]>([]);
@@ -195,7 +197,12 @@ export function useProject({
     if (workspaceOperationBusy()) return;
     const closing = tabsRef.current.filter(tab => all ? !tab.pinned : others ? tab.id !== id && !tab.pinned : tab.id === id);
     if (closing.some(tabIsDirty)) {
-      const confirmed = await ask('Discard unsaved changes in the tabs being closed?', { title: 'Unsaved Changes', kind: 'warning', okLabel: 'Discard', cancelLabel: 'Cancel' });
+      const confirmed = await ask(i18n.t('editor:project.discardTabsMessage'), {
+        title: i18n.t('editor:project.unsavedChangesTitle'),
+        kind: 'warning',
+        okLabel: i18n.t('editor:project.discard'),
+        cancelLabel: i18n.t('common:actions.cancel'),
+      });
       if (!confirmed) return;
     }
     if (workspaceOperationBusy()) return;
@@ -230,7 +237,12 @@ export function useProject({
     const request = ++fileRequestRef.current;
     const preview = tabsRef.current.find(tab => tab.preview);
     if (preview && tabIsDirty(preview)) {
-      const confirmed = await ask('Discard unsaved changes in the preview tab?', { title: 'Unsaved Changes', kind: 'warning', okLabel: 'Discard', cancelLabel: 'Cancel' });
+      const confirmed = await ask(i18n.t('editor:project.discardPreviewTabMessage'), {
+        title: i18n.t('editor:project.unsavedChangesTitle'),
+        kind: 'warning',
+        okLabel: i18n.t('editor:project.discard'),
+        cancelLabel: i18n.t('common:actions.cancel'),
+      });
       if (!confirmed || request !== fileRequestRef.current) return;
     }
     if (request !== fileRequestRef.current) return;
@@ -252,6 +264,8 @@ export function useProject({
   const projectRootRef = useRef<string | null>(null);
   const mainFilePathRef = useRef<string | null>(null);
   const activeFilePathRef = useRef<string | null>(null);
+  const engineRef = useRef<EngineType>(engine);
+  const sourceCodeRef = useRef<string>(sourceCode);
 
   useEffect(() => {
     projectRootRef.current = projectRoot;
@@ -264,6 +278,38 @@ export function useProject({
   useEffect(() => {
     activeFilePathRef.current = activeFilePath;
   }, [activeFilePath]);
+
+  useEffect(() => {
+    engineRef.current = engine;
+  }, [engine]);
+
+  useEffect(() => {
+    sourceCodeRef.current = sourceCode;
+  }, [sourceCode]);
+
+  useEffect(() => {
+    const handleLanguageChanged = (lng: string) => {
+      if (workspaceOperationBusy() || projectRootRef.current) return;
+      if (tabsRef.current.some(tabIsDirty)) return;
+      const currentSource = sourceCodeRef.current;
+      if (!isDefaultLatexSource(currentSource) && !isDefaultTypstSource(currentSource)) return;
+      const currentEngine = engineRef.current;
+      const nextSource = currentEngine === 'typst'
+        ? getDefaultTypstSource(lng)
+        : getDefaultLatexSource(lng);
+      if (nextSource === currentSource) return;
+      sourceCodeRef.current = nextSource;
+      setSourceCodeState(nextSource);
+      if (tabsRef.current.length > 0) {
+        resetTabs(null, nextSource, currentEngine);
+      }
+    };
+
+    i18n.on('languageChanged', handleLanguageChanged);
+    return () => {
+      i18n.off('languageChanged', handleLanguageChanged);
+    };
+  }, [resetTabs]);
 
   // Refresh project file tree from disk
   const refreshProjectFiles = useCallback(async (dir: string) => {
@@ -308,7 +354,7 @@ export function useProject({
     const root = projectRootRef.current;
     if (!root) return false;
     if (tabsRef.current.some(tabIsDirty)) {
-      toast.error('Cannot refresh after Git update', { description: 'Save or discard unsaved editor changes, then refresh the project.' });
+      toast.error(i18n.t('errors:project.gitRefreshDirtyTitle'), { description: i18n.t('errors:project.gitRefreshDirtyDescription') });
       return false;
     }
 
@@ -351,7 +397,7 @@ export function useProject({
         getCurrentTabs: () => tabsRef.current,
       });
       if (!reloaded.applied) {
-        toast.error('Project refresh was interrupted', { description: 'Unsaved editor changes appeared during refresh and were kept. Refresh again after saving them.' });
+        toast.error(i18n.t('errors:project.gitRefreshInterruptedTitle'), { description: i18n.t('errors:project.gitRefreshInterruptedDescription') });
         return false;
       }
 
@@ -385,14 +431,14 @@ export function useProject({
           activeSourceTabRef.current = source?.id ?? null;
           activeFilePathRef.current = source?.path ?? null;
           setActiveFilePath(source?.path ?? null);
-          setSourceCodeState(source?.content ?? (engine === 'typst' ? DEFAULT_TYPST_SOURCE : DEFAULT_LATEX_SOURCE));
+          setSourceCodeState(source?.content ?? (engine === 'typst' ? getDefaultTypstSource(i18n.language) : getDefaultLatexSource(i18n.language)));
         }
       } else {
         const source = [...reloaded.tabs].reverse().find(tab => tab.kind === 'source');
         activeSourceTabRef.current = source?.id ?? null;
         activeFilePathRef.current = source?.path ?? null;
         setActiveFilePath(source?.path ?? null);
-        setSourceCodeState(source?.content ?? (engine === 'typst' ? DEFAULT_TYPST_SOURCE : DEFAULT_LATEX_SOURCE));
+        setSourceCodeState(source?.content ?? (engine === 'typst' ? getDefaultTypstSource(i18n.language) : getDefaultLatexSource(i18n.language)));
       }
 
       // Apply a changed, valid project configuration while retaining the current settings otherwise.
@@ -420,11 +466,11 @@ export function useProject({
       window.dispatchEvent(new Event('sciencebatch:git-worktree-updated'));
       window.dispatchEvent(new Event('sciencebatch:git-status-changed'));
       if (reloaded.deletedNames.length) {
-        toast.warning('Some open files were removed by the Git update', { description: reloaded.deletedNames.join(', ') });
+        toast.warning(i18n.t('editor:project.gitDeletedOpenFilesWarning'), { description: reloaded.deletedNames.join(', ') });
       }
       return true;
     } catch (error) {
-      toast.error('Unable to refresh project after Git update', { description: 'The project contents could not be read from disk.' });
+      toast.error(i18n.t('errors:project.gitRefreshReadFailedTitle'), { description: i18n.t('errors:project.gitRefreshReadFailedDescription') });
       console.error('Failed to refresh project after Git update:', error);
       return false;
     }
@@ -445,14 +491,14 @@ export function useProject({
           content: sourceCode,
         });
         setTabs(tabsRef.current.map(tab => tab.path === currentActive && tab.kind === 'source' ? { ...tab, savedContent: sourceCode } : tab));
-        toast.success('File saved', { description: currentActive });
+        toast.success(i18n.t('editor:project.fileSaved'), { description: currentActive });
 
         // If a class or style file was modified, re-scan project custom macros
         if (currentActive.endsWith('.cls') || currentActive.endsWith('.sty')) {
           refreshProjectFiles(currentRoot);
         }
       } catch (e) {
-        toast.error('Failed to save file to disk');
+        toast.error(i18n.t('errors:project.saveFailed'));
         console.error(e);
         return;
       }
@@ -487,13 +533,13 @@ export function useProject({
     try {
       const selected = await open({
         multiple: true,
-        title: 'Select Files or Images to Import into Project',
+        title: i18n.t('editor:project.importFilesTitle'),
         filters: [
           {
-            name: 'Project Assets & Sources',
+            name: i18n.t('editor:project.importAssetsFilter'),
             extensions: ['png', 'jpg', 'jpeg', 'svg', 'webp', 'pdf', 'bib', 'cls', 'sty', 'tex', 'typ', 'csv', 'txt'],
           },
-          { name: 'All Files', extensions: ['*'] },
+          { name: i18n.t('editor:project.allFilesFilter'), extensions: ['*'] },
         ],
       });
 
@@ -510,11 +556,15 @@ export function useProject({
       }
 
       await refreshProjectFiles(root);
-      toast.success(`Imported ${paths.length} file(s) into project`);
+      toast.success(
+        paths.length === 1
+          ? i18n.t('editor:project.importedFilesSingular', { count: paths.length })
+          : i18n.t('editor:project.importedFilesPlural', { count: paths.length }),
+      );
     } catch (e) {
       console.error('Import failed:', e);
-      const message = typeof e === 'string' ? e : e instanceof Error ? e.message : String(e);
-      toast.error('Failed to import files into project', { description: message });
+      const message = translateBackendError(e);
+      toast.error(i18n.t('errors:project.importFilesFailed'), { description: message });
     }
   }, [projectRoot, refreshProjectFiles]);
 
@@ -528,7 +578,7 @@ export function useProject({
         const selected = await open({
           directory: true,
           multiple: false,
-          title: 'Open LaTeX or Typst Project Folder',
+          title: i18n.t('editor:project.openProjectFolderTitle'),
         });
 
         if (!selected || typeof selected !== 'string') return false;
@@ -541,7 +591,12 @@ export function useProject({
 
     if (tabsRef.current.some(tabIsDirty)) {
       if (rejectDirty) return false;
-      const confirmed = await ask('Discard unsaved changes before opening another project?', { title: 'Unsaved Changes', kind: 'warning', okLabel: 'Discard and Open', cancelLabel: 'Cancel' });
+      const confirmed = await ask(i18n.t('editor:project.discardOpenProjectMessage'), {
+        title: i18n.t('editor:project.unsavedChangesTitle'),
+        kind: 'warning',
+        okLabel: i18n.t('editor:project.discardAndOpen'),
+        cancelLabel: i18n.t('common:actions.cancel'),
+      });
       if (!confirmed) return false;
     }
 
@@ -551,7 +606,7 @@ export function useProject({
 
     try {
       const files = await refreshProjectFiles(targetPath);
-      const name = targetPath.split(/[/\\]/).filter(Boolean).pop() || 'Project';
+      const name = targetPath.split(/[/\\]/).filter(Boolean).pop() || i18n.t('editor:project.defaultProjectName');
 
       // Check for .sciencebatch.json config
       let detectedEngine: EngineType = 'latex';
@@ -596,7 +651,7 @@ export function useProject({
 
       // Load main file content
       const fullMainPath = `${targetPath}/${detectedMain}`;
-      let contentToLoad = detectedEngine === 'typst' ? DEFAULT_TYPST_SOURCE : DEFAULT_LATEX_SOURCE;
+      let contentToLoad = detectedEngine === 'typst' ? getDefaultTypstSource(i18n.language) : getDefaultLatexSource(i18n.language);
       try {
         contentToLoad = await invoke<string>('read_file_content', { path: fullMainPath });
         setActiveFilePath(fullMainPath);
@@ -611,8 +666,9 @@ export function useProject({
       onEnterEditorMode?.();
       recordRecentProject(targetPath, name, detectedEngine);
 
-      toast.success(`Opened ${name}`, {
-        description: `Engine: ${detectedEngine.toUpperCase()} — Main: ${detectedMain}`,
+      const engineLabel = detectedEngine === 'typst' ? i18n.t('common:engines.typst') : i18n.t('common:engines.latex');
+      toast.success(i18n.t('editor:project.openedProject', { name }), {
+        description: i18n.t('editor:project.openedProjectDescription', { engine: engineLabel, main: detectedMain }),
       });
 
 
@@ -621,14 +677,14 @@ export function useProject({
       try {
         const valid: string[] = await invoke('validate_recent_paths', { paths: [targetPath] });
         if (valid.length === 0) {
-          toast.error('Project folder not found', {
-            description: `The folder "${targetPath}" no longer exists on disk. Removed from recent projects.`,
+          toast.error(i18n.t('errors:project.folderNotFoundTitle'), {
+            description: i18n.t('errors:project.folderNotFoundDescription', { path: targetPath }),
           });
           removeRecentProject(targetPath);
           return false;
         }
       } catch {}
-      toast.error('Failed to open project folder');
+      toast.error(i18n.t('errors:project.openFolderFailed'));
       console.error(err);
       return false;
     }
@@ -651,7 +707,7 @@ export function useProject({
 
       await openFolder(createdFolderPath);
     } catch (err) {
-      toast.error('Error creating project folder');
+      toast.error(i18n.t('errors:project.createFolderError'));
       console.error(err);
     }
   }, [openFolder]);
@@ -666,8 +722,8 @@ export function useProject({
       try {
         const selected = await open({
           multiple: false,
-          title: 'Select LaTeX or Typst Project ZIP Archive',
-          filters: [{ name: 'ZIP Archives (*.zip)', extensions: ['zip'] }],
+          title: i18n.t('editor:project.selectZipArchiveTitle'),
+          filters: [{ name: i18n.t('editor:project.zipArchivesFilter'), extensions: ['zip'] }],
         });
         if (!selected || typeof selected !== 'string') return;
         zipPath = selected;
@@ -682,7 +738,7 @@ export function useProject({
         const selectedFolder = await open({
           directory: true,
           multiple: false,
-          title: 'Select Destination Folder to Extract Project',
+          title: i18n.t('editor:project.selectExtractFolderTitle'),
         });
         if (!selectedFolder || typeof selectedFolder !== 'string') return;
         parentDir = selectedFolder;
@@ -697,7 +753,7 @@ export function useProject({
       projName = fileName.replace(/\.zip$/i, '') || 'ImportedProject';
     }
 
-    const toastId = toast.loading('Extracting and configuring project archive...');
+    const toastId = toast.loading(i18n.t('editor:project.extractingZip'));
     try {
       const importedFolderPath = await invoke<string>('import_project_from_zip', {
         zipPath,
@@ -705,11 +761,11 @@ export function useProject({
         projectName: projName,
       });
 
-      toast.success('Project imported successfully', { id: toastId });
+      toast.success(i18n.t('editor:project.zipImported'), { id: toastId });
       await openFolder(importedFolderPath);
     } catch (err: unknown) {
-      const msg = typeof err === 'string' ? err : err instanceof Error ? err.message : 'Failed to extract project';
-      toast.error('Import Failed', {
+      const msg = translateBackendError(err, null, i18n.t('errors:project.extractFailedFallback'));
+      toast.error(i18n.t('errors:project.importZipFailedTitle'), {
         id: toastId,
         description: msg,
       });
@@ -725,14 +781,14 @@ export function useProject({
     projectRootRef.current = null;
     setTemplateAssets(chosenEngine === 'typst' ? 'starter-typst' : 'starter-latex');
     projectGenerationRef.current += 1;
-    setProjectName('Scratchpad');
+    setProjectName(i18n.t('editor:project.scratchpadName'));
     setActiveFilePath(null);
     activeFilePathRef.current = null;
     setMainFilePath(null);
     mainFilePathRef.current = null;
     setProjectFiles([]);
     setEngine(chosenEngine);
-    const starter = chosenEngine === 'typst' ? DEFAULT_TYPST_SOURCE : DEFAULT_LATEX_SOURCE;
+    const starter = chosenEngine === 'typst' ? getDefaultTypstSource(i18n.language) : getDefaultLatexSource(i18n.language);
     setSourceCodeState(starter);
     resetTabs(null, starter, chosenEngine);
     onEnterEditorMode?.();
@@ -746,8 +802,8 @@ export function useProject({
     setEngine(newEngine);
 
     if (!projectRoot) {
-      if (sourceCode === DEFAULT_LATEX_SOURCE || sourceCode === DEFAULT_TYPST_SOURCE) {
-        const nextSource = newEngine === 'typst' ? DEFAULT_TYPST_SOURCE : DEFAULT_LATEX_SOURCE;
+      if (isDefaultLatexSource(sourceCode) || isDefaultTypstSource(sourceCode)) {
+        const nextSource = newEngine === 'typst' ? getDefaultTypstSource(i18n.language) : getDefaultLatexSource(i18n.language);
         setSourceCodeState(nextSource);
         setTemplateAssets(newEngine === 'typst' ? 'starter-typst' : 'starter-latex');
         resetTabs(null, nextSource, newEngine);
@@ -757,7 +813,8 @@ export function useProject({
       setTemplateAssets(null);
     }
 
-    toast.info(`Typesetting engine set to ${newEngine.toUpperCase()}`);
+    const engineLabel = newEngine === 'typst' ? i18n.t('common:engines.typst') : i18n.t('common:engines.latex');
+    toast.info(i18n.t('editor:project.engineSetTo', { engine: engineLabel }));
 
   }, [engine, projectRoot, sourceCode, resetTabs]);
 
@@ -766,7 +823,12 @@ export function useProject({
     if (workspaceOperationBusy()) return;
     if (tabsRef.current.some(tabIsDirty)) {
       if (rejectDirty) return false;
-      const confirmed = await ask('Discard unsaved changes and close this project?', { title: 'Unsaved Changes', kind: 'warning', okLabel: 'Discard and Close', cancelLabel: 'Cancel' });
+      const confirmed = await ask(i18n.t('editor:project.discardCloseProjectMessage'), {
+        title: i18n.t('editor:project.unsavedChangesTitle'),
+        kind: 'warning',
+        okLabel: i18n.t('editor:project.discardAndClose'),
+        cancelLabel: i18n.t('common:actions.cancel'),
+      });
       if (!confirmed) return;
     }
     if (workspaceOperationBusy()) return;
@@ -810,7 +872,7 @@ export function useProject({
       if (request !== fileRequestRef.current || root !== projectRootRef.current) return;
       await openPreviewTab({ id, path: filePath, name: filePath.split(/[/\\]/).pop() || filePath, kind, pinned: false, preview: !permanent, content, savedContent: content });
     } catch (e) {
-      toast.error('Unable to open file', { description: String(e) });
+      toast.error(i18n.t('errors:project.openFileFailed'), { description: translateBackendError(e) });
     }
   }, [activateTab, openPreviewTab, promoteTab]);
 
@@ -835,7 +897,7 @@ export function useProject({
         content: rawConfig,
       });
       projectConfigRawRef.current = rawConfig;
-      toast.success(`Main entrypoint set to ${relName}`);
+      toast.success(i18n.t('editor:project.mainEntrypointSet', { file: relName }));
     } catch (e) {
       console.error('Failed to update project config:', e);
     }
@@ -853,10 +915,10 @@ export function useProject({
       await invoke('create_project_file', { projectRoot: root, path: fullPath });
       await refreshProjectFiles(root);
       selectFile(fullPath);
-      toast.success(`Created file ${cleanName}`);
+      toast.success(i18n.t('editor:project.createdFile', { name: cleanName }));
     } catch (e) {
-      const message = typeof e === 'string' ? e : e instanceof Error ? e.message : String(e);
-      toast.error('Failed to create file', { description: message });
+      const message = translateBackendError(e);
+      toast.error(i18n.t('errors:project.createFileFailed'), { description: message });
       console.error(e);
     }
   }, [projectRoot, refreshProjectFiles, selectFile]);
@@ -872,10 +934,10 @@ export function useProject({
       if (workspaceOperationBusy()) return;
       await invoke('create_project_directory', { projectRoot: root, path: fullPath });
       await refreshProjectFiles(root);
-      toast.success(`Created folder ${cleanName}`);
+      toast.success(i18n.t('editor:project.createdFolder', { name: cleanName }));
     } catch (e) {
-      const message = typeof e === 'string' ? e : e instanceof Error ? e.message : String(e);
-      toast.error('Failed to create folder', { description: message });
+      const message = translateBackendError(e);
+      toast.error(i18n.t('errors:project.createFolderFailed'), { description: message });
       console.error(e);
     }
   }, [projectRoot, refreshProjectFiles]);
@@ -987,7 +1049,7 @@ export function useProject({
       toast.success(successMessage);
       return true;
     } catch (e) {
-      const message = typeof e === 'string' ? e : e instanceof Error ? e.message : String(e);
+      const message = translateBackendError(e);
       toast.error(errorTitle, { description: message });
       console.error(e);
       return false;
@@ -999,8 +1061,8 @@ export function useProject({
     if (!root || workspaceOperationBusy()) return false;
     const trimmed = newName.trim();
     if (!trimmed || trimmed === '.' || trimmed === '..' || /[/\\]/.test(trimmed)) {
-      toast.error('Invalid name', {
-        description: 'Name cannot be empty, ".", "..", or contain path separators.',
+      toast.error(i18n.t('errors:project.invalidNameTitle'), {
+        description: i18n.t('errors:project.invalidNameDescription'),
       });
       return false;
     }
@@ -1012,7 +1074,13 @@ export function useProject({
     const newPath = parentDir ? `${parentDir}${sep}${trimmed}` : trimmed;
     if (newPath === normalizedOld) return true;
 
-    return relocateProjectPath(root, normalizedOld, newPath, `Renamed to ${trimmed}`, 'Failed to rename');
+    return relocateProjectPath(
+      root,
+      normalizedOld,
+      newPath,
+      i18n.t('editor:project.renamedTo', { name: trimmed }),
+      i18n.t('errors:project.renameFailed'),
+    );
   }, [projectRoot, relocateProjectPath]);
 
   const movePath = useCallback(async (srcPath: string, targetDir: string): Promise<boolean> => {
@@ -1037,12 +1105,18 @@ export function useProject({
     const normTargetSlash = cleanTargetDir.replace(/\\/g, '/');
     const normRootSlash = normalizedRoot.replace(/\\/g, '/');
     const targetLabel = cleanTargetDir === normalizedRoot
-      ? (projectName || normalizedRoot.split(/[/\\]/).pop() || 'project root')
+      ? (projectName || normalizedRoot.split(/[/\\]/).pop() || i18n.t('editor:project.projectRootFallback'))
       : (normTargetSlash.startsWith(`${normRootSlash}/`)
         ? normTargetSlash.slice(normRootSlash.length + 1)
         : normTargetSlash);
 
-    return relocateProjectPath(root, normalizedSrc, newPath, `Moved "${baseName}" to ${targetLabel}`, 'Failed to move');
+    return relocateProjectPath(
+      root,
+      normalizedSrc,
+      newPath,
+      i18n.t('editor:project.movedTo', { name: baseName, target: targetLabel }),
+      i18n.t('errors:project.moveFailed'),
+    );
   }, [projectName, projectRoot, relocateProjectPath]);
 
   const deletePath = useCallback(async (path: string, isDir = false): Promise<boolean> => {
@@ -1066,17 +1140,17 @@ export function useProject({
     });
 
     const basePrompt = isDir
-      ? `Move folder "${itemName}" and its contents to Trash? You can restore it from your system Trash.`
-      : `Move "${itemName}" to Trash? You can restore it from your system Trash.`;
+      ? i18n.t('editor:project.moveFolderTrashPrompt', { name: itemName })
+      : i18n.t('editor:project.moveFileTrashPrompt', { name: itemName });
     const message = hasDirtyAffected
-      ? `${basePrompt}\n\nUnsaved changes in open editor tabs for this ${isDir ? 'folder' : 'file'} will be discarded.`
+      ? `${basePrompt}\n\n${isDir ? i18n.t('editor:project.moveFolderTrashDirtySuffix') : i18n.t('editor:project.moveFileTrashDirtySuffix')}`
       : basePrompt;
 
     const confirmed = await ask(message, {
-      title: isDir ? 'Move Folder to Trash' : 'Move File to Trash',
+      title: isDir ? i18n.t('editor:project.moveFolderTrashTitle') : i18n.t('editor:project.moveFileTrashTitle'),
       kind: hasDirtyAffected ? 'warning' : 'info',
-      okLabel: 'Move to Trash',
-      cancelLabel: 'Cancel',
+      okLabel: i18n.t('editor:project.moveToTrashAction'),
+      cancelLabel: i18n.t('common:actions.cancel'),
     });
     if (!confirmed || workspaceOperationBusy()) return false;
 
@@ -1137,11 +1211,11 @@ export function useProject({
       }
 
       await refreshProjectFiles(root);
-      toast.success(`Moved "${itemName}" to Trash`);
+      toast.success(i18n.t('editor:project.movedToTrash', { name: itemName }));
       return true;
     } catch (e) {
-      const errMsg = typeof e === 'string' ? e : e instanceof Error ? e.message : String(e);
-      toast.error('Failed to move to Trash', { description: errMsg });
+      const errMsg = translateBackendError(e);
+      toast.error(i18n.t('errors:project.moveToTrashFailed'), { description: errMsg });
       console.error(e);
       return false;
     }
@@ -1195,11 +1269,11 @@ export function useProject({
       if (!isDir) {
         await selectFile(destPath);
       }
-      toast.success(`Duplicated as ${destPath.split(/[/\\]/).pop() || candidate}`);
+      toast.success(i18n.t('editor:project.duplicatedAs', { name: destPath.split(/[/\\]/).pop() || candidate }));
       return destPath;
     } catch (e) {
-      const message = typeof e === 'string' ? e : e instanceof Error ? e.message : String(e);
-      toast.error('Failed to duplicate', { description: message });
+      const message = translateBackendError(e);
+      toast.error(i18n.t('errors:project.duplicateFailed'), { description: message });
       console.error(e);
       return null;
     }
@@ -1209,8 +1283,8 @@ export function useProject({
     try {
       await invoke('reveal_in_file_manager', { path });
     } catch (e) {
-      const message = typeof e === 'string' ? e : e instanceof Error ? e.message : String(e);
-      toast.error('Failed to reveal in file manager', { description: message });
+      const message = translateBackendError(e);
+      toast.error(i18n.t('errors:project.revealFailed'), { description: message });
       console.error(e);
     }
   }, []);
@@ -1244,9 +1318,9 @@ export function useProject({
       }
       await invoke('workspace_apply_disk', { projectRoot: root, file: relativeFile, content, expectedSha256, allowedRoots });
     } catch (error) {
-      const message = String(error);
-      const code = message.match(/^([a-z][a-z0-9_.-]+):/)?.[1] ?? 'io.write';
-      return { ok: false as const, code, message };
+      const rawMessage = String(error);
+      const code = rawMessage.match(/^([a-z][a-z0-9_.-]+):/)?.[1] ?? 'io.write';
+      return { ok: false as const, code, message: translateBackendError(rawMessage, code) };
     }
     if (root !== projectRootRef.current || projectGenerationRef.current !== generation
       || documentRevisionsRef.current.get(documentId) !== revision || !tabsRef.current.some(item => item.id === documentId)) {

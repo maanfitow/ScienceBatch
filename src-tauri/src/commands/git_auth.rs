@@ -107,7 +107,7 @@ impl OAuthProvider {
             "github" => Ok(Self::GitHub),
             "gitlab" => Ok(Self::GitLab),
             other => Err(format!(
-                "Unsupported Git provider '{other}'. Expected 'github' or 'gitlab'."
+                "git_auth.unsupported_provider: Unsupported Git provider '{other}'. Expected 'github' or 'gitlab'."
             )),
         }
     }
@@ -214,7 +214,7 @@ impl SessionStore for KeyringSessionStore {
             let entry_key = provider.entry_key();
             tokio::task::spawn_blocking(move || load_keyring_session_sync(entry_key))
                 .await
-                .map_err(|error| format!("Keyring worker task failed: {error}"))?
+                .map_err(|error| format!("git_auth.keyring_failed: Keyring worker task failed: {error}"))?
         })
     }
 
@@ -227,7 +227,7 @@ impl SessionStore for KeyringSessionStore {
             let entry_key = provider.entry_key();
             tokio::task::spawn_blocking(move || save_keyring_session_sync(entry_key, &session))
                 .await
-                .map_err(|error| format!("Keyring worker task failed: {error}"))?
+                .map_err(|error| format!("git_auth.keyring_failed: Keyring worker task failed: {error}"))?
         })
     }
 
@@ -239,41 +239,41 @@ impl SessionStore for KeyringSessionStore {
             let entry_key = provider.entry_key();
             tokio::task::spawn_blocking(move || delete_keyring_session_sync(entry_key))
                 .await
-                .map_err(|error| format!("Keyring worker task failed: {error}"))?
+                .map_err(|error| format!("git_auth.keyring_failed: Keyring worker task failed: {error}"))?
         })
     }
 }
 
 fn load_keyring_session_sync(entry_key: &str) -> Result<Option<StoredOAuthSession>, String> {
     let entry = keyring::Entry::new(KEYRING_SERVICE, entry_key)
-        .map_err(|error| format!("Failed to open OS keyring entry: {error}"))?;
+        .map_err(|error| format!("git_auth.keyring_failed: Failed to open OS keyring entry: {error}"))?;
     match entry.get_password() {
         Ok(raw) => {
             let session: StoredOAuthSession = serde_json::from_str(&raw)
-                .map_err(|error| format!("Stored OAuth session in OS keyring is corrupted: {error}"))?;
+                .map_err(|error| format!("git_auth.keyring_failed: Stored OAuth session in OS keyring is corrupted: {error}"))?;
             Ok(Some(session))
         }
         Err(keyring::Error::NoEntry) => Ok(None),
-        Err(error) => Err(format!("Failed to read OAuth session from OS keyring: {error}")),
+        Err(error) => Err(format!("git_auth.keyring_failed: Failed to read OAuth session from OS keyring: {error}")),
     }
 }
 
 fn save_keyring_session_sync(entry_key: &str, session: &StoredOAuthSession) -> Result<(), String> {
     let payload = serde_json::to_string(session)
-        .map_err(|error| format!("Failed to serialize OAuth session: {error}"))?;
+        .map_err(|error| format!("git_auth.keyring_failed: Failed to serialize OAuth session: {error}"))?;
     let entry = keyring::Entry::new(KEYRING_SERVICE, entry_key)
-        .map_err(|error| format!("Failed to open OS keyring entry: {error}"))?;
+        .map_err(|error| format!("git_auth.keyring_failed: Failed to open OS keyring entry: {error}"))?;
     entry
         .set_password(&payload)
-        .map_err(|error| format!("Failed to store OAuth session in OS keyring: {error}"))
+        .map_err(|error| format!("git_auth.keyring_failed: Failed to store OAuth session in OS keyring: {error}"))
 }
 
 fn delete_keyring_session_sync(entry_key: &str) -> Result<(), String> {
     let entry = keyring::Entry::new(KEYRING_SERVICE, entry_key)
-        .map_err(|error| format!("Failed to open OS keyring entry: {error}"))?;
+        .map_err(|error| format!("git_auth.keyring_failed: Failed to open OS keyring entry: {error}"))?;
     match entry.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-        Err(error) => Err(format!("Failed to delete OAuth session from OS keyring: {error}")),
+        Err(error) => Err(format!("git_auth.keyring_failed: Failed to delete OAuth session from OS keyring: {error}")),
     }
 }
 
@@ -311,7 +311,7 @@ fn resolve_client_id(
         return Ok(explicit);
     }
     Err(format!(
-        "{} OAuth client ID is not configured. Set {} or provide a client ID in ScienceBatch Git Account settings.",
+        "git_auth.missing_client_id: {} OAuth client ID is not configured. Set {} or provide a client ID in ScienceBatch Git Account settings.",
         provider.display_name(),
         provider.env_var_name()
     ))
@@ -351,7 +351,7 @@ fn build_oauth_http_client() -> Result<reqwest::Client, String> {
         .timeout(OAUTH_HTTP_TIMEOUT)
         .user_agent(USER_AGENT)
         .build()
-        .map_err(|error| format!("Failed to initialize OAuth HTTP client: {error}"))
+        .map_err(|error| format!("git_auth.request_failed: Failed to initialize OAuth HTTP client: {error}"))
 }
 
 fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
@@ -368,14 +368,14 @@ fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
 fn random_base64url(num_bytes: usize) -> Result<String, String> {
     let mut bytes = vec![0u8; num_bytes];
     getrandom::fill(&mut bytes)
-        .map_err(|error| format!("Failed to generate cryptographically secure random bytes: {error}"))?;
+        .map_err(|error| format!("git_auth.crypto_failed: Failed to generate cryptographically secure random bytes: {error}"))?;
     Ok(URL_SAFE_NO_PAD.encode(bytes))
 }
 
 fn random_hex(num_bytes: usize) -> Result<String, String> {
     let mut bytes = vec![0u8; num_bytes];
     getrandom::fill(&mut bytes)
-        .map_err(|error| format!("Failed to generate cryptographically secure random bytes: {error}"))?;
+        .map_err(|error| format!("git_auth.crypto_failed: Failed to generate cryptographically secure random bytes: {error}"))?;
     let mut hex = String::with_capacity(num_bytes * 2);
     for byte in bytes {
         use std::fmt::Write as _;
@@ -524,36 +524,36 @@ async fn start_github_device_flow_with(
         .body(body)
         .send()
         .await
-        .map_err(|error| format!("Failed to reach GitHub OAuth device endpoint: {error}"))?;
+        .map_err(|error| format!("git_auth.request_failed: Failed to reach GitHub OAuth device endpoint: {error}"))?;
     let status = response.status();
     let bytes = response
         .bytes()
         .await
-        .map_err(|error| format!("Failed to read GitHub OAuth device response: {error}"))?;
+        .map_err(|error| format!("git_auth.request_failed: Failed to read GitHub OAuth device response: {error}"))?;
     let parsed: GitHubDeviceCodeResponse = serde_json::from_slice(&bytes).map_err(|error| {
-        format!("Invalid JSON from GitHub device endpoint (HTTP {status}): {error}")
+        format!("git_auth.invalid_response: Invalid JSON from GitHub device endpoint (HTTP {status}): {error}")
     })?;
     if !status.is_success() {
         let detail = parsed
             .error_description
             .or(parsed.error)
             .unwrap_or_else(|| format!("HTTP {}", status.as_u16()));
-        return Err(format!("GitHub device flow failed: {detail}"));
+        return Err(format!("git_auth.oauth_failed: GitHub device flow failed: {detail}"));
     }
     if let Some(error) = parsed.error {
         let detail = parsed.error_description.unwrap_or(error);
-        return Err(format!("GitHub device flow failed: {detail}"));
+        return Err(format!("git_auth.oauth_failed: GitHub device flow failed: {detail}"));
     }
     Ok(GitHubDeviceFlowStart {
         device_code: parsed
             .device_code
-            .ok_or_else(|| "GitHub response missing device_code.".to_string())?,
+            .ok_or_else(|| "git_auth.invalid_response: GitHub response missing device_code.".to_string())?,
         user_code: parsed
             .user_code
-            .ok_or_else(|| "GitHub response missing user_code.".to_string())?,
+            .ok_or_else(|| "git_auth.invalid_response: GitHub response missing user_code.".to_string())?,
         verification_uri: parsed
             .verification_uri
-            .ok_or_else(|| "GitHub response missing verification_uri.".to_string())?,
+            .ok_or_else(|| "git_auth.invalid_response: GitHub response missing verification_uri.".to_string())?,
         expires_in: parsed.expires_in.unwrap_or(900),
         interval: parsed.interval.unwrap_or(5),
     })
@@ -581,7 +581,7 @@ async fn poll_github_device_flow_with(
 ) -> Result<GitHubDevicePollResult, String> {
     let device_code = device_code.trim();
     if device_code.is_empty() {
-        return Err("GitHub device_code cannot be empty.".to_string());
+        return Err("git_auth.invalid_request: GitHub device_code cannot be empty.".to_string());
     }
     let client_id = resolve_client_id(OAuthProvider::GitHub, client_id)?;
     let client = build_oauth_http_client()?;
@@ -602,14 +602,14 @@ async fn poll_github_device_flow_with(
         .body(body)
         .send()
         .await
-        .map_err(|error| format!("Failed to poll GitHub OAuth token endpoint: {error}"))?;
+        .map_err(|error| format!("git_auth.request_failed: Failed to poll GitHub OAuth token endpoint: {error}"))?;
     let status = response.status();
     let bytes = response
         .bytes()
         .await
-        .map_err(|error| format!("Failed to read GitHub token poll response: {error}"))?;
+        .map_err(|error| format!("git_auth.request_failed: Failed to read GitHub token poll response: {error}"))?;
     let parsed: GitHubAccessTokenResponse = serde_json::from_slice(&bytes).map_err(|error| {
-        format!("Invalid JSON from GitHub token endpoint (HTTP {status}): {error}")
+        format!("git_auth.invalid_response: Invalid JSON from GitHub token endpoint (HTTP {status}): {error}")
     })?;
 
     if let Some(error_code) = parsed.error.as_deref() {
@@ -630,28 +630,34 @@ async fn poll_github_device_flow_with(
                 status: "expired".to_string(),
                 account: None,
                 interval: None,
-                error: parsed
-                    .error_description
-                    .or_else(|| Some("Device authorization code expired.".to_string())),
+                error: Some(format!(
+                    "git_auth.expired: {}",
+                    parsed
+                        .error_description
+                        .unwrap_or_else(|| "Device authorization code expired.".to_string())
+                )),
             }),
             "access_denied" => Ok(GitHubDevicePollResult {
                 status: "denied".to_string(),
                 account: None,
                 interval: None,
-                error: parsed
-                    .error_description
-                    .or_else(|| Some("Authorization was denied by the user.".to_string())),
+                error: Some(format!(
+                    "git_auth.denied: {}",
+                    parsed
+                        .error_description
+                        .unwrap_or_else(|| "Authorization was denied by the user.".to_string())
+                )),
             }),
             other => {
                 let detail = parsed.error_description.unwrap_or_else(|| other.to_string());
-                Err(format!("GitHub OAuth error ({other}): {detail}"))
+                Err(format!("git_auth.oauth_failed: GitHub OAuth error ({other}): {detail}"))
             }
         };
     }
 
     if !status.is_success() {
         return Err(format!(
-            "GitHub OAuth token endpoint returned HTTP {}.",
+            "git_auth.http_status: GitHub OAuth token endpoint returned HTTP {}.",
             status.as_u16()
         ));
     }
@@ -660,7 +666,7 @@ async fn poll_github_device_flow_with(
         .access_token
         .map(|token| sanitize_single_line(&token))
         .filter(|token| !token.is_empty())
-        .ok_or_else(|| "GitHub token response did not include an access token.".to_string())?;
+        .ok_or_else(|| "git_auth.invalid_response: GitHub token response did not include an access token.".to_string())?;
 
     let user = fetch_github_user(&client, &endpoints.github_api_base, &access_token).await?;
     let session = StoredOAuthSession {
@@ -697,20 +703,20 @@ async fn fetch_github_user(
         .bearer_auth(access_token)
         .send()
         .await
-        .map_err(|error| format!("Failed to fetch GitHub user profile: {error}"))?;
+        .map_err(|error| format!("git_auth.request_failed: Failed to fetch GitHub user profile: {error}"))?;
     let status = response.status();
     let bytes = response
         .bytes()
         .await
-        .map_err(|error| format!("Failed to read GitHub user profile response: {error}"))?;
+        .map_err(|error| format!("git_auth.request_failed: Failed to read GitHub user profile response: {error}"))?;
     if !status.is_success() {
         return Err(format!(
-            "GitHub user profile request failed with HTTP {}.",
+            "git_auth.http_status: GitHub user profile request failed with HTTP {}.",
             status.as_u16()
         ));
     }
     serde_json::from_slice(&bytes)
-        .map_err(|error| format!("Failed to parse GitHub user profile: {error}"))
+        .map_err(|error| format!("git_auth.invalid_response: Failed to parse GitHub user profile: {error}"))
 }
 
 #[tauri::command]
@@ -723,7 +729,7 @@ pub async fn start_gitlab_pkce_flow(
         &KeyringSessionStore,
         |auth_url| {
             open::that_detached(auth_url)
-                .map_err(|error| format!("Failed to open system browser for GitLab sign-in: {error}"))
+                .map_err(|error| format!("git_auth.browser_open_failed: Failed to open system browser for GitLab sign-in: {error}"))
         },
         PKCE_CALLBACK_TIMEOUT,
     )
@@ -747,10 +753,10 @@ where
 
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
-        .map_err(|error| format!("Failed to bind local OAuth callback listener: {error}"))?;
+        .map_err(|error| format!("git_auth.callback_listener_failed: Failed to bind local OAuth callback listener: {error}"))?;
     let port = listener
         .local_addr()
-        .map_err(|error| format!("Failed to inspect local OAuth callback port: {error}"))?
+        .map_err(|error| format!("git_auth.callback_listener_failed: Failed to inspect local OAuth callback port: {error}"))?
         .port();
     let redirect_uri = format!("http://127.0.0.1:{port}/callback");
 
@@ -771,7 +777,7 @@ where
         wait_for_pkce_callback(&listener, &expected_state),
     )
     .await
-    .map_err(|_| "GitLab sign-in timed out after 180 seconds waiting for browser callback.".to_string())??;
+    .map_err(|_| "git_auth.timeout: GitLab sign-in timed out after 180 seconds waiting for browser callback.".to_string())??;
 
     let client = build_oauth_http_client()?;
     let token_url = format!(
@@ -792,28 +798,28 @@ where
         .body(token_body)
         .send()
         .await
-        .map_err(|error| format!("Failed to exchange GitLab authorization code: {error}"))?;
+        .map_err(|error| format!("git_auth.request_failed: Failed to exchange GitLab authorization code: {error}"))?;
     let status = response.status();
     let bytes = response
         .bytes()
         .await
-        .map_err(|error| format!("Failed to read GitLab OAuth token response: {error}"))?;
+        .map_err(|error| format!("git_auth.request_failed: Failed to read GitLab OAuth token response: {error}"))?;
     let parsed: GitLabTokenResponse = serde_json::from_slice(&bytes).map_err(|error| {
-        format!("Invalid JSON from GitLab token endpoint (HTTP {status}): {error}")
+        format!("git_auth.invalid_response: Invalid JSON from GitLab token endpoint (HTTP {status}): {error}")
     })?;
     if !status.is_success() || parsed.error.is_some() {
         let detail = parsed
             .error_description
             .or(parsed.error)
             .unwrap_or_else(|| format!("HTTP {}", status.as_u16()));
-        return Err(format!("GitLab token exchange failed: {detail}"));
+        return Err(format!("git_auth.oauth_failed: GitLab token exchange failed: {detail}"));
     }
 
     let access_token = parsed
         .access_token
         .map(|token| sanitize_single_line(&token))
         .filter(|token| !token.is_empty())
-        .ok_or_else(|| "GitLab token response did not include an access token.".to_string())?;
+        .ok_or_else(|| "git_auth.invalid_response: GitLab token response did not include an access token.".to_string())?;
     let refresh_token = parsed
         .refresh_token
         .map(|token| sanitize_single_line(&token))
@@ -847,7 +853,7 @@ async fn wait_for_pkce_callback(
         let (mut stream, _) = listener
             .accept()
             .await
-            .map_err(|error| format!("Failed to accept local OAuth callback connection: {error}"))?;
+            .map_err(|error| format!("git_auth.callback_listener_failed: Failed to accept local OAuth callback connection: {error}"))?;
         let mut buf = vec![0u8; 8192];
         let read_len = match tokio::time::timeout(Duration::from_secs(5), stream.read(&mut buf)).await
         {
@@ -883,7 +889,12 @@ async fn wait_for_pkce_callback(
                 escape_html(desc)
             );
             let _ = send_html_response(&mut stream, "400 Bad Request", &body).await;
-            return Err(format!("GitLab authorization failed: {desc}"));
+            let code_prefix = if err == "access_denied" {
+                "git_auth.denied"
+            } else {
+                "git_auth.oauth_failed"
+            };
+            return Err(format!("{code_prefix}: GitLab authorization failed: {desc}"));
         }
 
         let returned_state = params.get("state").map(String::as_str).unwrap_or("");
@@ -894,7 +905,7 @@ async fn wait_for_pkce_callback(
                 "<!doctype html><html><body><p>ScienceBatch sign-in failed: invalid OAuth state.</p></body></html>",
             )
             .await;
-            return Err("GitLab OAuth callback failed state verification.".to_string());
+            return Err("git_auth.invalid_state: GitLab OAuth callback failed state verification.".to_string());
         }
 
         let Some(code) = params.get("code").filter(|c| !c.is_empty()) else {
@@ -904,7 +915,7 @@ async fn wait_for_pkce_callback(
                 "<!doctype html><html><body><p>ScienceBatch sign-in failed: missing authorization code.</p></body></html>",
             )
             .await;
-            return Err("GitLab OAuth callback did not include an authorization code.".to_string());
+            return Err("git_auth.missing_code: GitLab OAuth callback did not include an authorization code.".to_string());
         };
 
         let _ = send_html_response(
@@ -969,20 +980,20 @@ async fn fetch_gitlab_user(
         .bearer_auth(access_token)
         .send()
         .await
-        .map_err(|error| format!("Failed to fetch GitLab user profile: {error}"))?;
+        .map_err(|error| format!("git_auth.request_failed: Failed to fetch GitLab user profile: {error}"))?;
     let status = response.status();
     let bytes = response
         .bytes()
         .await
-        .map_err(|error| format!("Failed to read GitLab user profile response: {error}"))?;
+        .map_err(|error| format!("git_auth.request_failed: Failed to read GitLab user profile response: {error}"))?;
     if !status.is_success() {
         return Err(format!(
-            "GitLab user profile request failed with HTTP {}.",
+            "git_auth.http_status: GitLab user profile request failed with HTTP {}.",
             status.as_u16()
         ));
     }
     serde_json::from_slice(&bytes)
-        .map_err(|error| format!("Failed to parse GitLab user profile: {error}"))
+        .map_err(|error| format!("git_auth.invalid_response: Failed to parse GitLab user profile: {error}"))
 }
 
 async fn refresh_gitlab_session_if_needed(
@@ -1029,14 +1040,14 @@ async fn refresh_gitlab_session_if_needed(
         .body(body)
         .send()
         .await
-        .map_err(|error| format!("Failed to refresh GitLab OAuth token: {error}"))?;
+        .map_err(|error| format!("git_auth.request_failed: Failed to refresh GitLab OAuth token: {error}"))?;
     let status = response.status();
     let bytes = response
         .bytes()
         .await
-        .map_err(|error| format!("Failed to read GitLab token refresh response: {error}"))?;
+        .map_err(|error| format!("git_auth.request_failed: Failed to read GitLab token refresh response: {error}"))?;
     let parsed: GitLabTokenResponse = serde_json::from_slice(&bytes).map_err(|error| {
-        format!("Invalid JSON from GitLab refresh endpoint (HTTP {status}): {error}")
+        format!("git_auth.invalid_response: Invalid JSON from GitLab refresh endpoint (HTTP {status}): {error}")
     })?;
     if !status.is_success() || parsed.error.is_some() {
         let detail = parsed
@@ -1044,7 +1055,7 @@ async fn refresh_gitlab_session_if_needed(
             .or(parsed.error)
             .unwrap_or_else(|| format!("HTTP {}", status.as_u16()));
         return Err(format!(
-            "GitLab session refresh failed ({detail}). Please sign in again."
+            "git_auth.refresh_failed: GitLab session refresh failed ({detail}). Please sign in again."
         ));
     }
 
@@ -1052,7 +1063,7 @@ async fn refresh_gitlab_session_if_needed(
         .access_token
         .map(|token| sanitize_single_line(&token))
         .filter(|token| !token.is_empty())
-        .ok_or_else(|| "GitLab refresh response did not include an access token.".to_string())?;
+        .ok_or_else(|| "git_auth.invalid_response: GitLab refresh response did not include an access token.".to_string())?;
     let new_refresh_token = parsed
         .refresh_token
         .map(|token| sanitize_single_line(&token))
@@ -1081,7 +1092,7 @@ async fn load_active_session(
 ) -> Result<StoredOAuthSession, String> {
     let session = store.load(provider).await?.ok_or_else(|| {
         format!(
-            "Not signed in to {}. Sign in first from Git Accounts.",
+            "git_auth.not_signed_in: Not signed in to {}. Sign in first from Git Accounts.",
             provider.display_name()
         )
     })?;
@@ -1120,20 +1131,20 @@ async fn list_git_provider_repositories_with(
                 .bearer_auth(&session.access_token)
                 .send()
                 .await
-                .map_err(|error| format!("Failed to list GitHub repositories: {error}"))?;
+                .map_err(|error| format!("git_auth.request_failed: Failed to list GitHub repositories: {error}"))?;
             let status = response.status();
             let bytes = response
                 .bytes()
                 .await
-                .map_err(|error| format!("Failed to read GitHub repositories response: {error}"))?;
+                .map_err(|error| format!("git_auth.request_failed: Failed to read GitHub repositories response: {error}"))?;
             if !status.is_success() {
                 return Err(format!(
-                    "GitHub repository list failed with HTTP {}.",
+                    "git_auth.http_status: GitHub repository list failed with HTTP {}.",
                     status.as_u16()
                 ));
             }
             let items: Vec<GitHubRepoApiItem> = serde_json::from_slice(&bytes)
-                .map_err(|error| format!("Failed to parse GitHub repositories response: {error}"))?;
+                .map_err(|error| format!("git_auth.invalid_response: Failed to parse GitHub repositories response: {error}"))?;
             Ok(items
                 .into_iter()
                 .map(|repo| GitProviderRepo {
@@ -1158,20 +1169,20 @@ async fn list_git_provider_repositories_with(
                 .bearer_auth(&session.access_token)
                 .send()
                 .await
-                .map_err(|error| format!("Failed to list GitLab projects: {error}"))?;
+                .map_err(|error| format!("git_auth.request_failed: Failed to list GitLab projects: {error}"))?;
             let status = response.status();
             let bytes = response
                 .bytes()
                 .await
-                .map_err(|error| format!("Failed to read GitLab projects response: {error}"))?;
+                .map_err(|error| format!("git_auth.request_failed: Failed to read GitLab projects response: {error}"))?;
             if !status.is_success() {
                 return Err(format!(
-                    "GitLab project list failed with HTTP {}.",
+                    "git_auth.http_status: GitLab project list failed with HTTP {}.",
                     status.as_u16()
                 ));
             }
             let items: Vec<GitLabProjectApiItem> = serde_json::from_slice(&bytes)
-                .map_err(|error| format!("Failed to parse GitLab projects response: {error}"))?;
+                .map_err(|error| format!("git_auth.invalid_response: Failed to parse GitLab projects response: {error}"))?;
             Ok(items
                 .into_iter()
                 .map(|project| GitProviderRepo {
@@ -1218,7 +1229,7 @@ async fn create_git_provider_repository_with(
 ) -> Result<GitProviderRepo, String> {
     let name = name.trim();
     if name.is_empty() {
-        return Err("Repository name cannot be empty.".to_string());
+        return Err("git_auth.empty_repo_name: Repository name cannot be empty.".to_string());
     }
     let session = load_active_session(provider, endpoints, store).await?;
     let client = build_oauth_http_client()?;
@@ -1242,7 +1253,7 @@ async fn create_git_provider_repository_with(
                 private,
                 description: description.as_deref(),
             })
-            .map_err(|error| format!("Failed to encode GitHub repository request: {error}"))?;
+            .map_err(|error| format!("git_auth.invalid_request: Failed to encode GitHub repository request: {error}"))?;
             let response = client
                 .post(&url)
                 .header("Accept", "application/vnd.github+json")
@@ -1251,20 +1262,20 @@ async fn create_git_provider_repository_with(
                 .body(payload)
                 .send()
                 .await
-                .map_err(|error| format!("Failed to create GitHub repository: {error}"))?;
+                .map_err(|error| format!("git_auth.request_failed: Failed to create GitHub repository: {error}"))?;
             let status = response.status();
             let bytes = response
                 .bytes()
                 .await
-                .map_err(|error| format!("Failed to read GitHub create repository response: {error}"))?;
+                .map_err(|error| format!("git_auth.request_failed: Failed to read GitHub create repository response: {error}"))?;
             if !status.is_success() {
                 return Err(format!(
-                    "GitHub repository creation failed with HTTP {}.",
+                    "git_auth.http_status: GitHub repository creation failed with HTTP {}.",
                     status.as_u16()
                 ));
             }
             let repo: GitHubRepoApiItem = serde_json::from_slice(&bytes)
-                .map_err(|error| format!("Failed to parse created GitHub repository: {error}"))?;
+                .map_err(|error| format!("git_auth.invalid_response: Failed to parse created GitHub repository: {error}"))?;
             Ok(GitProviderRepo {
                 id: repo.id,
                 name: repo.name,
@@ -1293,7 +1304,7 @@ async fn create_git_provider_repository_with(
                 visibility: if private { "private" } else { "public" },
                 description: description.as_deref(),
             })
-            .map_err(|error| format!("Failed to encode GitLab project request: {error}"))?;
+            .map_err(|error| format!("git_auth.invalid_request: Failed to encode GitLab project request: {error}"))?;
             let response = client
                 .post(&url)
                 .header("Content-Type", "application/json")
@@ -1301,20 +1312,20 @@ async fn create_git_provider_repository_with(
                 .body(payload)
                 .send()
                 .await
-                .map_err(|error| format!("Failed to create GitLab project: {error}"))?;
+                .map_err(|error| format!("git_auth.request_failed: Failed to create GitLab project: {error}"))?;
             let status = response.status();
             let bytes = response
                 .bytes()
                 .await
-                .map_err(|error| format!("Failed to read GitLab create project response: {error}"))?;
+                .map_err(|error| format!("git_auth.request_failed: Failed to read GitLab create project response: {error}"))?;
             if !status.is_success() {
                 return Err(format!(
-                    "GitLab project creation failed with HTTP {}.",
+                    "git_auth.http_status: GitLab project creation failed with HTTP {}.",
                     status.as_u16()
                 ));
             }
             let project: GitLabProjectApiItem = serde_json::from_slice(&bytes)
-                .map_err(|error| format!("Failed to parse created GitLab project: {error}"))?;
+                .map_err(|error| format!("git_auth.invalid_response: Failed to parse created GitLab project: {error}"))?;
             Ok(GitProviderRepo {
                 id: project.id,
                 name: project.name,
@@ -1342,10 +1353,10 @@ impl EphemeralGitCredentialGuard {
         let nonce = random_hex(32)?;
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
-            .map_err(|error| format!("Failed to bind ephemeral Git credential listener: {error}"))?;
+            .map_err(|error| format!("git_auth.credential_listener_failed: Failed to bind ephemeral Git credential listener: {error}"))?;
         let addr = listener
             .local_addr()
-            .map_err(|error| format!("Failed to inspect ephemeral Git credential address: {error}"))?;
+            .map_err(|error| format!("git_auth.credential_listener_failed: Failed to inspect ephemeral Git credential address: {error}"))?;
         let (shutdown_tx, mut shutdown_rx) = oneshot::channel();
         let server_nonce = nonce.clone();
 

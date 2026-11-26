@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useLayoutEffect, useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import '../editor/monacoSetup';
 import Editor, { OnMount, BeforeMount } from '@monaco-editor/react';
 import type * as monacoType from 'monaco-editor';
@@ -19,6 +20,7 @@ import { createWritingEditorBridge } from '../editor/writingBridge';
 import { createWorkspaceAutomationBridge } from '../editor/workspaceAutomationBridge';
 import { getWritingSymbolAdapter } from '../editor/writing/adapters';
 import { registerEditorClipboardCopy } from '../editor/editorClipboard';
+import i18n from '../i18n';
 
 const LARGE_DOCUMENT_INTERACTIVE_LIMIT = 1024 * 1024;
 
@@ -50,7 +52,7 @@ function buildWritingEditorState({
       language,
       editable: eligibleLanguage !== null && !readOnly && !hasMultipleSelections,
       available: false,
-      reason: 'Writing tools are unavailable for documents larger than 1 MiB.',
+      reason: i18n.t('writing:editorState.largeDocument'),
       source: '',
       cursorOffset: 0,
       canAddPackages: false,
@@ -58,14 +60,14 @@ function buildWritingEditorState({
   }
   const context = eligibleLanguage
     ? getWritingSymbolAdapter(eligibleLanguage).classifyContext(source, cursorOffset)
-    : { context: 'blocked' as const, reason: 'Writing tools are available only in editable LaTeX or Typst source files.' };
+    : { context: 'blocked' as const, reason: i18n.t('writing:editorState.editableSourceRequired') };
   const editable = eligibleLanguage !== null && !readOnly && !hasMultipleSelections;
   const available = editable && context.context !== 'blocked';
   return {
     language,
     editable,
     available,
-    reason: available ? '' : readOnly ? 'The editor is temporarily read-only.' : hasMultipleSelections ? 'Writing tools support one selection at a time.' : context.reason || 'Writing tools are available only in a supported source context.',
+    reason: available ? '' : readOnly ? i18n.t('writing:editorState.readOnly') : hasMultipleSelections ? i18n.t('writing:editorState.singleSelectionOnly') : context.reason || i18n.t('writing:editorState.supportedContextRequired'),
     source,
     cursorOffset,
     canAddPackages: canAddPackages && eligibleLanguage === 'latex' && !readOnly,
@@ -116,6 +118,8 @@ export const EditorView: React.FC<EditorViewProps> = ({
   wordWrap,
 }) => {
   const { monacoTheme } = useTheme();
+  const { i18n: reactI18n } = useTranslation('writing');
+  const activeLanguage = reactI18n.language;
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monacoType.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
@@ -143,7 +147,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
   const latestJumpRequestRef = useRef(jumpRequest);
   latestJumpRequestRef.current = jumpRequest;
   const writingListenersRef = useRef<monacoType.IDisposable[]>([]);
-  const writingStateRef = useRef<WritingEditorState>({ language: engine, editable: false, available: false, reason: 'Writing tools are unavailable.', source: value, cursorOffset: 0, canAddPackages: false });
+  const writingStateRef = useRef<WritingEditorState>({ language: engine, editable: false, available: false, reason: i18n.t('writing:editorState.unavailable'), source: value, cursorOffset: 0, canAddPackages: false });
   const writingPropsRef = useRef({ engine, activeFilePath, canAddPackages, onWritingBridgeChange, onAutomationBridgeChange, onCursorLineChange, getDocumentRevision, documentId, isScratchpad });
   const writingContextKey = `${engine}\u0000${documentId}\u0000${activeFilePath ?? ''}\u0000${isScratchpad}\u0000${readOnly}`;
   const writingContextKeyRef = useRef(writingContextKey);
@@ -437,7 +441,10 @@ export const EditorView: React.FC<EditorViewProps> = ({
       monaco.editor.getModel(modelUri)?.dispose();
       modelUrisRef.current.delete(id);
     }
-    clipboardCommandRef.current = registerEditorClipboardCopy(monaco, editor);
+    clipboardCommandRef.current = registerEditorClipboardCopy(monaco, editor, {
+      getCopyFailedTitle: () => i18n.t('errors:clipboard.copyFailed'),
+      getClipboardUnavailableMessage: () => i18n.t('errors:clipboard.textUnavailable'),
+    });
     const writingBridge = createWritingEditorBridge(editor, monaco, {
       documentId: writingPropsRef.current.documentId,
       getDocumentId: () => writingPropsRef.current.documentId,
@@ -747,7 +754,7 @@ export const EditorView: React.FC<EditorViewProps> = ({
     writingStateRef.current = state;
     const bridge = writingBridgeRef.current;
     if (bridge) onWritingBridgeChange?.(bridge, state);
-  }, [activeFilePath, canAddPackages, engine, isScratchpad, onWritingBridgeChange, readOnly]);
+  }, [activeFilePath, activeLanguage, canAddPackages, engine, isScratchpad, onWritingBridgeChange, readOnly]);
 
   const handleEditorChange = (val: string | undefined) => {
     if (readOnlyRef.current) return;

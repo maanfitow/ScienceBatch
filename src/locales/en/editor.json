@@ -1,0 +1,1602 @@
+{
+  "pdf": {
+    "tabs": {
+      "preview": "PDF Preview",
+      "diagnostics": "Logs & Issues"
+    },
+    "contextMenu": {
+      "copyImage": "Copy Image",
+      "selectAll": "Select All",
+      "goToSource": "Go to Source",
+      "doubleClickShortcut": "Double-click",
+      "zoomIn": "Zoom In",
+      "zoomOut": "Zoom Out",
+      "fitToWidth": "Fit to Width",
+      "resetZoom": "Reset Zoom (100%)"
+    },
+    "linkTitlePrefix": "{{modifier}}+Click to follow link",
+    "holdToFollowLink": "Hold {{modifier}} + Click to follow link",
+    "holdToJumpDestination": "Hold {{modifier}} + Click to jump to destination",
+    "jumpAction": "Jump",
+    "noSourceMapping": "No source mapping found at this location",
+    "imageCopied": "Image copied to clipboard",
+    "renderingPages": "Rendering PDF pages...",
+    "retryRendering": "Retry Rendering",
+    "emptyTitle": "Document Not Compiled",
+    "emptyHint": "Press <shortcutTag>{{shortcut}}</shortcutTag> or click <actionTag>{{action}}</actionTag> to preview the compiled PDF.",
+    "compilingInMemory": "Compiling with {{engine}} in memory...",
+    "tectonicEngine": "Tectonic",
+    "pageOf": "Page {{current}} of {{total}}"
+  },
+  "diagnostics": {
+    "errorSingular": "{{count}} Error",
+    "errorPlural": "{{count}} Errors",
+    "warningSingular": "{{count}} Warning",
+    "warningPlural": "{{count}} Warnings",
+    "cleanCompilation": "Clean Compilation",
+    "copyErrorsTooltip": "Copy concise error summary for chat analysis",
+    "copyErrors": "Copy Errors",
+    "copiedBang": "Copied!",
+    "copied": "Copied",
+    "copyRawLogTooltip": "Copy complete compiler log (texput.log)",
+    "copyRawLog": "Copy Raw Log",
+    "recompileTooltip": "Trigger {{engine}} recompilation (Ctrl + S)",
+    "compiling": "Compiling...",
+    "recompile": "Recompile",
+    "typstError": "Typst Error",
+    "latexError": "LaTeX Error",
+    "typstWarning": "Typst Warning",
+    "latexWarning": "LaTeX Warning",
+    "openFileAtLineTooltip": "Open {{file}} at line {{line}}",
+    "openFileTooltip": "Open {{file}}",
+    "jumpToLineTooltip": "Jump to line {{line}}",
+    "lineLabel": "Line {{line}}",
+    "copyErrorTooltip": "Copy this error message",
+    "copyWarningTooltip": "Copy this warning message",
+    "suggestedFix": "Suggested Fix:",
+    "note": "Note:",
+    "emptyTitle": "No Compilation Errors",
+    "emptyDescription": "Your document source code compiled cleanly without any errors or warnings.",
+    "rawLogTitle": "Raw Compiler Log",
+    "copyEntireRawLogTooltip": "Copy entire raw log",
+    "errorsCopied": "Errors summary copied to clipboard",
+    "rawLogCopied": "Complete compiler log copied to clipboard",
+    "copiedToClipboard": "Copied to clipboard",
+    "summaryHeader": "=== {{engine}} Compilation Diagnostics ===",
+    "summaryErrorsSection": "[Errors ({{count}})]",
+    "summaryWarningsSection": "[Warnings ({{count}})]",
+    "summaryLinePrefix": "(Line {{line}}) ",
+    "summarySuggestedFix": "Suggested Fix: {{suggestion}}",
+    "summaryNote": "Note: {{suggestion}}"
+  },
+  "writing": {
+    "categories": {
+      "all": "All categories",
+      "greek": "Greek letters",
+      "operators": "Operators",
+      "relations": "Relations",
+      "arrows": "Arrows",
+      "logic": "Sets and logic",
+      "misc": "Miscellaneous"
+    },
+    "contexts": {
+      "text": "text",
+      "mathInline": "math inline",
+      "mathDisplay": "math display",
+      "mathEnvironment": "math environment",
+      "blocked": "blocked"
+    },
+    "toolbarLabel": "Writing tools",
+    "formattingGroupLabel": "Text formatting",
+    "selectLatexSource": "Select an editable LaTeX source file.",
+    "symbols": "Symbols",
+    "symbolsTooltip": "Browse and insert math symbols",
+    "table": "Table",
+    "tableTooltip": "Create a table",
+    "tableUnavailable": "Table creation is unavailable for this language.",
+    "matrix": "Matrix",
+    "matrixTooltip": "Create a matrix",
+    "matrixUnavailable": "Matrix creation is unavailable for this language.",
+    "editTable": "Edit table",
+    "editMatrix": "Edit matrix",
+    "editTableTooltip": "Edit compatible table at the cursor",
+    "editMatrixTooltip": "Edit compatible matrix at the cursor",
+    "bold": "Bold",
+    "italic": "Italic",
+    "insert": "Insert",
+    "closeWritingTools": "Close writing tools",
+    "boldApplied": "Bold formatting applied.",
+    "boldRemoved": "Bold formatting removed.",
+    "italicApplied": "Italic formatting applied.",
+    "italicRemoved": "Italic formatting removed.",
+    "previewUnavailableExpression": "Preview is unavailable for this expression.",
+    "closePanelBeforeFormatting": "Close the writing panel before formatting text.",
+    "selectEditableSource": "Select an editable source before formatting text.",
+    "sessionNotReady": "Formatting is unavailable because the editor session is not ready.",
+    "selectActiveSourceEditor": "Select an active source editor before formatting text.",
+    "sessionChangedRefresh": "The editor session changed. Retry after it refreshes.",
+    "manualEditRequired": "This structure requires manual editing in the source.",
+    "selectionCannotBeFormatted": "This selection cannot be formatted here.",
+    "editorChangedRetry": "The editor changed. Retry the formatting action.",
+    "editorChangedBeforeApply": "The editor changed before formatting could be applied. Retry the action.",
+    "noCompatibleTable": "No compatible table was found at the cursor.",
+    "noCompatibleMatrix": "No compatible matrix was found at the cursor.",
+    "editorChangedWhileOpen": "The editor changed while this tool was open. Close it and try again.",
+    "editCouldNotBeApplied": "The edit could not be applied because the editor session changed.",
+    "symbolCannotBeInserted": "This symbol cannot be inserted at the current selection.",
+    "editorChangedBeforeSymbol": "The editor changed before the symbol could be inserted.",
+    "unableToGenerateStructure": "Unable to generate this structure.",
+    "selectionCrossesLatexBoundary": "The current selection crosses a LaTeX boundary.",
+    "tablesOnlyInTextMode": "Tables can only be inserted in text mode.",
+    "packagesUnverified": "Package requirements could not be verified automatically.",
+    "packagesAlreadyDeclared": "All required packages are already declared.",
+    "editorChangedBeforePackages": "The editor changed before packages could be added.",
+    "packagesAddedForStructure": "Packages added. Review the generated source, then insert when ready.",
+    "packagesAddedForSymbol": "Packages added. The symbol insertion target has been preserved.",
+    "sessionNoLongerCurrent": "The editor session is no longer current.",
+    "panelChangedRetry": "The editor changed while this panel was open. Close it and retry."
+  },
+  "dialogs": {
+    "insertSymbolTitle": "Insert a symbol",
+    "searchSymbolsLabel": "Search symbols",
+    "searchTypstPlaceholder": "Search by name, identifier, or alias",
+    "searchLatexPlaceholder": "Search by name, command, or alias",
+    "mathSymbolsLabel": "Math symbols",
+    "noMatchingSymbols": "No symbols match this search.",
+    "categoryLabel": "Category",
+    "symbolIllustrationLabel": "{{name}} symbol illustration",
+    "glyphIllustrationTitle": "Glyph illustration only; it is not compiled Typst output and may not match the document font.",
+    "glyphIllustrationNote": "Glyph illustration only. This is not compiled Typst output and may not match the document font.",
+    "unavailableInContext": "Unavailable in this context",
+    "symbolPreviewUnavailable": "Preview unavailable. The LaTeX command will still be inserted.",
+    "requiresPackages": "Requires {{packages}}",
+    "packagesLoadedSuffix": " · loaded",
+    "packagesUncertainSuffix": " · loading could not be verified",
+    "addPackages": "Add packages",
+    "openMainFile": "Open main file",
+    "openMainFileToAddPackages": "Open the main file to add packages.",
+    "selectSymbolHint": "Select a symbol to preview its syntax.",
+    "insertSymbolAria": "Insert {{name}} ({{command}})",
+    "insertSymbolFallbackAria": "Insert symbol",
+    "editTable": "Edit table",
+    "createTable": "Create a table",
+    "editMatrix": "Edit matrix",
+    "createMatrix": "Create a matrix",
+    "builderViewLabel": "Builder view",
+    "buildTab": "Build",
+    "sourceTab": "Source",
+    "dimensions": "Dimensions",
+    "rows": "Rows",
+    "columns": "Columns",
+    "shrinkWarning": "Reducing dimensions will remove populated cells.",
+    "shrinkWarningLocations": "Reducing dimensions will remove populated cells in {{locations}}.",
+    "shrinkRows": "rows {{indexes}}",
+    "shrinkColumns": "columns {{indexes}}",
+    "shrinkAndJoiner": "{{rows}} and {{columns}}",
+    "keepCells": "Keep cells",
+    "confirmReduction": "Confirm reduction",
+    "columnAlignment": "Column alignment",
+    "columnLabel": "Column {{index}}",
+    "columnAlignmentLabel": "Column {{index}} alignment",
+    "alignLeft": "Left",
+    "alignCenter": "Center",
+    "alignRight": "Right",
+    "moreOptions": "More options",
+    "format": "Format",
+    "formatPlain": "Plain",
+    "formatGrid": "Grid",
+    "formatBooktabs": "Booktabs",
+    "boldHeaderRow": "Bold header row",
+    "headerRow": "Header row",
+    "wrapInTable": "Wrap in table environment",
+    "wrapInFigure": "Wrap in figure",
+    "caption": "Caption",
+    "optionalCaption": "Optional caption",
+    "captionIsLatex": "Caption is LaTeX",
+    "label": "Label",
+    "optionalLabel": "Optional label",
+    "captionLiteralNote": "Captions are literal text. Custom numbering and placement are not evaluated.",
+    "matrixDelimiters": "Matrix delimiters",
+    "delimiters": {
+      "none": "None",
+      "parentheses": "Parentheses",
+      "brackets": "Brackets",
+      "braces": "Braces",
+      "singleBars": "Single bars",
+      "doubleBars": "Double bars"
+    },
+    "structureCellsLabel": "Structure cells",
+    "cellHeaderAria": "Row {{row}}, column {{column}}, header",
+    "cellAria": "Row {{row}}, column {{column}}",
+    "typstCellPrefix": "Row {{row}}, column {{column}}",
+    "typstCellError": "Row {{row}}, column {{column}}: {{error}}",
+    "cellTypstMarkupAria": "Row {{row}}, column {{column}}, Typst markup",
+    "cellTextAria": "Row {{row}}, column {{column}}, text",
+    "cellTypstMathAria": "Row {{row}}, column {{column}}, Typst math expression",
+    "cellIsLatexTooltip": "Cell source is LaTeX",
+    "cellIsEscapedTooltip": "Cell content is escaped text",
+    "cellIsTypstTooltip": "Cell content is Typst markup",
+    "cellIsLiteralTooltip": "Cell content is literal text",
+    "toggleLatexInputAria": "Toggle LaTeX input for row {{row}}, column {{column}}",
+    "toggleTypstMarkupAria": "Toggle Typst markup for row {{row}}, column {{column}}",
+    "previewUnavailableWithError": "Preview unavailable: {{error}}",
+    "update": "Update",
+    "tablePreviewLabel": "Table preview",
+    "tableLayoutPreviewLabel": "Table layout preview",
+    "tablePreviewNote": "Layout preview. Final size and font depend on the LaTeX document.",
+    "tablePreviewLatexCellsNote": "Layout preview. Final size and font depend on the LaTeX document. LaTeX cells are shown as source.",
+    "typstCellSingleLineError": "Cell content must stay on one line.",
+    "invalidTypstContent": "Invalid Typst content.",
+    "invalidTypstMath": "Invalid Typst math expression.",
+    "typstSelectionBlocked": "The current selection crosses an unavailable Typst context.",
+    "typstTablesOnlyInMarkup": "Tables can only be inserted in Typst markup.",
+    "typstDialogChangedTryAgain": "The editor changed while this dialog was open. Close it and try again.",
+    "typstDialogChangedRetry": "The editor changed while this dialog was open. Close it and retry.",
+    "confirmDimensionChangeBeforeInsert": "Confirm or cancel the dimension change before inserting.",
+    "editorChangedBeforeStructure": "The editor changed before this structure could be applied.",
+    "typstPreviewNote": "Schematic preview. Final font and size depend on the document rules.",
+    "schematicTablePreviewLabel": "Schematic table preview",
+    "scrollableTablePreviewLabel": "Scrollable table preview",
+    "typstMatrixPreviewLabel": "{{delimiter}} matrix preview"
+  },
+  "project": {
+    "unsavedChangesTitle": "Unsaved Changes",
+    "discardTabsMessage": "Discard unsaved changes in the tabs being closed?",
+    "discardPreviewTabMessage": "Discard unsaved changes in the preview tab?",
+    "discardOpenProjectMessage": "Discard unsaved changes before opening another project?",
+    "discardCloseProjectMessage": "Discard unsaved changes and close this project?",
+    "discard": "Discard",
+    "discardAndOpen": "Discard and Open",
+    "discardAndClose": "Discard and Close",
+    "gitDeletedOpenFilesWarning": "Some open files were removed by the Git update",
+    "fileSaved": "File saved",
+    "importFilesTitle": "Select Files or Images to Import into Project",
+    "importAssetsFilter": "Project Assets & Sources",
+    "allFilesFilter": "All Files",
+    "importedFilesSingular": "Imported {{count}} file into project",
+    "importedFilesPlural": "Imported {{count}} files into project",
+    "openProjectFolderTitle": "Open LaTeX or Typst Project Folder",
+    "defaultProjectName": "Project",
+    "openedProject": "Opened {{name}}",
+    "openedProjectDescription": "Engine: {{engine}} — Main: {{main}}",
+    "selectZipArchiveTitle": "Select LaTeX or Typst Project ZIP Archive",
+    "zipArchivesFilter": "ZIP Archives (*.zip)",
+    "selectExtractFolderTitle": "Select Destination Folder to Extract Project",
+    "extractingZip": "Extracting and configuring project archive...",
+    "zipImported": "Project imported successfully",
+    "scratchpadName": "Scratchpad",
+    "engineSetTo": "Typesetting engine set to {{engine}}",
+    "mainEntrypointSet": "Main entrypoint set to {{file}}",
+    "createdFile": "Created file {{name}}",
+    "createdFolder": "Created folder {{name}}",
+    "renamedTo": "Renamed to {{name}}",
+    "projectRootFallback": "project root",
+    "movedTo": "Moved \"{{name}}\" to {{target}}",
+    "moveFolderTrashTitle": "Move Folder to Trash",
+    "moveFileTrashTitle": "Move File to Trash",
+    "moveFolderTrashPrompt": "Move folder \"{{name}}\" and its contents to Trash? You can restore it from your system Trash.",
+    "moveFileTrashPrompt": "Move \"{{name}}\" to Trash? You can restore it from your system Trash.",
+    "moveFolderTrashDirtySuffix": "Unsaved changes in open editor tabs for this folder will be discarded.",
+    "moveFileTrashDirtySuffix": "Unsaved changes in open editor tabs for this file will be discarded.",
+    "moveToTrashAction": "Move to Trash",
+    "movedToTrash": "Moved \"{{name}}\" to Trash",
+    "duplicatedAs": "Duplicated as {{name}}"
+  },
+  "compiler": {
+    "preparingWorkspace": "Preparing in-memory {{engine}} workspace snapshot...",
+    "compilingWorkspace": "Compiling {{engine}} workspace...",
+    "compilingWorkspaceDescription": "Processing the current editor buffers in memory",
+    "preparingCompiler": "Preparing in-memory {{engine}} compiler...",
+    "compilingDocument": "Compiling {{engine}} document...",
+    "compilingDocumentDescription": "Processing in RAM VFS",
+    "pdfGenerated": "PDF generated",
+    "compileSuccessTitle": "{{engine}} compilation successful",
+    "compileSuccessWarningsSingular": "Rendered with {{count}} warning.",
+    "compileSuccessWarningsPlural": "Rendered with {{count}} warnings.",
+    "compileSuccessDescription": "Document rendered and updated in viewer.",
+    "compilationFailed": "Compilation failed.",
+    "engineErrorTitle": "{{engine}} Error",
+    "checkWorkspaceDiagnosticsSuggestion": "Check the workspace diagnostics and retry compilation.",
+    "checkLogsSuggestion": "Check console logs or retry compilation."
+  },
+  "export": {
+    "savePdfTitle": "Save PDF Document As...",
+    "pdfFilterName": "PDF Document",
+    "pdfSaved": "PDF saved successfully",
+    "pdfDownloaded": "PDF downloaded",
+    "exportZipTitle": "Export Project as ZIP Archive",
+    "zipFilterName": "ZIP Archive",
+    "packagingZip": "Packaging project archive...",
+    "zipExported": "Project archive exported successfully"
+  },
+  "resources": {
+    "untitledWorkspace": "Untitled workspace",
+    "preparingKnown": "Preparing selected known resources.",
+    "detectedReady": "Detected resources are ready.",
+    "downloadPaused": "The download was paused. You can resume it when ready.",
+    "cancelling": "Stopping and collecting the resource worker...",
+    "downloadStillRunning": "The download is still running.",
+    "openDialogAction": "Project Resources…",
+    "packs": {
+      "latexBasic": "LaTeX basic",
+      "latexIeeetran": "IEEEtran article",
+      "latexResumeFonts": "Resume fonts",
+      "typstEngineAssets": "Typst engine assets",
+      "basePackage": "Base package"
+    }
+  },
+  "updates": {
+    "availableTitle": "Update available: v{{version}}",
+    "availableDescription": "A new ScienceBatch release is ready.",
+    "viewDetails": "View Details"
+  },
+  "suggestions": {
+    "latex": {
+      "misplaced_ampersand": "Literal '&' used in text mode. Use '\\&' for an ampersand, or enclose columns inside an alignment environment like 'tabular' or 'align'.",
+      "undefined_control_sequence": "LaTeX command or macro not recognized. Check for typos or verify the required package is imported in the preamble.",
+      "undefined_environment": "Environment '{{env}}' is not recognized. Verify spelling or import the LaTeX package that provides '\\begin{{lb}}{{env}}{{rb}}'.",
+      "undefined_environment_generic": "Environment not recognized. Verify spelling or check that the providing package is imported in the preamble.",
+      "missing_dollar": "Math symbol used in text mode. Wrap formulas inside '$ ... $' for inline math or '\\[ ... \\]' for display math.",
+      "extra_brace_or_dollar": "Unbalanced delimiter or curly brace. Check that every '{' and '$' has a matching closing pair.",
+      "mismatched_env": "Mismatched environment closure: '\\begin{{lb}}{{beginEnv}}{{rb}}' was closed with '\\end{{lb}}{{endEnv}}{{rb}}'. Ensure tags match and are properly nested.",
+      "mismatched_env_generic": "Mismatched environment tags. Ensure each '\\begin{...}' has a matching '\\end{...}'.",
+      "undefined_reference": "Cross-reference key '{{key}}' not found. Ensure a matching '\\label{{lb}}{{key}}{{rb}}' exists in your document.",
+      "undefined_reference_generic": "Cross-reference key not found. Ensure a matching '\\label{...}' anchor exists in your document.",
+      "undefined_citation": "Citation key '{{key}}' not found. Check that the entry exists in your .bib file and matches case-sensitively.",
+      "undefined_citation_generic": "Citation key not found in bibliography (.bib). Verify case sensitivity and bibliography entry keys.",
+      "font_not_found": "Font '{{font}}' was not found by XeTeX. Ensure it is installed on your OS, or load the font by exact file name (e.g. '\\setmainfont{{lb}}{{font}}.otf{{rb}}') if it resides in the project.",
+      "font_not_found_generic": "Font not found by XeTeX. Ensure the font is installed on your OS or specify the exact OpenType/TrueType filename.",
+      "inputenc_ignored": "Tectonic runs on XeTeX which natively supports UTF-8 Unicode. You can safely remove '\\usepackage[utf8]{inputenc}'.",
+      "pagelabels_info": "Informational notice from hyperref. Document outline and page labels will synchronize automatically on subsequent runs.",
+      "option_clash": "Package '{{pkg}}' was loaded multiple times with conflicting options. Declare options globally using '\\PassOptionsToPackage{options}{{lb}}{{pkg}}{{rb}}' before \\documentclass, or consolidate package imports.",
+      "option_clash_generic": "Package was loaded multiple times with conflicting options. Declare options globally using '\\PassOptionsToPackage{options}{package}' before \\documentclass.",
+      "unknown_docclass_caption": "Document class has custom caption formatting that may conflict with the 'caption' package. Configure styling with '\\captionsetup' or suppress the notice with '\\WarningFilter{caption}{Unknown document class}'.",
+      "asset_not_found": "Figure or asset '{{file}}' was not found. Verify the relative path matches your project directory structure.",
+      "asset_not_found_generic": "Figure or asset not found. Verify the relative path matches your project folder structure (e.g. 'figures/image.pdf').",
+      "sty_not_found": "LaTeX package '{{file}}' not found. Verify the package name or place '{{file}}' in your project folder.",
+      "sty_not_found_generic": "LaTeX package (.sty) not found in bundle or project. Verify required package name or place the '.sty' file in your project folder.",
+      "cls_not_found": "Document class '{{file}}' not found. Ensure '{{file}}' is present in your project root directory.",
+      "cls_not_found_generic": "Document class (.cls) file not found. Ensure the custom class file is present in your project directory.",
+      "bib_not_found": "Bibliography database '{{file}}' not found. Verify the file name and path in your project directory.",
+      "bib_not_found_generic": "Bibliography (.bib) file not found. Verify the file name matches your project folder structure.",
+      "graphic_not_found": "Graphic file '{{file}}' not found. Verify the file path matches your project folder structure.",
+      "file_not_found": "File '{{file}}' not found in bundle or project. Verify the file name and relative path.",
+      "float_specifier": "LaTeX float placement specifier '[h]' alone is too restrictive. Use '[htbp]' so LaTeX can position the float at the top or bottom of the column if it does not fit inline.",
+      "usepackage_before_documentclass": "All '\\usepackage{...}' declarations must be placed in the preamble after '\\documentclass{...}' and before '\\begin{document}'.",
+      "fallback_bibtex": "Informational notice: BibLaTeX is using the embedded in-memory BibTeX backend without requiring external Biber.",
+      "empty_bibliography": "No matching entries found in .bib for this category or filter. Comment out this \\printbibliography command if you have no publications of this type."
+    },
+    "typst": {
+      "font_not_found_linux": "Font '{{font}}' is not installed on your Linux system. To install: '{{installCmd}}'. You can also use bundled fonts: 'Libertinus Serif' or 'New Computer Modern', or define a fallback: font: (\"{{font}}\", \"Libertinus Serif\").",
+      "font_not_found_windows": "Font '{{font}}' was not found on your Windows system. Download and install it in Settings > Personalization > Fonts (or right-click > 'Install for all users'). Alternatively, use 'Libertinus Serif' or define a fallback: font: (\"{{font}}\", \"Libertinus Serif\").",
+      "font_not_found_macos": "Font '{{font}}' was not found on macOS. Install it in Font Book or via Homebrew ('brew install --cask font-{{brewName}}'). Alternatively, use 'Libertinus Serif' or define a fallback: font: (\"{{font}}\", \"Libertinus Serif\").",
+      "font_not_found_other": "Font '{{font}}' is not available. Install it on your system or use the bundled font 'Libertinus Serif'.",
+      "equation_numbering": "To cross-reference equations with @label, enable equation numbering by adding: #set math.equation(numbering: \"(1)\") to your document.",
+      "unknown_variable": "Variable '{{name}}' is not defined. Check spelling or declare it with a #let statement: '#let {{name}} = ...'.",
+      "unknown_variable_generic": "Undefined variable. Check spelling or declare it with a #let statement.",
+      "delimiter_mismatch": "Unclosed or mismatched delimiter. Check matching parentheses (), brackets [], or braces {}.",
+      "generic_syntax": "Review Typst syntax or function arguments."
+    }
+  },
+  "compilerProgress": {
+    "compiler": {
+      "starting": "Starting in-memory {{engine}} compiler...",
+      "compiling": "Compiling {{engine}} document in RAM (job {{jobId}})...",
+      "completed": "PDF generated successfully.",
+      "error": "Compilation reported errors.",
+      "cancelled": "Compilation cancelled.",
+      "workspace_started": "Compiling current workspace snapshot ({{jobId}})",
+      "workspace_finished": "Workspace compilation {{status}} ({{jobId}})"
+    },
+    "workspaceFinishedStatuses": {
+      "finished": "finished",
+      "cancelled": "cancelled",
+      "error": "error"
+    }
+  },
+  "linter": {
+    "unexpectedEnd": "Unexpected '\\end{{lb}}{{env}}{{rb}}' without matching '\\begin{{lb}}{{env}}{{rb}}'",
+    "mismatchedEnv": "Mismatched environment: '\\begin{{lb}}{{beginEnv}}{{rb}}' closed by '\\end{{lb}}{{endEnv}}{{rb}}'",
+    "unclosedEnv": "Unclosed LaTeX environment: '\\begin{{lb}}{{env}}{{rb}}' is missing a matching '\\end{{lb}}{{env}}{{rb}}'.",
+    "misplacedAmpersand": "Misplaced alignment tab character '&'. Use '\\&' for a literal ampersand or place inside an alignment environment ('align', 'tabular', 'pmatrix').",
+    "undefinedRef": "Undefined reference anchor: '\\ref{{lb}}{{key}}{{rb}}'. No matching '\\label{{lb}}{{key}}{{rb}}' found in document.",
+    "unescapedUnderscore": "Unescaped underscore '_' in text mode. In LaTeX this triggers '! Missing $ inserted'. Use '\\_' for a literal underscore or wrap in math mode '$ ... $'.",
+    "didYouMeanOne": " Did you mean '\\{{first}}'?",
+    "didYouMeanTwo": " Did you mean '\\{{first}}' or '\\{{second}}'?",
+    "didYouMeanThree": " Did you mean '\\{{first}}', '\\{{second}}', or '\\{{third}}'?",
+    "unknownCommand": "Unknown or misspelled LaTeX command: '\\{{command}}'.{{tip}}"
+  },
+  "codeActions": {
+    "changeToCommand": "Change to '\\{{command}}'",
+    "escapeUnderscore": "Escape as '\\_'",
+    "wrapMathUnderscore": "Wrap in math mode '$_$'",
+    "escapeAmpersand": "Escape as '\\&'"
+  },
+  "completion": {
+    "latex": {
+      "refDetail": "Detected \\label anchor",
+      "refDocumentation": "Cross-reference anchor: {{label}}",
+      "citeDetail": "BibTeX citation entry",
+      "citeDocumentation": "Citation key: {{key}}",
+      "imageDetail": "Project Image Asset",
+      "imageDocumentation": "Relative path: {{path}}",
+      "bibDetail": "Project Bibliography File",
+      "bibDocumentation": "Path: {{path}}",
+      "clsDetail": "Custom Document Class (.cls)",
+      "clsDocumentation": "Local class file: {{path}}",
+      "subfileDetail": "LaTeX Submodule File",
+      "subfileDocumentation": "Include LaTeX file: {{path}}",
+      "environmentDetail": "Environment: {{detail}}",
+      "environmentHeading": "Environment",
+      "customMacroDetail": "Project Macro (Class/Package)",
+      "customMacroDocumentation": "Custom command defined in workspace class (.cls) or style (.sty) file.",
+      "hoverCommandHeading": "LaTeX Command",
+      "hoverEnvironmentHeading": "LaTeX Environment"
+    },
+    "typst": {
+      "symbolDocumentation": "Built-in Typst symbol: {{id}}",
+      "matDetail": "Matrix expression",
+      "matDocumentation": "Creates a matrix in Typst math using commas for columns and semicolons for rows.",
+      "imageDetail": "Project Image Asset",
+      "imageDocumentation": "Insert image path: {{path}}",
+      "bibDetail": "Project Bibliography File (.bib)",
+      "bibDocumentation": "Typst bibliography source: {{path}}",
+      "includeDetail": "Typst Submodule File (.typ)",
+      "includeDocumentation": "Include Typst file: {{path}}",
+      "refDetail": "Typst Cross-reference Target",
+      "refDocumentation": "Reference label: <{{label}}>",
+      "heading1Detail": "Top-level section heading",
+      "heading1Documentation": "Top-level section heading with cross-reference label",
+      "heading2Detail": "Second-level subsection heading",
+      "heading2Documentation": "Second-level subsection heading with cross-reference label",
+      "blockMathDetail": "Display math equation block",
+      "blockMathDocumentation": "Display math equation block with reference label"
+    }
+  },
+  "latexCommands": {
+    "documentclass": {
+      "detail": "Document class",
+      "documentation": "Sets the document type (article, report, book, beamer)."
+    },
+    "usepackage": {
+      "detail": "Import CTAN package",
+      "documentation": "Loads a LaTeX package/extension into the preamble."
+    },
+    "geometry": {
+      "detail": "Page geometry & margins",
+      "documentation": "Configures paper size and page margins via the geometry package (e.g. margin=2.5cm, top=2cm, left=3cm)."
+    },
+    "newtheorem": {
+      "detail": "Define theorem environment",
+      "documentation": "Defines a custom theorem-like environment (amsthm)."
+    },
+    "hypersetup": {
+      "detail": "Configure hyperref links",
+      "documentation": "Sets hyperlink styling and PDF metadata properties via the hyperref package."
+    },
+    "graphicspath": {
+      "detail": "Image search paths",
+      "documentation": "Defines root directories where graphicx will search for image files."
+    },
+    "setlength": {
+      "detail": "Set length parameter",
+      "documentation": "Sets the value of a LaTeX length variable (e.g. \\parindent, \\parskip)."
+    },
+    "newcommand": {
+      "detail": "Define custom macro",
+      "documentation": "Creates a new user-defined LaTeX command macro."
+    },
+    "renewcommand": {
+      "detail": "Redefine existing macro",
+      "documentation": "Overwrites an existing LaTeX command macro."
+    },
+    "DeclareRobustCommand": {
+      "detail": "Define robust macro",
+      "documentation": "Creates a robust macro that will not expand prematurely in moving arguments."
+    },
+    "IEEEoverridecommandlockouts": {
+      "detail": "IEEEtran unlock commands",
+      "documentation": "Unlocks commands in IEEEtran to enable funding acknowledgments in title footnotes."
+    },
+    "IEEEauthorblockN": {
+      "detail": "IEEEtran author names block",
+      "documentation": "Formats author names in IEEE conference title blocks."
+    },
+    "IEEEauthorblockA": {
+      "detail": "IEEEtran author affiliation block",
+      "documentation": "Formats author affiliation and email in IEEE conference title blocks."
+    },
+    "title": {
+      "detail": "Document title",
+      "documentation": "Sets the main title of the document."
+    },
+    "author": {
+      "detail": "Document author",
+      "documentation": "Sets the author(s) of the document."
+    },
+    "date": {
+      "detail": "Document date",
+      "documentation": "Sets the date (use \\today for current date)."
+    },
+    "today": {
+      "detail": "Current date",
+      "documentation": "Outputs the current date dynamically (e.g. March 15, 2026)."
+    },
+    "maketitle": {
+      "detail": "Render title header",
+      "documentation": "Typesets the title, author, and date block."
+    },
+    "tableofcontents": {
+      "detail": "Table of contents",
+      "documentation": "Generates the table of contents."
+    },
+    "listoffigures": {
+      "detail": "List of figures",
+      "documentation": "Generates an automated list of floating figures."
+    },
+    "listoftables": {
+      "detail": "List of tables",
+      "documentation": "Generates an automated list of floating tables."
+    },
+    "appendix": {
+      "detail": "Start appendix section",
+      "documentation": "Changes section numbering to letters (A, B, C...) for appendixes."
+    },
+    "pagenumbering": {
+      "detail": "Page numbering style",
+      "documentation": "Sets page numbering format (arabic, roman, Roman, alph, Alph)."
+    },
+    "setcounter": {
+      "detail": "Set counter value",
+      "documentation": "Assigns a numeric value to a counter."
+    },
+    "addtocounter": {
+      "detail": "Increment counter",
+      "documentation": "Increments a counter by a given integer."
+    },
+    "newpage": {
+      "detail": "Page break",
+      "documentation": "Forces a break to a new page."
+    },
+    "clearpage": {
+      "detail": "Clear page & flush floats",
+      "documentation": "Forces a page break and outputs all pending floating figures/tables."
+    },
+    "tiny": {
+      "detail": "Font size: tiny (~5pt)",
+      "documentation": "Switches font size to tiny."
+    },
+    "scriptsize": {
+      "detail": "Font size: scriptsize (~7pt)",
+      "documentation": "Switches font size to script size (for sub/superscripts)."
+    },
+    "footnotesize": {
+      "detail": "Font size: footnotesize (~8pt)",
+      "documentation": "Switches font size to footnote size."
+    },
+    "small": {
+      "detail": "Font size: small (~9pt)",
+      "documentation": "Switches font size to small (commonly used for abstracts and author affiliations)."
+    },
+    "normalsize": {
+      "detail": "Font size: normal (~10-12pt)",
+      "documentation": "Resets font size to the document default base size."
+    },
+    "large": {
+      "detail": "Font size: large (~12-14pt)",
+      "documentation": "Switches font size to large."
+    },
+    "Large": {
+      "detail": "Font size: Large (~14-17pt)",
+      "documentation": "Switches font size to larger."
+    },
+    "LARGE": {
+      "detail": "Font size: LARGE (~17-20pt)",
+      "documentation": "Switches font size to extra large."
+    },
+    "huge": {
+      "detail": "Font size: huge (~20-25pt)",
+      "documentation": "Switches font size to huge."
+    },
+    "Huge": {
+      "detail": "Font size: Huge (~25pt+)",
+      "documentation": "Switches font size to the largest available size."
+    },
+    "textbf": {
+      "detail": "Bold font",
+      "documentation": "Applies bold font weight to the text enclosed in braces."
+    },
+    "textit": {
+      "detail": "Italic font",
+      "documentation": "Applies italic (oblique) font shape to the text."
+    },
+    "underline": {
+      "detail": "Underline text",
+      "documentation": "Underlines the specified text argument."
+    },
+    "texttt": {
+      "detail": "Monospace / Typewriter font",
+      "documentation": "Applies fixed-width font suited for inline code, filenames, or variables."
+    },
+    "emph": {
+      "detail": "Contextual emphasis",
+      "documentation": "Emphasizes text by italicizing normal text or uprighting already italicized text."
+    },
+    "textsc": {
+      "detail": "Small capitals",
+      "documentation": "Formats text in small capital letters."
+    },
+    "text": {
+      "detail": "Math mode inline text",
+      "documentation": "Embeds normal text font inside mathematical equations (amsmath)."
+    },
+    "textcolor": {
+      "detail": "Colored text",
+      "documentation": "Sets the foreground color of text (xcolor package)."
+    },
+    "colorbox": {
+      "detail": "Highlighted background box",
+      "documentation": "Places text on a colored background box."
+    },
+    "textbackslash": {
+      "detail": "Literal backslash (\\)",
+      "documentation": "Produces a literal backslash in text mode."
+    },
+    "textsuperscript": {
+      "detail": "Superscript in text mode",
+      "documentation": "Formats text as a superscript in text mode (e.g. for author affiliations)."
+    },
+    "textsubscript": {
+      "detail": "Subscript in text mode",
+      "documentation": "Formats text as a subscript in text mode."
+    },
+    "textdaggerdbl": {
+      "detail": "Double dagger symbol (‡)",
+      "documentation": "Produces a double dagger symbol in text mode (commonly used for author footnotes)."
+    },
+    "textdagger": {
+      "detail": "Dagger symbol (†)",
+      "documentation": "Produces a dagger symbol in text mode."
+    },
+    "textwidth": {
+      "detail": "Text width dimension",
+      "documentation": "The width of the text body on the page."
+    },
+    "linewidth": {
+      "detail": "Line width dimension",
+      "documentation": "The current line width within the active environment or column."
+    },
+    "columnwidth": {
+      "detail": "Column width dimension",
+      "documentation": "The width of a single column in multi-column layout."
+    },
+    "makecell": {
+      "detail": "Multi-line table cell",
+      "documentation": "Enables manual line breaks and aligned content inside tabular cells (makecell package)."
+    },
+    "centering": {
+      "detail": "Center alignment",
+      "documentation": "Centers content within the current environment or scope."
+    },
+    "raggedright": {
+      "detail": "Left-aligned text (ragged right)",
+      "documentation": "Aligns text to the left margin without right-side justification."
+    },
+    "raggedleft": {
+      "detail": "Right-aligned text (ragged left)",
+      "documentation": "Aligns text to the right margin."
+    },
+    "item": {
+      "detail": "List item",
+      "documentation": "Adds a bullet or numbered entry inside itemize or enumerate environments."
+    },
+    "item_opt": {
+      "detail": "Custom labeled list item",
+      "documentation": "Adds an item with a custom label (e.g. for description lists)."
+    },
+    "section": {
+      "detail": "Numbered section",
+      "documentation": "Creates a top-level numbered section heading."
+    },
+    "subsection": {
+      "detail": "Numbered subsection",
+      "documentation": "Creates a second-level numbered subsection heading."
+    },
+    "subsubsection": {
+      "detail": "Numbered subsubsection",
+      "documentation": "Creates a third-level numbered subsubsection heading."
+    },
+    "paragraph": {
+      "detail": "Inline paragraph heading",
+      "documentation": "Creates an unnumbered bold inline paragraph heading."
+    },
+    "includegraphics": {
+      "detail": "Include external graphic",
+      "documentation": "Embeds an image file into the document (graphicx package)."
+    },
+    "caption": {
+      "detail": "Figure/Table caption",
+      "documentation": "Sets the descriptive caption for a floating figure or table."
+    },
+    "toprule": {
+      "detail": "Booktabs top rule",
+      "documentation": "Adds a professional top rule inside a tabular environment (booktabs)."
+    },
+    "midrule": {
+      "detail": "Booktabs middle rule",
+      "documentation": "Adds a professional rule between table header and body (booktabs)."
+    },
+    "bottomrule": {
+      "detail": "Booktabs bottom rule",
+      "documentation": "Adds a professional bottom rule inside a tabular environment (booktabs)."
+    },
+    "textasciicircum": {
+      "detail": "Literal caret",
+      "documentation": "Prints a literal caret character in text mode."
+    },
+    "textasciitilde": {
+      "detail": "Literal tilde",
+      "documentation": "Prints a literal tilde character in text mode."
+    },
+    "vspace": {
+      "detail": "Vertical space",
+      "documentation": "Inserts vertical whitespace of the specified dimension."
+    },
+    "hspace": {
+      "detail": "Horizontal space",
+      "documentation": "Inserts horizontal whitespace of the specified dimension."
+    },
+    "hfill": {
+      "detail": "Horizontal spring / fill",
+      "documentation": "Expands horizontally to push content to the margins."
+    },
+    "vfill": {
+      "detail": "Vertical spring / fill",
+      "documentation": "Expands vertically to push content to the bottom of the page."
+    },
+    "quad": {
+      "detail": "Space: 1em quad",
+      "documentation": "Inserts horizontal space equal to the current font size."
+    },
+    "qquad": {
+      "detail": "Space: 2em double quad",
+      "documentation": "Inserts double horizontal space equal to 2em."
+    },
+    "frac": {
+      "detail": "Fraction (num/den)",
+      "documentation": "Inserts a fraction with numerator and denominator."
+    },
+    "sqrt": {
+      "detail": "Square root",
+      "documentation": "Inserts a square root, or n-th root with \\sqrt[n]{x}."
+    },
+    "sum": {
+      "detail": "Summation operator (∑)",
+      "documentation": "Inserts the summation symbol with lower and upper limits."
+    },
+    "int": {
+      "detail": "Definite integral (∫)",
+      "documentation": "Inserts an integral with lower and upper bounds and differential."
+    },
+    "iint": {
+      "detail": "Double integral (∬)",
+      "documentation": "Inserts a double area integral."
+    },
+    "iiint": {
+      "detail": "Triple integral (∭)",
+      "documentation": "Inserts a triple volume integral."
+    },
+    "oint": {
+      "detail": "Contour / Closed line integral (∮)",
+      "documentation": "Inserts a closed curve line integral."
+    },
+    "prod": {
+      "detail": "Product operator (∏)",
+      "documentation": "Inserts the product sequence operator with limits."
+    },
+    "lim": {
+      "detail": "Limit notation",
+      "documentation": "Inserts a limit with variable approach target."
+    },
+    "partial": {
+      "detail": "Partial derivative (∂)",
+      "documentation": "Partial differentiation symbol."
+    },
+    "nabla": {
+      "detail": "Nabla / Del operator (∇)",
+      "documentation": "Vector differential operator for gradient, divergence, and curl."
+    },
+    "infty": {
+      "detail": "Infinity (∞)",
+      "documentation": "Mathematical infinity symbol."
+    },
+    "vec": {
+      "detail": "Vector arrow accent",
+      "documentation": "Places a vector arrow over the symbol (e.g. \\vec{v})."
+    },
+    "hat": {
+      "detail": "Hat / Unit vector accent",
+      "documentation": "Places a caret (circumflex) hat over the symbol."
+    },
+    "bar": {
+      "detail": "Bar / Mean accent",
+      "documentation": "Places a horizontal bar over the symbol."
+    },
+    "tilde": {
+      "detail": "Tilde accent (~)",
+      "documentation": "Places a tilde over the symbol."
+    },
+    "dot": {
+      "detail": "Dot / First time derivative",
+      "documentation": "Places a single dot over the symbol (Newtonian time derivative)."
+    },
+    "ddot": {
+      "detail": "Double dot / Second derivative",
+      "documentation": "Places two dots over the symbol."
+    },
+    "overline": {
+      "detail": "Overline bar",
+      "documentation": "Draws a continuous horizontal line above the entire expression."
+    },
+    "boxed": {
+      "detail": "Boxed equation formula",
+      "documentation": "Encloses a formula inside a rectangular bounding box (amsmath)."
+    },
+    "overbrace": {
+      "detail": "Overbrace with note",
+      "documentation": "Draws a curly brace above an expression with an annotation."
+    },
+    "underbrace": {
+      "detail": "Underbrace with note",
+      "documentation": "Draws a curly brace below an expression with an annotation."
+    },
+    "left_paren": {
+      "detail": "Auto-sizing parentheses ()",
+      "documentation": "Encloses math in parentheses that scale automatically to the enclosed height."
+    },
+    "left_bracket": {
+      "detail": "Auto-sizing brackets []",
+      "documentation": "Encloses math in brackets that scale automatically to the enclosed height."
+    },
+    "left_brace": {
+      "detail": "Auto-sizing braces {}",
+      "documentation": "Encloses math in curly braces that scale automatically to the enclosed height."
+    },
+    "left_bar": {
+      "detail": "Auto-sizing absolute value ||",
+      "documentation": "Encloses math in single vertical bars for absolute value / determinant."
+    },
+    "left_double_bar": {
+      "detail": "Auto-sizing norm ‖‖",
+      "documentation": "Encloses math in double vertical bars for vector/matrix norm."
+    },
+    "dots": {
+      "detail": "Baseline dots (...)",
+      "documentation": "Ellipsis dots placed along the baseline."
+    },
+    "cdots": {
+      "detail": "Centered dots (⋯)",
+      "documentation": "Ellipsis dots placed centered between operators (e.g. 1 + 2 + \\cdots + n)."
+    },
+    "vdots": {
+      "detail": "Vertical dots (⋮)",
+      "documentation": "Vertical ellipsis dots for matrices."
+    },
+    "ddots": {
+      "detail": "Diagonal dots (⋱)",
+      "documentation": "Diagonal ellipsis dots for matrix diagonals."
+    },
+    "alpha": {
+      "detail": "Greek alpha (α)",
+      "documentation": "Greek lowercase letter alpha."
+    },
+    "beta": {
+      "detail": "Greek beta (β)",
+      "documentation": "Greek lowercase letter beta."
+    },
+    "gamma": {
+      "detail": "Greek gamma (γ)",
+      "documentation": "Greek lowercase letter gamma."
+    },
+    "Gamma": {
+      "detail": "Greek Gamma (Γ)",
+      "documentation": "Greek uppercase letter Gamma."
+    },
+    "delta": {
+      "detail": "Greek delta (δ)",
+      "documentation": "Greek lowercase letter delta."
+    },
+    "Delta": {
+      "detail": "Greek Delta (Δ)",
+      "documentation": "Greek uppercase letter Delta (Laplacian or difference)."
+    },
+    "epsilon": {
+      "detail": "Greek epsilon (ε)",
+      "documentation": "Greek lowercase letter epsilon."
+    },
+    "varepsilon": {
+      "detail": "Greek varepsilon (𝜀)",
+      "documentation": "Smooth variant of lowercase epsilon."
+    },
+    "zeta": {
+      "detail": "Greek zeta (ζ)",
+      "documentation": "Greek lowercase letter zeta."
+    },
+    "eta": {
+      "detail": "Greek eta (η)",
+      "documentation": "Greek lowercase letter eta."
+    },
+    "theta": {
+      "detail": "Greek theta (θ)",
+      "documentation": "Greek lowercase letter theta."
+    },
+    "Theta": {
+      "detail": "Greek Theta (Θ)",
+      "documentation": "Greek uppercase letter Theta."
+    },
+    "lambda": {
+      "detail": "Greek lambda (λ)",
+      "documentation": "Greek lowercase letter lambda (wavelength or eigenvalue)."
+    },
+    "Lambda": {
+      "detail": "Greek Lambda (Λ)",
+      "documentation": "Greek uppercase letter Lambda."
+    },
+    "mu": {
+      "detail": "Greek mu (μ)",
+      "documentation": "Greek lowercase letter mu (micro or mean)."
+    },
+    "nu": {
+      "detail": "Greek nu (ν)",
+      "documentation": "Greek lowercase letter nu."
+    },
+    "xi": {
+      "detail": "Greek xi (ξ)",
+      "documentation": "Greek lowercase letter xi."
+    },
+    "pi": {
+      "detail": "Constant Pi (π)",
+      "documentation": "Mathematical circular constant π ≈ 3.14159."
+    },
+    "rho": {
+      "detail": "Greek rho (ρ)",
+      "documentation": "Greek lowercase letter rho (density or resistivity)."
+    },
+    "sigma": {
+      "detail": "Greek sigma (σ)",
+      "documentation": "Greek lowercase letter sigma (standard deviation or stress)."
+    },
+    "Sigma": {
+      "detail": "Greek Sigma (Σ)",
+      "documentation": "Greek uppercase letter Sigma (summation or covariance)."
+    },
+    "tau": {
+      "detail": "Greek tau (τ)",
+      "documentation": "Greek lowercase letter tau (torque or time constant)."
+    },
+    "phi": {
+      "detail": "Greek phi (ϕ)",
+      "documentation": "Greek lowercase letter phi."
+    },
+    "varphi": {
+      "detail": "Greek varphi (φ)",
+      "documentation": "Curly lowercase letter varphi."
+    },
+    "Phi": {
+      "detail": "Greek Phi (Φ)",
+      "documentation": "Greek uppercase letter Phi."
+    },
+    "psi": {
+      "detail": "Greek psi (ψ)",
+      "documentation": "Greek lowercase letter psi (wavefunction)."
+    },
+    "Psi": {
+      "detail": "Greek Psi (Ψ)",
+      "documentation": "Greek uppercase letter Psi."
+    },
+    "omega": {
+      "detail": "Greek omega (ω)",
+      "documentation": "Greek lowercase letter omega (angular frequency)."
+    },
+    "Omega": {
+      "detail": "Greek Omega (Ω)",
+      "documentation": "Greek uppercase letter Omega (Ohm resistance)."
+    },
+    "leq": {
+      "detail": "Less than or equal (≤)",
+      "documentation": "Order relation less than or equal."
+    },
+    "geq": {
+      "detail": "Greater than or equal (≥)",
+      "documentation": "Order relation greater than or equal."
+    },
+    "neq": {
+      "detail": "Not equal (≠)",
+      "documentation": "Inequality relation."
+    },
+    "approx": {
+      "detail": "Approximately equal (≈)",
+      "documentation": "Asymptotic or numerical approximation."
+    },
+    "equiv": {
+      "detail": "Equivalent / Identical (≡)",
+      "documentation": "Congruence or definition equality."
+    },
+    "times": {
+      "detail": "Multiplication cross (×)",
+      "documentation": "Cartesian product or arithmetic multiplication."
+    },
+    "cdot": {
+      "detail": "Dot product (·)",
+      "documentation": "Center dot scalar / dot product."
+    },
+    "pm": {
+      "detail": "Plus-minus (±)",
+      "documentation": "Plus or minus uncertainty sign."
+    },
+    "mp": {
+      "detail": "Minus-plus (∓)",
+      "documentation": "Minus or plus sign."
+    },
+    "rightarrow": {
+      "detail": "Right arrow (→)",
+      "documentation": "Single right arrow (mapping or limit)."
+    },
+    "Leftarrow": {
+      "detail": "Implies left (⇐)",
+      "documentation": "Logical implication left."
+    },
+    "Rightarrow": {
+      "detail": "Implies right (⇒)",
+      "documentation": "Logical implication right."
+    },
+    "Leftrightarrow": {
+      "detail": "If and only if (⇔)",
+      "documentation": "Logical equivalence."
+    },
+    "forall": {
+      "detail": "Universal quantifier (∀)",
+      "documentation": "For all elements in set."
+    },
+    "exists": {
+      "detail": "Existential quantifier (∃)",
+      "documentation": "There exists at least one element."
+    },
+    "in": {
+      "detail": "Element of set (∈)",
+      "documentation": "Indicates membership in a set."
+    },
+    "notin": {
+      "detail": "Not element of set (∉)",
+      "documentation": "Indicates non-membership in a set."
+    },
+    "subset": {
+      "detail": "Subset (⊂)",
+      "documentation": "Strict subset inclusion."
+    },
+    "subseteq": {
+      "detail": "Subset or equal (⊆)",
+      "documentation": "Subset inclusion allowing equality."
+    },
+    "cup": {
+      "detail": "Set union (∪)",
+      "documentation": "Union of sets."
+    },
+    "cap": {
+      "detail": "Set intersection (∩)",
+      "documentation": "Intersection of sets."
+    },
+    "mathbb": {
+      "detail": "Blackboard bold (ℝ, ℂ, ℕ, ℤ)",
+      "documentation": "Number sets in blackboard bold font."
+    },
+    "mathcal": {
+      "detail": "Calligraphic script (ℒ, ℋ)",
+      "documentation": "Calligraphic font for operators and spaces."
+    },
+    "label": {
+      "detail": "Anchor label",
+      "documentation": "Assigns a unique key to refer to equations, figures, tables, or sections."
+    },
+    "ref": {
+      "detail": "Cross-reference",
+      "documentation": "Inserts the numbered reference for the given label."
+    },
+    "eqref": {
+      "detail": "Equation reference with parentheses",
+      "documentation": "Inserts equation reference enclosed in parentheses, e.g. (1)."
+    },
+    "cite": {
+      "detail": "Bibliographic citation",
+      "documentation": "Inserts a citation corresponding to a BibTeX bibliography entry."
+    },
+    "bibliographystyle": {
+      "detail": "Bibliography style",
+      "documentation": "Sets the formatting style for references (plain, unsrt, alpha, abbrv, ieeetr)."
+    },
+    "bibliography": {
+      "detail": "Include BibTeX file",
+      "documentation": "Loads bibliography data from a .bib file."
+    },
+    "footnote": {
+      "detail": "Numbered footnote",
+      "documentation": "Inserts an automatically numbered footnote at the bottom of the page."
+    },
+    "url": {
+      "detail": "Clickable URL link",
+      "documentation": "Typesets a raw URL as a clickable link (hyperref package)."
+    },
+    "href": {
+      "detail": "Hyperlink with text",
+      "documentation": "Creates a hyperlink with custom anchor text (hyperref package)."
+    },
+    "makeheaders": {
+      "detail": "Render CV header block",
+      "documentation": "Typesets left and right CV header blocks with alignment option (c, l, r)."
+    },
+    "makerubric": {
+      "detail": "Include CV rubric section",
+      "documentation": "Includes and typesets a modular CV section/rubric file (CurVe class)."
+    },
+    "photo": {
+      "detail": "CV portrait photo",
+      "documentation": "Inserts a portrait photo with position option (l, r) in CurVe headers."
+    },
+    "photoscale": {
+      "detail": "Scale factor for CV photo",
+      "documentation": "Sets the scaling multiplier for the CV portrait photograph."
+    },
+    "entry_star": {
+      "detail": "CV timeline entry item",
+      "documentation": "Adds a key-aligned timeline entry item in CurVe rubric environments."
+    },
+    "justifying": {
+      "detail": "Fully justified text alignment",
+      "documentation": "Enforces full paragraph justification with hyphenation (ragged2e package)."
+    },
+    "faEnvelope": {
+      "detail": "FontAwesome envelope icon",
+      "documentation": "Renders an email envelope icon (fontawesome5)."
+    },
+    "faLinkedin": {
+      "detail": "FontAwesome LinkedIn icon",
+      "documentation": "Renders a LinkedIn brand icon (fontawesome5)."
+    },
+    "faPhone": {
+      "detail": "FontAwesome telephone icon",
+      "documentation": "Renders a phone receiver icon (fontawesome5)."
+    },
+    "faGithub": {
+      "detail": "FontAwesome GitHub icon",
+      "documentation": "Renders a GitHub brand icon (fontawesome5)."
+    },
+    "faGlobe": {
+      "detail": "FontAwesome globe icon",
+      "documentation": "Renders a globe / web URL icon (fontawesome5)."
+    },
+    "faFilePdf": {
+      "detail": "FontAwesome PDF file icon",
+      "documentation": "Renders a PDF document icon (fontawesome5)."
+    },
+    "simpleicon": {
+      "detail": "SimpleIcons brand logo",
+      "documentation": "Renders a brand icon by name from the embedded SimpleIcons suite (e.g. \\simpleicon{x}, \\simpleicon{python})."
+    },
+    "setmainfont": {
+      "detail": "Set main serif font (fontspec)",
+      "documentation": "Configures the primary document serif font for XeLaTeX/LuaLaTeX (fontspec package)."
+    },
+    "setsansfont": {
+      "detail": "Set sans-serif font (fontspec)",
+      "documentation": "Configures the document sans-serif font for XeLaTeX/LuaLaTeX (fontspec package)."
+    },
+    "setmonofont": {
+      "detail": "Set monospace font (fontspec)",
+      "documentation": "Configures the document monospace typewriter font for XeLaTeX/LuaLaTeX (fontspec package)."
+    },
+    "newfontfamily": {
+      "detail": "Define custom font family (fontspec)",
+      "documentation": "Defines a new font-switching command for a specific typeface (fontspec package)."
+    },
+    "defaultfontfeatures": {
+      "detail": "Set default font features (fontspec)",
+      "documentation": "Applies default OpenType/AAT font options to subsequent font declarations (fontspec package)."
+    },
+    "addfontfeatures": {
+      "detail": "Add font features (fontspec)",
+      "documentation": "Modifies OpenType/AAT features for the currently active font (fontspec package)."
+    },
+    "pagestyle": {
+      "detail": "Set page header/footer style",
+      "documentation": "Sets the active page style (plain, empty, headings, myheadings, or fancy)."
+    },
+    "fancyhf": {
+      "detail": "Clear or set headers & footers",
+      "documentation": "Clears or sets header and footer fields simultaneously (fancyhdr package)."
+    },
+    "fancyhead": {
+      "detail": "Set page header field",
+      "documentation": "Configures header content for specified page positions and odd/even pages (fancyhdr)."
+    },
+    "fancyfoot": {
+      "detail": "Set page footer field",
+      "documentation": "Configures footer content for specified page positions and odd/even pages (fancyhdr)."
+    },
+    "lhead": {
+      "detail": "Left header field",
+      "documentation": "Sets the left-aligned header text (fancyhdr package)."
+    },
+    "chead": {
+      "detail": "Center header field",
+      "documentation": "Sets the centered header text (fancyhdr package)."
+    },
+    "rhead": {
+      "detail": "Right header field",
+      "documentation": "Sets the right-aligned header text (fancyhdr package)."
+    },
+    "lfoot": {
+      "detail": "Left footer field",
+      "documentation": "Sets the left-aligned footer text (fancyhdr package)."
+    },
+    "cfoot": {
+      "detail": "Center footer field",
+      "documentation": "Sets the centered footer text (fancyhdr package)."
+    },
+    "rfoot": {
+      "detail": "Right footer field",
+      "documentation": "Sets the right-aligned footer text (fancyhdr package)."
+    },
+    "headrulewidth": {
+      "detail": "Header rule thickness",
+      "documentation": "Length macro controlling the thickness of the horizontal rule below the header (fancyhdr)."
+    },
+    "footrulewidth": {
+      "detail": "Footer rule thickness",
+      "documentation": "Length macro controlling the thickness of the horizontal rule above the footer (fancyhdr)."
+    },
+    "fancypagestyle": {
+      "detail": "Define custom page style",
+      "documentation": "Defines or redefines a named page style with custom fancyhdr settings."
+    },
+    "titleformat": {
+      "detail": "Customize section heading format",
+      "documentation": "Customizes typography, numbering, and layout of sectioning commands (titlesec package)."
+    },
+    "titlespacing": {
+      "detail": "Customize section heading spacing",
+      "documentation": "Adjusts left margin, before-spacing, and after-spacing of section headings (titlesec)."
+    },
+    "titlerule": {
+      "detail": "Horizontal rule in heading",
+      "documentation": "Draws a horizontal rule spanning the text width inside a section title (titlesec package)."
+    },
+    "titlelabel": {
+      "detail": "Customize section label format",
+      "documentation": "Redefines the formatting of section numbers in headings (titlesec package)."
+    },
+    "urlstyle": {
+      "detail": "Set URL font style",
+      "documentation": "Sets the font style used by \\url and \\href (tt, rm, sf, or same; url/hyperref)."
+    },
+    "newcolumntype": {
+      "detail": "Define custom table column type",
+      "documentation": "Registers a custom column specifier for tabular and tabularx environments (array package)."
+    },
+    "arraybackslash": {
+      "detail": "Restore tabular row break \\\\",
+      "documentation": "Restores the meaning of \\\\ as a table row separator after \\raggedright or \\centering (array)."
+    },
+    "tabcolsep": {
+      "detail": "Table column horizontal padding",
+      "documentation": "Half the horizontal spacing inserted between columns in tabular environments."
+    },
+    "raisebox": {
+      "detail": "Raise or lower inline box",
+      "documentation": "Shifts content vertically relative to the baseline (accepts \\height, \\width, \\depth, \\totalheight)."
+    },
+    "height": {
+      "detail": "Box natural height dimension",
+      "documentation": "Natural height above the baseline of the box being measured inside \\raisebox or \\makebox."
+    },
+    "width": {
+      "detail": "Box natural width dimension",
+      "documentation": "Natural horizontal width of the box being measured inside \\raisebox, \\makebox, or \\parbox."
+    },
+    "depth": {
+      "detail": "Box natural depth dimension",
+      "documentation": "Natural depth below the baseline of the box being measured inside \\raisebox or \\makebox."
+    },
+    "totalheight": {
+      "detail": "Box total height (height + depth)",
+      "documentation": "Sum of natural height and depth of the box being measured inside \\raisebox or \\makebox."
+    },
+    "thepage": {
+      "detail": "Current page number counter",
+      "documentation": "Expands to the formatted representation of the current page counter."
+    },
+    "labelitemi": {
+      "detail": "First-level itemize bullet symbol",
+      "documentation": "Macro controlling the bullet symbol used for top-level itemize lists."
+    },
+    "color": {
+      "detail": "Switch active text color",
+      "documentation": "Switches the current foreground text color for the active scope (xcolor package)."
+    },
+    "bfseries": {
+      "detail": "Bold font weight switch",
+      "documentation": "Switches the active font series to bold within the current group."
+    },
+    "textbullet": {
+      "detail": "Bullet symbol (•)",
+      "documentation": "Produces a solid bullet symbol in text mode."
+    }
+  },
+  "latexEnvironments": {
+    "equation": {
+      "detail": "Numbered equation",
+      "documentation": "Centered display mathematical equation with automatic numbering."
+    },
+    "equation_star": {
+      "detail": "Unnumbered equation",
+      "documentation": "Centered display mathematical equation without number (amsmath)."
+    },
+    "align": {
+      "detail": "Aligned equations (numbered)",
+      "documentation": "Multiline equations aligned by ampersands (&) with automatic numbering on each line."
+    },
+    "align_star": {
+      "detail": "Aligned equations (unnumbered)",
+      "documentation": "Multiline equations aligned by ampersands without numbering."
+    },
+    "figure": {
+      "detail": "Floating figure",
+      "documentation": "Floating container for figures and graphics with caption and label."
+    },
+    "table": {
+      "detail": "Floating table",
+      "documentation": "Floating container for tabular data with caption and label."
+    },
+    "tabular": {
+      "detail": "Tabular alignment grid",
+      "documentation": "Table grid alignment with columns (l=left, c=center, r=right)."
+    },
+    "tabularx": {
+      "detail": "Fixed-width flexible tabular grid",
+      "documentation": "Table environment spanning a target width with auto-expanding X columns (tabularx package)."
+    },
+    "longtable": {
+      "detail": "Multi-page table",
+      "documentation": "Table environment that automatically breaks across multiple pages (longtable package)."
+    },
+    "itemize": {
+      "detail": "Unordered bulleted list",
+      "documentation": "Creates an unordered list with bullet points."
+    },
+    "enumerate": {
+      "detail": "Ordered numbered list",
+      "documentation": "Creates a sequential list with automatic numbering (1, 2, 3...)."
+    },
+    "description": {
+      "detail": "Descriptive term list",
+      "documentation": "List where each item starts with a bold defined term [term]."
+    },
+    "pmatrix": {
+      "detail": "Matrix with parentheses ()",
+      "documentation": "amsmath matrix enclosed in round parentheses."
+    },
+    "bmatrix": {
+      "detail": "Matrix with brackets []",
+      "documentation": "amsmath matrix enclosed in square brackets."
+    },
+    "matrix": {
+      "detail": "Matrix without delimiters",
+      "documentation": "amsmath matrix with no surrounding delimiters."
+    },
+    "Bmatrix": {
+      "detail": "Matrix with braces {}",
+      "documentation": "amsmath matrix enclosed in curly braces."
+    },
+    "vmatrix": {
+      "detail": "Matrix with vertical bars",
+      "documentation": "amsmath matrix enclosed in single vertical bars."
+    },
+    "Vmatrix": {
+      "detail": "Matrix with double vertical bars",
+      "documentation": "amsmath matrix enclosed in double vertical bars."
+    },
+    "theorem": {
+      "detail": "Theorem environment",
+      "documentation": "Formal theorem statement environment (amsthm)."
+    },
+    "proof": {
+      "detail": "Mathematical proof",
+      "documentation": "Proof environment with end-of-proof QED square symbol (amsthm)."
+    },
+    "abstract": {
+      "detail": "Paper abstract section",
+      "documentation": "Synopsis / abstract section for academic articles."
+    }
+  },
+  "typstCompletions": {
+    "set_page": {
+      "detail": "Configure document page dimensions and margins",
+      "documentation": "Configure page size, orientation, and margins.\n\nExample:\n`#set page(paper: \"a4\", margin: (x: 2.5cm, y: 2.5cm))`"
+    },
+    "set_text": {
+      "detail": "Configure default text typography and language",
+      "documentation": "Configure default document font family, size, and hyphenation language."
+    },
+    "set_par": {
+      "detail": "Configure paragraph justification and line spacing",
+      "documentation": "Set paragraph alignment justification and line spacing (leading)."
+    },
+    "set_math_equation": {
+      "detail": "Enable automatic equation numbering",
+      "documentation": "Number math equations automatically for cross-referencing (@label)."
+    },
+    "set": {
+      "detail": "Style rule: set element properties",
+      "documentation": "Applies default styles or configuration to an element type throughout the document."
+    },
+    "show": {
+      "detail": "Transform or style rule",
+      "documentation": "Customizes how elements of a certain type are displayed or rendered."
+    },
+    "let": {
+      "detail": "Variable or function declaration",
+      "documentation": "Binds a value or defines a reusable function in Typst."
+    },
+    "import": {
+      "detail": "Import module or items",
+      "documentation": "Imports definitions, variables, or functions from another Typst module or package."
+    },
+    "include": {
+      "detail": "Include subfile contents",
+      "documentation": "Includes another Typst file directly into the document structure."
+    },
+    "for": {
+      "detail": "For loop iteration",
+      "documentation": "Iterates over an array, dictionary, or range to generate content dynamically."
+    },
+    "if": {
+      "detail": "Conditional expression",
+      "documentation": "Conditionally renders content or evaluates expressions based on a boolean condition."
+    },
+    "align": {
+      "detail": "Align block or inline content",
+      "documentation": "Aligns content along the horizontal and vertical axes (e.g. center, left, right)."
+    },
+    "table": {
+      "detail": "Structured tabular data",
+      "documentation": "Creates publication-ready tables with customizable column widths, fills, and strokes."
+    },
+    "table_header": {
+      "detail": "Semantic table header row",
+      "documentation": "Marks table cells as a semantic header row, including Typst header behavior for repeated table headings."
+    },
+    "table_hline": {
+      "detail": "Horizontal table rule",
+      "documentation": "Adds a horizontal table rule at the selected row boundary."
+    },
+    "grid": {
+      "detail": "Multi-column grid container",
+      "documentation": "Lays out content in a responsive, multi-column grid with configurable gutter spacing."
+    },
+    "figure": {
+      "detail": "Numbered figure with caption & label",
+      "documentation": "Creates a captioned, numbered figure (image, table, code) with automatic reference label."
+    },
+    "image": {
+      "detail": "Embed image asset",
+      "documentation": "Inserts an image file (PNG, JPEG, SVG) into the document flow."
+    },
+    "text": {
+      "detail": "Styled inline text",
+      "documentation": "Applies inline font formatting, weight, color (fill), tracking, or styling to text."
+    },
+    "strong": {
+      "detail": "Strong text emphasis",
+      "documentation": "Applies strong emphasis to a Typst content block."
+    },
+    "rect": {
+      "detail": "Rectangle box with optional fill and border",
+      "documentation": "Draws a rectangle with customizable dimensions, fill color, and border radius."
+    },
+    "circle": {
+      "detail": "Circle shape",
+      "documentation": "Draws a circle with specified radius and fill color."
+    },
+    "line": {
+      "detail": "Horizontal or angled line separator",
+      "documentation": "Draws a line with specified length, angle, and stroke style."
+    },
+    "block": {
+      "detail": "Styled block container",
+      "documentation": "Creates a block-level container with margins, padding (inset), fill, and borders."
+    },
+    "box": {
+      "detail": "Inline box container",
+      "documentation": "Creates an inline container that flows alongside text without breaking lines."
+    },
+    "v": {
+      "detail": "Vertical spacing",
+      "documentation": "Inserts vertical whitespace of a given length (pt, em, cm, etc.)."
+    },
+    "h": {
+      "detail": "Horizontal spacing",
+      "documentation": "Inserts horizontal whitespace of a given length."
+    },
+    "pad": {
+      "detail": "Add inner padding to content",
+      "documentation": "Pads surrounding content with specified horizontal (x) and vertical (y) distances."
+    },
+    "stack": {
+      "detail": "Stack multiple items with spacing",
+      "documentation": "Arranges multiple items horizontally or vertically with consistent spacing."
+    },
+    "colbreak": {
+      "detail": "Break column",
+      "documentation": "Forces a break to the next column in a multi-column document."
+    },
+    "pagebreak": {
+      "detail": "Break page",
+      "documentation": "Forces a page break to a new page."
+    },
+    "heading": {
+      "detail": "Section heading with level",
+      "documentation": "Creates a structural heading of specified level with optional reference anchor."
+    },
+    "list": {
+      "detail": "Bulleted list",
+      "documentation": "Creates an unordered bulleted list."
+    },
+    "enum": {
+      "detail": "Numbered list (enumeration)",
+      "documentation": "Creates an ordered numbered list."
+    },
+    "terms": {
+      "detail": "Description / terms list",
+      "documentation": "Creates a definition list pairing terms with descriptions."
+    },
+    "link": {
+      "detail": "Hyperlink to external URL",
+      "documentation": "Creates a clickable hyperlink with custom display text."
+    },
+    "quote": {
+      "detail": "Block quotation with attribution",
+      "documentation": "Inserts a block quote with optional author attribution."
+    },
+    "footnote": {
+      "detail": "Footnote reference",
+      "documentation": "Attaches a footnote reference at current position."
+    },
+    "bibliography": {
+      "detail": "Include bibliography from .bib file",
+      "documentation": "Renders the bibliography section using BibTeX citations."
+    },
+    "cite": {
+      "detail": "Citation reference to bibliography",
+      "documentation": "Cites an entry defined in the bibliography source."
+    },
+    "highlight": {
+      "detail": "Highlight text with background color",
+      "documentation": "Highlights text with a colored background."
+    },
+    "calc": {
+      "detail": "Math & Calculation library",
+      "documentation": "Built-in mathematical calculations and numeric functions."
+    },
+    "rgb": {
+      "detail": "Define RGB color",
+      "documentation": "Creates a color from hex string or red, green, blue values."
+    },
+    "luma": {
+      "detail": "Define grayscale color (0-255)",
+      "documentation": "Creates a grayscale luminance color."
+    },
+    "lorem": {
+      "detail": "Generate lorem ipsum placeholder text",
+      "documentation": "Generates mock Latin prose of specified word count."
+    }
+  }
+}

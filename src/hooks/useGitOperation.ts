@@ -2,6 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { GitOperationError, GitOperationProgressPayload } from '../types/git';
+import i18n from '../i18n';
+import {
+  translateBackendError,
+  translateGitOperationError,
+  translateGitProgress,
+  type CodedGitOperationProgressPayload,
+} from '../i18n/backendMessages';
 
 export type GitOperationKind = 'commit' | 'remote' | 'fetch' | 'pull' | 'push' | 'clone';
 
@@ -20,16 +27,21 @@ const normalizeError = (reason: unknown): GitOperationFailure => {
   }
   if (value && typeof value === 'object' && 'message' in value) {
     const item = value as Partial<GitOperationError>;
-    return {
+    const raw: GitOperationError = {
       code: typeof item.code === 'string' ? item.code : 'git_operation_failed',
-      message: typeof item.message === 'string' ? item.message : 'Git operation failed.',
+      message: typeof item.message === 'string' ? item.message : i18n.t('errors:git.operationFailed'),
       recovery: typeof item.recovery === 'string' ? item.recovery : null,
       partialPath: typeof item.partialPath === 'string' ? item.partialPath : null,
       outcomeUnknown: item.outcomeUnknown === true,
     };
+    return {
+      ...translateGitOperationError(raw),
+      rawMessage: raw.message,
+    };
   }
-  const message = typeof reason === 'string' ? reason : reason instanceof Error ? reason.message : 'Git operation failed.';
-  return { code: 'git_operation_failed', message, recovery: null, partialPath: null, outcomeUnknown: false, rawMessage: message };
+  const rawMessage = typeof reason === 'string' ? reason : reason instanceof Error ? reason.message : i18n.t('errors:git.operationFailed');
+  const translated = translateBackendError(reason, null, i18n.t('errors:git.operationFailed'));
+  return { code: 'git_operation_failed', message: translated, recovery: null, partialPath: null, outcomeUnknown: false, rawMessage };
 };
 
 export const useGitOperation = (repositoryRoot: string | null) => {
@@ -61,8 +73,8 @@ export const useGitOperation = (repositoryRoot: string | null) => {
   const clearError = useCallback(() => setError(null), []);
 
   const run = useCallback(async <T,>(kind: GitOperationKind, command: string, args: Record<string, unknown>, options: GitOperationOptions = {}): Promise<T> => {
-    if (!repositoryRoot && kind !== 'clone') throw normalizeError('Open a Git repository before running this operation.');
-    if (operationIdRef.current) throw normalizeError('Another Git operation is already running.');
+    if (!repositoryRoot && kind !== 'clone') throw normalizeError(i18n.t('errors:git.repositoryRequired'));
+    if (operationIdRef.current) throw normalizeError(i18n.t('errors:git.alreadyRunning'));
     const request = ++requestId.current;
     const operationId = options.reportsProgress === false ? null : crypto.randomUUID();
     const operationToken = operationId || crypto.randomUUID();
@@ -73,9 +85,11 @@ export const useGitOperation = (repositoryRoot: string | null) => {
     let unlisten: UnlistenFn | undefined;
     try {
       if (operationId) {
-        unlisten = await listen<GitOperationProgressPayload>('git-operation-progress', event => {
+        unlisten = await listen<CodedGitOperationProgressPayload>('git-operation-progress', event => {
           const payload = event.payload;
-          if (payload.operationId === operationId && rootRef.current === repositoryRoot && mounted.current && request === requestId.current) setProgress(payload);
+          if (payload.operationId === operationId && rootRef.current === repositoryRoot && mounted.current && request === requestId.current) {
+            setProgress({ ...payload, message: translateGitProgress(payload) });
+          }
         });
         if (!mounted.current || request !== requestId.current || rootRef.current !== repositoryRoot) {
           unlisten();

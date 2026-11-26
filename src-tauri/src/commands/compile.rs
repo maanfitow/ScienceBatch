@@ -181,6 +181,11 @@ pub async fn compile_document(
         ProgressPayload {
             status: "Starting".into(),
             message: format!("Starting in-memory {active_engine} compiler..."),
+            code: Some("compiler.starting".into()),
+            params: Some(BTreeMap::from([(
+                "engine".into(),
+                active_engine.clone(),
+            )])),
         },
     );
 
@@ -189,6 +194,11 @@ pub async fn compile_document(
         ProgressPayload {
             status: "Compiling".into(),
             message: format!("Compiling {active_engine} document in RAM (job {compile_id})..."),
+            code: Some("compiler.compiling".into()),
+            params: Some(BTreeMap::from([
+                ("engine".into(), active_engine.clone()),
+                ("jobId".into(), compile_id.to_string()),
+            ])),
         },
     );
 
@@ -230,31 +240,35 @@ pub async fn compile_document(
         .map_err(|error| format!("{}: {}", error.code, error.message));
     match result {
         Ok(response) => {
-            let (status, message) = if response.success {
-                ("Completed", "PDF generated successfully.")
+            let (status, message, code) = if response.success {
+                ("Completed", "PDF generated successfully.", "compiler.completed")
             } else {
-                ("Error", "Compilation reported errors.")
+                ("Error", "Compilation reported errors.", "compiler.error")
             };
             let _ = app_handle.emit(
                 "compilation-progress",
                 ProgressPayload {
                     status: status.into(),
                     message: message.into(),
+                    code: Some(code.into()),
+                    params: None,
                 },
             );
             Ok(response)
         }
         Err(error) => {
-            let status = if error.starts_with("operation.interrupted:") {
-                "Cancelled"
+            let (status, code) = if error.starts_with("operation.interrupted:") {
+                ("Cancelled", "compiler.cancelled")
             } else {
-                "Error"
+                ("Error", "compiler.error")
             };
             let _ = app_handle.emit(
                 "compilation-progress",
                 ProgressPayload {
                     status: status.into(),
                     message: error.clone(),
+                    code: Some(code.into()),
+                    params: None,
                 },
             );
             Err(error)
@@ -274,6 +288,8 @@ pub async fn cancel_compilation(
         ProgressPayload {
             status: "Cancelled".into(),
             message: "Compilation cancelled.".into(),
+            code: Some("compiler.cancelled".into()),
+            params: None,
         },
     );
     Ok(())

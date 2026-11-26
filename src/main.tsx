@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import './i18n';
 import App from './App';
 import { ThemeProvider } from './themes/ThemeContext';
 import '@fontsource/inter/400.css';

@@ -1,4 +1,5 @@
 import React from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { 
   FolderPlus, 
   FolderOpen, 
@@ -9,8 +10,10 @@ import {
   ChevronRight,
   BookOpen,
   Archive,
-  X
+  X,
+  Globe
 } from 'lucide-react';
+import { normalizeLanguage, setAppLanguage } from '../i18n';
 import { RecentProject } from '../types';
 
 export type { RecentProject };
@@ -36,8 +39,30 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
   onOpenRecentProject,
   onRemoveRecentProject,
 }) => {
+  const { t, i18n } = useTranslation(['common', 'menu']);
+  const currentLanguage = normalizeLanguage(i18n.language);
+
   return (
     <div className="welcome-screen">
+      <div className="welcome-language-switcher" role="group" aria-label={t('menu:language.ariaLabel')}>
+        <Globe size={13} aria-hidden="true" />
+        <button
+          type="button"
+          className={`welcome-lang-btn ${currentLanguage === 'en' ? 'is-active' : ''}`}
+          onClick={() => { void setAppLanguage('en'); }}
+          aria-pressed={currentLanguage === 'en'}
+        >
+          {t('common:languages.shortEn')}
+        </button>
+        <button
+          type="button"
+          className={`welcome-lang-btn ${currentLanguage === 'es' ? 'is-active' : ''}`}
+          onClick={() => { void setAppLanguage('es'); }}
+          aria-pressed={currentLanguage === 'es'}
+        >
+          {t('common:languages.shortEs')}
+        </button>
+      </div>
       <div className="welcome-hero">
         <div className="welcome-logo-badge">
           <span className="welcome-logo-chip welcome-logo-latex">
@@ -47,16 +72,16 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
             <FileCode size={26} />
           </span>
         </div>
-        <h1 className="welcome-title">ScienceBatch Studio</h1>
+        <h1 className="welcome-title">{t('common:appStudioName')}</h1>
         <p className="welcome-subtitle">
-          High-performance local typesetting environment for <strong>LaTeX</strong> and <strong>Typst</strong>.
+          <Trans ns="menu" i18nKey="welcome.subtitle" components={{ strong: <strong /> }} />
         </p>
       </div>
 
       <div className="welcome-grid">
         {/* Left Column: Streamlined Quick Actions */}
         <div className="welcome-actions-card">
-          <h2 className="welcome-section-title">Start a Document</h2>
+          <h2 className="welcome-section-title">{t('menu:welcome.startDocument')}</h2>
 
           <div className="welcome-action-buttons">
             <button className="btn-welcome-action btn-welcome-primary" onClick={onNewProject}>
@@ -64,8 +89,8 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
                 <FolderPlus size={20} />
               </div>
               <div className="action-text-group">
-                <span className="action-title">New Project</span>
-                <span className="action-desc">Create from starter templates or import from ZIP archive</span>
+                <span className="action-title">{t('menu:welcome.newProjectTitle')}</span>
+                <span className="action-desc">{t('menu:welcome.newProjectDesc')}</span>
               </div>
               <ChevronRight size={16} className="action-arrow" />
             </button>
@@ -75,8 +100,8 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
                 <FolderOpen size={20} />
               </div>
               <div className="action-text-group">
-                <span className="action-title">Open Project Folder</span>
-                <span className="action-desc">Open any folder containing .tex or .typ files</span>
+                <span className="action-title">{t('menu:welcome.openFolderTitle')}</span>
+                <span className="action-desc">{t('menu:welcome.openFolderDesc')}</span>
               </div>
               <ChevronRight size={16} className="action-arrow" />
             </button>
@@ -86,8 +111,8 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
                 <Archive size={20} />
               </div>
               <div className="action-text-group">
-                <span className="action-title">Import from ZIP</span>
-                <span className="action-desc">Extract and open a LaTeX or Typst .zip archive</span>
+                <span className="action-title">{t('menu:welcome.importZipTitle')}</span>
+                <span className="action-desc">{t('menu:welcome.importZipDesc')}</span>
               </div>
               <ChevronRight size={16} className="action-arrow" />
             </button>
@@ -97,31 +122,31 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
                 <GitBranch size={20} />
               </div>
               <div className="action-text-group">
-                <span className="action-title">Clone Repository</span>
-                <span className="action-desc">Clone a GitHub or GitLab project to your computer</span>
+                <span className="action-title">{t('menu:welcome.cloneRepoTitle')}</span>
+                <span className="action-desc">{t('menu:welcome.cloneRepoDesc')}</span>
               </div>
               <ChevronRight size={16} className="action-arrow" />
             </button>
 
             {/* Sleek Compact In-Memory Scratchpad Bar */}
             <div className="welcome-scratchpad-bar">
-              <span className="welcome-scratchpad-title">Instant in-memory scratchpad:</span>
+              <span className="welcome-scratchpad-title">{t('menu:welcome.scratchpadLabel')}</span>
               <div className="welcome-scratchpad-actions">
                 <button 
                   className="btn-scratchpad-pill" 
                   onClick={() => onQuickScratchpad('latex')}
-                  title="Launch instant in-memory LaTeX draft"
+                  title={t('menu:welcome.quickLatexTooltip')}
                 >
                   <FileText size={14} className="icon-latex" />
-                  <span>Quick LaTeX</span>
+                  <span>{t('menu:welcome.quickLatex')}</span>
                 </button>
                 <button 
                   className="btn-scratchpad-pill" 
                   onClick={() => onQuickScratchpad('typst')}
-                  title="Launch instant in-memory Typst draft"
+                  title={t('menu:welcome.quickTypstTooltip')}
                 >
                   <FileCode size={14} className="icon-typst" />
-                  <span>Quick Typst</span>
+                  <span>{t('menu:welcome.quickTypst')}</span>
                 </button>
               </div>
             </div>
@@ -133,7 +158,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
           <div className="welcome-recent-header">
             <h2 className="welcome-section-title">
               <RotateCcw size={16} className="text-muted" />
-              <span>Recent Projects</span>
+              <span>{t('menu:welcome.recentProjects')}</span>
             </h2>
           </div>
 
@@ -173,8 +198,8 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
                           e.stopPropagation();
                           onRemoveRecentProject(proj.path);
                         }}
-                        title="Remove from recent projects"
-                        aria-label="Remove from recents"
+                        title={t('menu:welcome.removeRecentTooltip')}
+                        aria-label={t('menu:welcome.removeRecentAria')}
                       >
                         <X size={13} />
                       </button>
@@ -186,8 +211,8 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
             ) : (
               <div className="recent-empty-state">
                 <BookOpen size={28} className="recent-empty-icon" />
-                <p>No recent projects found</p>
-                <span>Create or open a folder to see it listed here</span>
+                <p>{t('menu:welcome.noRecentTitle')}</p>
+                <span>{t('menu:welcome.noRecentSubtitle')}</span>
               </div>
             )}
           </div>

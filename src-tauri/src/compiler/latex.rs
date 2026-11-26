@@ -61,6 +61,8 @@ fn automation_error_to_compile_response(err: AutomationError, main_name: &str) -
             line: diag.line,
             file: diag.file,
             suggestion: diag.suggestion,
+            suggestion_code: None,
+            suggestion_params: None,
         };
         if diag.severity == "warning" {
             warnings.push(item);
@@ -75,6 +77,8 @@ fn automation_error_to_compile_response(err: AutomationError, main_name: &str) -
             line: None,
             file: Some(main_name.to_owned()),
             suggestion: None,
+            suggestion_code: None,
+            suggestion_params: None,
         });
     }
     let raw_log = match err.details {

@@ -1,3 +1,4 @@
+import i18n from '../i18n';
 import type { useProjectResources } from '../hooks/useProjectResources';
 import type {
   ResourceListPage,
@@ -28,18 +29,18 @@ export function formatBytes(bytes: number | null | undefined): string {
 }
 
 export function availabilityLabel(value: string, downloaded: boolean): string {
-  if (downloaded) return 'Ready';
+  if (downloaded) return i18n.t('resources:availability.ready');
   switch (value) {
     case 'local':
-      return 'In project';
+      return i18n.t('resources:availability.inProject');
     case 'embedded':
-      return 'Built-in';
+      return i18n.t('resources:availability.builtIn');
     case 'cached_verified':
-      return 'Ready';
+      return i18n.t('resources:availability.ready');
     case 'invalid':
-      return 'Repair';
+      return i18n.t('resources:availability.repair');
     case 'missing':
-      return 'Missing';
+      return i18n.t('resources:availability.missing');
     default:
       return value.replace(/_/g, ' ');
   }
@@ -63,40 +64,72 @@ export function availabilityTone(value: string, downloaded: boolean, preparing: 
 
 export function cacheErrorMessage(code?: string): string {
   if (code?.includes('stale') || code?.includes('changed')) {
-    return 'The installed resource inventory changed. Reload the list to review the latest files.';
+    return i18n.t('resources:cacheErrors.inventoryChanged');
   }
   if (code?.includes('busy') || code?.includes('locked')) {
-    return 'Installed resources are in use and cannot be removed right now.';
+    return i18n.t('resources:cacheErrors.inUse');
   }
-  return 'Installed resources could not be updated. Reload the list and try again.';
+  return i18n.t('resources:cacheErrors.updateFailed');
 }
 
 export function friendlyPhase(phase?: string, status?: string): string {
   switch (status?.toLowerCase()) {
     case 'finished':
-      return 'Detected resources are ready';
+      return i18n.t('resources:phases.finished');
     case 'cancelled':
-      return 'Download paused';
+      return i18n.t('resources:phases.cancelled');
     case 'cancelling':
-      return 'Stopping the download';
+      return i18n.t('resources:phases.cancelling');
   }
   switch (phase?.toLowerCase()) {
     case 'downloading':
     case 'download':
-      return 'Downloading required files';
+      return i18n.t('resources:phases.downloading');
     case 'publishing':
-      return 'Verifying and saving files';
+      return i18n.t('resources:phases.publishing');
     case 'verifying':
-      return 'Verifying files';
+      return i18n.t('resources:phases.verifying');
     default:
-      return 'Preparing required files';
+      return i18n.t('resources:phases.preparing');
   }
+}
+
+const PACK_LABEL_KEYS: Record<string, string> = {
+  'latex-basic': 'editor:resources.packs.latexBasic',
+  'LaTeX basic': 'editor:resources.packs.latexBasic',
+  'LaTeX Basic': 'editor:resources.packs.latexBasic',
+  'latex-ieeetran': 'editor:resources.packs.latexIeeetran',
+  'IEEEtran article': 'editor:resources.packs.latexIeeetran',
+  'latex-resume-fonts': 'editor:resources.packs.latexResumeFonts',
+  'Resume fonts': 'editor:resources.packs.latexResumeFonts',
+  'typst-engine-assets': 'editor:resources.packs.typstEngineAssets',
+  'Typst engine assets': 'editor:resources.packs.typstEngineAssets',
+  'Base package': 'editor:resources.packs.basePackage',
+};
+
+/** Maps known backend pack identifiers and English pack labels to localized display labels. */
+export function friendlyPackLabel(labelOrId: string): string {
+  const key = PACK_LABEL_KEYS[labelOrId.trim()];
+  if (!key) return labelOrId;
+  return i18n.t(key as never, { defaultValue: labelOrId } as never) as unknown as string;
 }
 
 export function requirementRows(resourcePage: ResourceListPage | null): ResourceRequirement[] {
   return (resourcePage?.items ?? [])
     .filter(entry => entry.itemType === 'requirement')
-    .map(entry => entry.item as ResourceRequirement);
+    .map(entry => {
+      const item = entry.item as ResourceRequirement;
+      const mappedLabel = friendlyPackLabel(item.label);
+      const mappedParents = item.parents.map(parent => friendlyPackLabel(parent));
+      if (mappedLabel === item.label && mappedParents.every((parent, idx) => parent === item.parents[idx])) {
+        return item;
+      }
+      return {
+        ...item,
+        label: mappedLabel,
+        parents: mappedParents,
+      };
+    });
 }
 
 export function mergeUnknownItems(
@@ -128,29 +161,29 @@ export function splitCachePath(path: string): { fileName: string; dirPath: strin
   };
 }
 
-const UNKNOWN_REASON_LABELS: Record<string, string> = {
-  macro_valued_catalog_reference: 'Dynamic macro in package',
-  macro_valued_package_reference: 'Dynamic package macro',
-  macro_valued_file_reference: 'Dynamic file macro',
-  macro_valued_user_asset: 'Dynamic asset path',
-  macro_valued_font_reference: 'Dynamic font path',
-  input_not_found_in_project_or_bundle: 'Optional or missing input',
-  bundle_style_not_found: 'Package not found in bundle',
-  missing_project_asset_not_downloadable: 'Missing project asset',
-  missing_project_bibliography_not_downloadable: 'Missing bibliography file',
-  font_file_not_found: 'Font file not found',
-  font_family_resolution_unknown: 'System font (checked on compile)',
-  conditional_tex_dependency: 'Conditional dependency',
-  project_local_file_missing: 'Missing project file',
-  source_not_utf8: 'Non-UTF-8 source file',
-};
+const UNKNOWN_REASON_KEYS = {
+  macro_valued_catalog_reference: 'resources:unknownReasons.macro_valued_catalog_reference',
+  macro_valued_package_reference: 'resources:unknownReasons.macro_valued_package_reference',
+  macro_valued_file_reference: 'resources:unknownReasons.macro_valued_file_reference',
+  macro_valued_user_asset: 'resources:unknownReasons.macro_valued_user_asset',
+  macro_valued_font_reference: 'resources:unknownReasons.macro_valued_font_reference',
+  input_not_found_in_project_or_bundle: 'resources:unknownReasons.input_not_found_in_project_or_bundle',
+  bundle_style_not_found: 'resources:unknownReasons.bundle_style_not_found',
+  missing_project_asset_not_downloadable: 'resources:unknownReasons.missing_project_asset_not_downloadable',
+  missing_project_bibliography_not_downloadable: 'resources:unknownReasons.missing_project_bibliography_not_downloadable',
+  font_file_not_found: 'resources:unknownReasons.font_file_not_found',
+  font_family_resolution_unknown: 'resources:unknownReasons.font_family_resolution_unknown',
+  conditional_tex_dependency: 'resources:unknownReasons.conditional_tex_dependency',
+  project_local_file_missing: 'resources:unknownReasons.project_local_file_missing',
+  source_not_utf8: 'resources:unknownReasons.source_not_utf8',
+} as const;
 
-/** Converts backend unknown-resource reason codes into readable English labels. */
+/** Converts backend unknown-resource reason codes into readable localized labels. */
 export function friendlyUnknownReason(reason?: string | null): string {
   const trimmed = reason?.trim() ?? '';
-  if (!trimmed) return 'Dynamic reference';
-  const mapped = UNKNOWN_REASON_LABELS[trimmed];
-  if (mapped) return mapped;
+  if (!trimmed) return i18n.t('resources:unknownReasons.default');
+  const key = UNKNOWN_REASON_KEYS[trimmed as keyof typeof UNKNOWN_REASON_KEYS];
+  if (key) return i18n.t(key);
   const humanized = trimmed.replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
   return humanized.charAt(0).toUpperCase() + humanized.slice(1);
 }
