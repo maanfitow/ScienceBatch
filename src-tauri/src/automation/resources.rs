@@ -525,12 +525,15 @@ async fn run_prepare_process_with_timeout(
     timeout: Duration,
     permit: Option<tokio::sync::OwnedSemaphorePermit>,
 ) -> Result<(Value, Vec<super::PublicDiagnostic>), AutomationError> {
-    let mut child = Command::new(executable)
+    let mut command = Command::new(executable);
+    command
         .arg("--resource-prepare-worker")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .kill_on_drop(true)
+        .kill_on_drop(true);
+    super::configure_background_command(&mut command);
+    let mut child = command
         .spawn()
         .map_err(|e| {
             AutomationError::new(

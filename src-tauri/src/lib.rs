@@ -94,6 +94,7 @@ pub fn run() {
             commands::files::validate_recent_paths,
             commands::files::open_external_url,
             commands::files::reset_webview_zoom,
+            commands::updates::check_for_updates,
             commands::export::import_project_from_zip,
             commands::export::export_project_to_zip,
             commands::git::get_git_status,
@@ -111,6 +112,13 @@ pub fn run() {
             commands::git::fetch_git_remote,
             commands::git::pull_git_remote,
             commands::git::push_git_remote,
+            commands::git_auth::get_git_accounts,
+            commands::git_auth::sign_out_git_account,
+            commands::git_auth::start_github_device_flow,
+            commands::git_auth::poll_github_device_flow,
+            commands::git_auth::start_gitlab_pkce_flow,
+            commands::git_auth::list_git_provider_repositories,
+            commands::git_auth::create_git_provider_repository,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build ScienceBatch application");

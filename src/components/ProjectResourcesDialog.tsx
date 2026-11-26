@@ -296,10 +296,14 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
   const segmentPercent = (value: number) => (totalStorageBytes > 0 ? (value / totalStorageBytes) * 100 : 0);
 
   const normalizedFilter = cacheFilter.trim().toLocaleLowerCase();
-  const visibleCacheItems = (currentCachePage?.items ?? []).filter(item =>
+  const loadedCacheItems = currentCachePage?.items ?? [];
+  const visibleCacheItems = loadedCacheItems.filter(item =>
     normalizedFilter ? item.path.toLocaleLowerCase().includes(normalizedFilter) : true,
   );
-  const selectableCount = currentCachePage?.items.filter(item => item.removable && !item.requiredByProject).length ?? 0;
+  const selectableCount = loadedCacheItems.filter(item => item.removable && !item.requiredByProject).length;
+  const isWindowsPlatform = typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows');
+  const isReadOnlyCache =
+    isWindowsPlatform && loadedCacheItems.length > 0 && loadedCacheItems.every(item => !item.removable);
 
   const toggleSelected = (path: string) => {
     setSelectedPaths(current => (current.includes(path) ? current.filter(value => value !== path) : [...current, path]));
@@ -785,6 +789,11 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
                 <p className="project-resources-note">
                   Shared across LaTeX projects. Files used by this project and built-in app resources are protected.
                 </p>
+                {isReadOnlyCache && (
+                  <p className="project-resources-note project-resources-readonly-note">
+                    Shared cache pruning is read-only on Windows in v0.1.0.
+                  </p>
+                )}
               </section>
 
               <div className="project-resources-filter-box">
@@ -862,7 +871,11 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
                         {item.requiredByProject ? (
                           <span className="project-resources-cache-badge is-in-use">In use</span>
                         ) : !item.removable ? (
-                          <span className="project-resources-cache-badge is-built-in">Built-in</span>
+                          isReadOnlyCache ? (
+                            <span className="project-resources-cache-badge is-read-only">Read-only</span>
+                          ) : (
+                            <span className="project-resources-cache-badge is-built-in">Built-in</span>
+                          )
                         ) : null}
                         <span className="project-resources-cache-size">{formatBytes(item.bytes)}</span>
                       </label>
@@ -924,8 +937,14 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
               ) : (
                 <>
                   <span className="project-resources-selection-summary">
-                    {selectedPaths.length} selected
-                    {selectableCount > 0 ? ` · ${selectableCount} removable on this page` : ''}
+                    {isReadOnlyCache
+                      ? 'Shared cache pruning is read-only on Windows in v0.1.0.'
+                      : (
+                        <>
+                          {selectedPaths.length} selected
+                          {selectableCount > 0 ? ` · ${selectableCount} removable on this page` : ''}
+                        </>
+                      )}
                   </span>
                   <div className="project-resources-footer-actions">
                     <button type="button" className="project-resources-secondary" onClick={onClose}>
@@ -935,9 +954,15 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
                       type="button"
                       className="project-resources-cancel"
                       disabled={
-                        !selectedPaths.length
+                        isReadOnlyCache
+                        || !selectedPaths.length
                         || selectedPaths.length > 200
                         || Boolean(resources.activeJobId || resources.isRemovingResources)
+                      }
+                      title={
+                        isReadOnlyCache
+                          ? 'Shared cache pruning is read-only on Windows in v0.1.0.'
+                          : undefined
                       }
                       onClick={() => setConfirmRemoval(true)}
                     >

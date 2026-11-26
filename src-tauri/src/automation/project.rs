@@ -37,7 +37,12 @@ struct Metadata {
 use serde::Deserialize as DeserializeProject;
 
 pub fn normalize_project_path(path: &str) -> Result<String, AutomationError> {
-    if path.trim().is_empty() || Path::new(path).is_absolute() || path.starts_with('\\') {
+    if path.trim().is_empty()
+        || Path::new(path).is_absolute()
+        || Path::new(path).has_root()
+        || path.starts_with('\\')
+        || path.starts_with('/')
+    {
         return Err(as_error(
             "path.outside_project",
             "Project paths must be relative.",

@@ -704,6 +704,6 @@ fn set_private_windows_acl(path: &std::path::Path) -> Result<(), String> {
         ));
     }
     // A protected empty DACL would deny the owner too, so use an explicit owner-only ACL below.
-    let _ = &mut wide;
+    let _ = &wide;
     Ok(())
 }

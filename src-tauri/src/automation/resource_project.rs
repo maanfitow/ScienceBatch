@@ -3451,7 +3451,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     fn default_showcase_source() -> String {
-        let source_file = include_str!("../../../src/editor/latexData.ts");
+        let source_file = include_str!("../../../src/editor/latexData.ts").replace("\r\n", "\n");
         let (_, source) = source_file
             .split_once("export const DEFAULT_LATEX_SOURCE = `")
             .expect("default LaTeX source export should exist");
@@ -4032,7 +4032,27 @@ mod tests {
         #[cfg(unix)]
         std::os::unix::fs::symlink(&real, &link).unwrap();
         #[cfg(windows)]
-        std::os::windows::fs::symlink_dir(&real, &link).unwrap();
+        {
+            match std::os::windows::fs::symlink_dir(&real, &link) {
+                Ok(()) => {}
+                Err(error) if error.raw_os_error() == Some(1314) => {
+                    let output = std::process::Command::new("cmd")
+                        .args(["/C", "mklink", "/J"])
+                        .arg(&link)
+                        .arg(&real)
+                        .output();
+                    let junction_ok = output.map_or(false, |out| out.status.success())
+                        && fs::symlink_metadata(&link).map_or(false, |m| m.file_type().is_symlink());
+                    if !junction_ok {
+                        eprintln!(
+                            "Skipping snapshot_root_rejects_symbolic_links: neither directory symlinks nor NTFS junctions are permitted on this host."
+                        );
+                        return;
+                    }
+                }
+                Err(error) => panic!("failed to create Windows directory symlink: {error}"),
+            }
+        }
         let mut project = snapshot("\\documentclass{article}", &[]);
         project.root = link;
         assert_eq!(

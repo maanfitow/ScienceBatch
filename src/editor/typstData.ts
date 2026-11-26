@@ -2,7 +2,7 @@
  * Default starter template for Typst documents in ScienceBatch.
  */
 export const DEFAULT_TYPST_SOURCE = `#set page(paper: "a4", margin: (x: 2.5cm, y: 2.5cm))
-#set text(font: ("DejaVu Sans", "Libertinus Serif"), size: 11pt, lang: "en")
+#set text(font: ("Libertinus Serif", "New Computer Modern"), size: 11pt, lang: "en")
 #set par(justify: true)
 #set math.equation(numbering: "(1)")
 #set heading(numbering: "1.1")

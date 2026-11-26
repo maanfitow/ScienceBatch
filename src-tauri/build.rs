@@ -55,5 +55,16 @@ fn main() {
             );
         }
     }
+    println!("cargo:rerun-if-env-changed=SCIENCEBATCH_WINDOWS_TEST_MANIFEST");
+    if target.contains("windows-msvc")
+        && std::env::var("SCIENCEBATCH_WINDOWS_TEST_MANIFEST").as_deref() == Ok("1")
+    {
+        // `tauri-build` only links its Common-Controls v6 manifest resource into `bin` targets,
+        // so `cargo test --lib` on Windows MSVC needs an embedded manifest when `rfd` imports `TaskDialogIndirect`.
+        println!("cargo:rustc-link-arg=/MANIFEST:EMBED");
+        println!(
+            "cargo:rustc-link-arg=/MANIFESTDEPENDENCY:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'"
+        );
+    }
     tauri_build::build()
 }

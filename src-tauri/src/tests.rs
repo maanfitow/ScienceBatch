@@ -25,14 +25,25 @@ fn add_explicit_latex_showcase_assets(root: &Path) {
 
 #[test]
 fn test_compile_typst_with_fonts() {
-    let typst_code = r#"
+    #[cfg(target_os = "windows")]
+    let system_font = "Segoe UI";
+    #[cfg(target_os = "macos")]
+    let system_font = "Helvetica Neue";
+    #[cfg(target_os = "linux")]
+    let system_font = "DejaVu Sans";
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    let system_font = "Libertinus Serif";
+
+    let typst_code = format!(
+        r#"
     #set page(paper: "a4")
-    #set text(font: ("DejaVu Sans", "Libertinus Serif"), size: 11pt)
+    #set text(font: ("{system_font}", "Libertinus Serif"), size: 11pt)
     = Test Document
     Testing Typst compilation with system font discovery.
     $ E = m c^2 $
-    "#;
-    let resp = compile_typst_to_pdf(typst_code, None, None);
+    "#
+    );
+    let resp = compile_typst_to_pdf(&typst_code, None, None);
     assert!(
         resp.success,
         "Typst compilation failed: {:?}",
@@ -57,9 +68,15 @@ fn test_unknown_font_diagnostic_suggestion() {
         let err_item = error.unwrap();
         let suggestion = err_item.suggestion.as_ref().unwrap();
         #[cfg(target_os = "linux")]
-        assert!(suggestion.contains("sudo apt install fonts-roboto"));
+        {
+            assert!(suggestion.contains("sudo apt install fonts-roboto"));
+            assert!(suggestion.contains("Font 'roboto' is not installed"));
+        }
+        #[cfg(target_os = "windows")]
+        assert!(suggestion.contains("Font 'roboto' was not found on your Windows system"));
+        #[cfg(target_os = "macos")]
+        assert!(suggestion.contains("Font 'roboto' was not found on macOS"));
         assert!(suggestion.contains("Libertinus Serif"));
-        assert!(suggestion.contains("Font 'roboto' is not installed"));
     }
 }
 
@@ -510,7 +527,7 @@ Speed & Fast & Instant \\
 #[test]
 fn test_default_typst_source_compilation() {
     let typst = r#"#set page(paper: "a4", margin: (x: 2.5cm, y: 2.5cm))
-#set text(font: ("DejaVu Sans", "Libertinus Serif"), size: 11pt, lang: "en")
+#set text(font: ("Libertinus Serif", "New Computer Modern"), size: 11pt, lang: "en")
 #set math.equation(numbering: "(1)")
 #set heading(numbering: "1.1")
 
@@ -569,7 +586,7 @@ $ mat(x'; y') = mat(cos theta, -sin theta; sin theta, cos theta) mat(x; y) $ <eq
 #[test]
 fn test_showcase_typst_zero_errors_compilation() {
     let typst_source = r##"#set page(paper: "a4", margin: (x: 2.5cm, y: 2.5cm))
-#set text(font: ("DejaVu Sans", "Libertinus Serif"), size: 11pt, lang: "en")
+#set text(font: ("Libertinus Serif", "New Computer Modern"), size: 11pt, lang: "en")
 #set par(justify: true)
 #set math.equation(numbering: "(1)")
 #set heading(numbering: "1.1")

@@ -265,6 +265,12 @@
   color: var(--text-secondary);
 }
 
+.project-resources-readonly-note {
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--border-color) 65%, transparent);
+  color: var(--text-muted);
+}
+
 .project-resources-friendly-error {
   color: var(--status-error);
 }
@@ -693,7 +699,8 @@
   color: var(--status-info, var(--accent-primary));
 }
 
-.project-resources-cache-badge.is-built-in {
+.project-resources-cache-badge.is-built-in,
+.project-resources-cache-badge.is-read-only {
   background: var(--bg-tertiary);
   color: var(--text-secondary);
 }

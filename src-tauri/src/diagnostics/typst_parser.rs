@@ -2,6 +2,7 @@ use crate::types::DiagnosticItem;
 
 pub fn get_os_font_suggestion(font_name: &str) -> String {
     let font_clean = font_name.trim().trim_matches('\'').trim_matches('"');
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     let font_lower = font_clean.to_lowercase();
 
     #[cfg(target_os = "linux")]

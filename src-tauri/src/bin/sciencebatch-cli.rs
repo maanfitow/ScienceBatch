@@ -7,6 +7,9 @@ use std::sync::Arc;
 #[tokio::main]
 async fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().is_some_and(|a| a == "--git-credential") {
+        std::process::exit(sciencebatch_lib::commands::git_auth::run_git_credential_helper());
+    }
     if let Some(exit_code) = sciencebatch_lib::automation::mcp::run_cli_command(&args).await {
         std::process::exit(exit_code);
     }
