@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/core';
 import {
   AlertCircle,
@@ -10,6 +11,8 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { getIntlLocale } from '../i18n';
+import { translateBackendError } from '../i18n/backendMessages';
 import type { UpdateCheckResult } from '../hooks/useUpdateNotifier';
 
 interface UpdateModalProps {
@@ -27,7 +30,7 @@ const formatPublishedDate = (isoDate: string | null): string | null => {
   if (!isoDate) return null;
   const parsed = new Date(isoDate);
   if (Number.isNaN(parsed.getTime())) return null;
-  return parsed.toLocaleDateString('en-US', {
+  return parsed.toLocaleDateString(getIntlLocale(), {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -44,6 +47,8 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
   onCheckAgain,
   onClose,
 }) => {
+  const { t } = useTranslation(['menu', 'common']);
+
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -66,8 +71,8 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
     try {
       await invoke('open_external_url', { url: updateResult.downloadUrl });
     } catch (err) {
-      toast.error('Failed to open release page', {
-        description: err instanceof Error ? err.message : String(err),
+      toast.error(t('menu:updateModal.openReleaseError'), {
+        description: translateBackendError(err),
       });
     }
   };
@@ -84,12 +89,12 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
         <div className="modal-header">
           <div className="modal-title-group">
             <Sparkles size={18} className="modal-title-icon" />
-            <h3 id="update-modal-title">Software Updates</h3>
+            <h3 id="update-modal-title">{t('menu:updateModal.title')}</h3>
           </div>
           <button
             type="button"
             className="btn-modal-close"
-            aria-label="Close update dialog"
+            aria-label={t('menu:updateModal.closeAria')}
             onClick={onClose}
           >
             <X size={17} />
@@ -98,7 +103,7 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
 
         <div className="modal-body">
           <div className="update-version-row">
-            <span className="update-version-label">Installed Version</span>
+            <span className="update-version-label">{t('menu:updateModal.installedVersion')}</span>
             <span className="update-version-badge">v{currentVersion}</span>
           </div>
 
@@ -106,9 +111,9 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
             <div className="update-status-card update-status-checking" role="status" aria-live="polite">
               <LoaderCircle size={18} className="spin" />
               <div>
-                <div className="update-status-title">Checking for updates...</div>
+                <div className="update-status-title">{t('menu:updateModal.checkingTitle')}</div>
                 <div className="update-status-subtitle">
-                  Querying GitHub Releases for the latest stable ScienceBatch build.
+                  {t('menu:updateModal.checkingSubtitle')}
                 </div>
               </div>
             </div>
@@ -118,8 +123,8 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
             <div className="update-status-card update-status-error" role="alert">
               <AlertCircle size={18} />
               <div>
-                <div className="update-status-title">Update check failed</div>
-                <div className="update-status-subtitle">{checkError}</div>
+                <div className="update-status-title">{t('menu:updateModal.errorTitle')}</div>
+                <div className="update-status-subtitle">{translateBackendError(checkError)}</div>
               </div>
             </div>
           )}
@@ -129,18 +134,25 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
               <div className="update-available-header">
                 <div>
                   <div className="update-status-title">
-                    {updateResult.releaseName || `ScienceBatch ${updateResult.latestTag}`}
+                    {updateResult.releaseName ||
+                      t('menu:updateModal.releaseFallbackName', { tag: updateResult.latestTag })}
                   </div>
                   <div className="update-status-subtitle">
-                    Version v{updateResult.latestVersion} is available
-                    {publishedDate ? ` · Published ${publishedDate}` : ''}
+                    {publishedDate
+                      ? t('menu:updateModal.versionAvailableWithDate', {
+                          version: updateResult.latestVersion,
+                          date: publishedDate,
+                        })
+                      : t('menu:updateModal.versionAvailable', {
+                          version: updateResult.latestVersion,
+                        })}
                   </div>
                 </div>
-                <span className="update-new-badge">New Release</span>
+                <span className="update-new-badge">{t('menu:updateModal.newReleaseBadge')}</span>
               </div>
 
               {updateResult.releaseNotes && (
-                <div className="update-release-notes" aria-label="Release notes">
+                <div className="update-release-notes" aria-label={t('menu:updateModal.releaseNotesAria')}>
                   {updateResult.releaseNotes}
                 </div>
               )}
@@ -156,13 +168,16 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
               <div>
                 <div className="update-status-title">
                   {updateResult.noPublishedReleases
-                    ? 'No published releases yet'
-                    : 'You are up to date'}
+                    ? t('menu:updateModal.noReleasesTitle')
+                    : t('menu:updateModal.upToDateTitle')}
                 </div>
                 <div className="update-status-subtitle">
                   {updateResult.noPublishedReleases
-                    ? `You are running ScienceBatch v${currentVersion}. Public releases will appear here once published on GitHub.`
-                    : `ScienceBatch v${currentVersion} matches the latest stable release (${updateResult.latestTag}).`}
+                    ? t('menu:updateModal.noReleasesSubtitle', { version: currentVersion })
+                    : t('menu:updateModal.upToDateSubtitle', {
+                        version: currentVersion,
+                        tag: updateResult.latestTag,
+                      })}
                 </div>
               </div>
             </div>
@@ -172,9 +187,9 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
             <div className="update-status-card">
               <RefreshCw size={18} />
               <div>
-                <div className="update-status-title">Ready to check for updates</div>
+                <div className="update-status-title">{t('menu:updateModal.readyTitle')}</div>
                 <div className="update-status-subtitle">
-                  Check GitHub Releases manually whenever you want to verify if a newer version is available.
+                  {t('menu:updateModal.readySubtitle')}
                 </div>
               </div>
             </div>
@@ -186,12 +201,12 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
               checked={autoCheckOnStartup}
               onChange={(event) => onToggleAutoCheckOnStartup(event.target.checked)}
             />
-            <span>Check for updates automatically on startup</span>
+            <span>{t('menu:updateModal.autoCheckLabel')}</span>
           </label>
 
           <div className="modal-footer">
             <button type="button" className="btn-secondary" onClick={onClose}>
-              Close
+              {t('common:actions.close')}
             </button>
             <button
               type="button"
@@ -200,7 +215,11 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
               onClick={onCheckAgain}
             >
               <RefreshCw size={14} className={isChecking ? 'spin' : undefined} />
-              <span>{isChecking ? 'Checking...' : 'Check Again'}</span>
+              <span>
+                {isChecking
+                  ? t('menu:updateModal.checkingButton')
+                  : t('menu:updateModal.checkAgainButton')}
+              </span>
             </button>
             {updateResult?.updateAvailable && (
               <button
@@ -209,7 +228,7 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
                 onClick={() => void handleDownloadRelease()}
               >
                 <Download size={14} />
-                <span>Download Release</span>
+                <span>{t('menu:updateModal.downloadRelease')}</span>
               </button>
             )}
           </div>

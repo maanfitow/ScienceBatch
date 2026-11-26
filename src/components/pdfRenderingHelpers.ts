@@ -216,6 +216,13 @@ export function createPdfLinkService(
   };
 }
 
+export interface PdfLinkClickMessages {
+  followExternalLink?: string;
+  openLabel?: string;
+  jumpInternalDestination?: string;
+  jumpLabel?: string;
+}
+
 export interface PdfLinkClickCoordinationOptions {
   event: {
     target: EventTarget | null;
@@ -241,6 +248,7 @@ export interface PdfLinkClickCoordinationOptions {
       action: { label: string; onClick: () => void };
     },
   ) => void;
+  messages?: PdfLinkClickMessages;
 }
 
 /**
@@ -256,6 +264,7 @@ export function handlePdfAnnotationLinkClickCapture(options: PdfLinkClickCoordin
     bypassModifierRef,
     onOpenExternalUrl,
     showInfoToast,
+    messages,
   } = options;
 
   const targetEl = event.target as HTMLElement | null;
@@ -304,21 +313,21 @@ export function handlePdfAnnotationLinkClickCapture(options: PdfLinkClickCoordin
   const modLabel = getPdfModifierLabel();
 
   if (externalUrl) {
-    showInfoToast(`Hold ${modLabel} + Click to follow link`, {
+    showInfoToast(messages?.followExternalLink ?? `Hold ${modLabel} + Click to follow link`, {
       description: externalUrl,
       duration: 2500,
       action: {
-        label: 'Open',
+        label: messages?.openLabel ?? 'Open',
         onClick: () => {
           onOpenExternalUrl(externalUrl);
         },
       },
     });
   } else {
-    showInfoToast(`Hold ${modLabel} + Click to jump to destination`, {
+    showInfoToast(messages?.jumpInternalDestination ?? `Hold ${modLabel} + Click to jump to destination`, {
       duration: 2200,
       action: {
-        label: 'Jump',
+        label: messages?.jumpLabel ?? 'Jump',
         onClick: () => {
           bypassModifierRef.current = true;
           anchor.click();

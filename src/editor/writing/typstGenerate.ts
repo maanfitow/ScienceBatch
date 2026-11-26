@@ -1,6 +1,13 @@
 import type { MathContext } from '../../types/writing';
 import type { TypstSymbolEntry } from './typstSymbols';
 
+type WritingTranslator = (key: string, fallback: string, params?: Record<string, string | number>) => string;
+const wt = (key: string, fallback: string, params?: Record<string, string | number>): string => {
+  const fn = (globalThis as { __sciencebatchTranslate?: WritingTranslator }).__sciencebatchTranslate;
+  if (fn) return fn(`writing:${key}`, fallback, params);
+  return params ? fallback.replace(/\{\{(\w+)\}\}/g, (_m, k) => String(params[k] ?? '')) : fallback;
+};
+
 export interface TypstInsertionResult { text: string; reason?: string }
 
 const boundaryCharacter = (character: string | undefined) => Boolean(character && /[\p{L}\p{N}_]/u.test(character));
@@ -13,14 +20,14 @@ export function typstSymbolInsertion(
   start: number,
   end: number,
 ): TypstInsertionResult {
-  if (context === 'blocked' || context === 'math-environment') return { text: '', reason: 'This Typst context does not support symbol insertion.' };
-  if (start < 0 || end < start || end > source.length) return { text: '', reason: 'The selection is outside the current document.' };
+  if (context === 'blocked' || context === 'math-environment') return { text: '', reason: wt('typstSymbols.insertionUnsupported', 'This Typst context does not support symbol insertion.') };
+  if (start < 0 || end < start || end > source.length) return { text: '', reason: wt('typstSymbols.selectionOutsideDocument', 'The selection is outside the current document.') };
   const identifier = typeof symbol === 'string' ? symbol : symbol.nativeIdentifier;
-  if (!/^[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)*$/.test(identifier)) return { text: '', reason: 'Choose a verified built-in Typst symbol.' };
+  if (!/^[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)*$/.test(identifier)) return { text: '', reason: wt('typstSymbols.verifiedSymbolRequired', 'Choose a verified built-in Typst symbol.') };
   if (context === 'text') return { text: `$${identifier}$` };
 
   if (start === end && isInsideMathIdentifier(source, start)) {
-    return { text: '', reason: 'Place the cursor between math identifiers or select the complete identifier before inserting.' };
+    return { text: '', reason: wt('typstSymbols.insideMathIdentifierBoundary', 'Place the cursor between math identifiers or select the complete identifier before inserting.') };
   }
   const before = source[start - 1];
   const after = source[end];

@@ -1,0 +1,201 @@
+{
+  "common": {
+    "closePanel": "Close panel"
+  },
+  "activityBar": {
+    "ariaLabel": "Workspace Activity Bar",
+    "separatorTooltip": "Tool group separator (Drag an icon here to move between groups)",
+    "toolTooltip": "{{label}} - Drag to move",
+    "toolTooltipWithShortcut": "{{label}} ({{shortcut}}) - Drag to move",
+    "tools": {
+      "files": "Project Files",
+      "search": "Search in Files",
+      "git": "Source Control (Git)",
+      "dependencies": "Dependencies",
+      "outline": "Outline & Structure"
+    },
+    "contextMenu": {
+      "moveToBottom": "Move to Bottom Group",
+      "moveToTop": "Move to Top Group",
+      "resetLayout": "Reset to Default Layout"
+    }
+  },
+  "workspace": {
+    "openProjectDependencies": "Open a project to view dependencies."
+  },
+  "fileTree": {
+    "projectExplorer": "Project Explorer",
+    "renameInputAriaLabel": "Rename item",
+    "newFileInsideFolder": "New file inside folder",
+    "newFileInsideAriaLabel": "New file inside {{name}}",
+    "moreActionsFor": "More actions for {{name}}",
+    "mainEntrypointTitle": "Main Entrypoint File",
+    "mainBadge": "Main",
+    "createInsidePrefix": "Inside:",
+    "createFilePlaceholder": "filename.tex or filename.typ",
+    "createFolderPlaceholder": "folder name",
+    "confirmCreateAriaLabel": "Confirm create",
+    "emptyState": "No files in project folder",
+    "header": {
+      "importFilesTitle": "Import Files / Images",
+      "importFilesAriaLabel": "Import files or images",
+      "newFile": "New File",
+      "newFileAriaLabel": "New file",
+      "newFolder": "New Folder",
+      "newFolderAriaLabel": "New folder",
+      "collapseAll": "Collapse All Folders",
+      "collapseAllAriaLabel": "Collapse all folders",
+      "refresh": "Refresh Explorer",
+      "refreshAriaLabel": "Refresh explorer"
+    },
+    "contextMenu": {
+      "newFile": "New File…",
+      "newFolder": "New Folder…",
+      "importFilesHere": "Import Files Here…",
+      "collapseFolder": "Collapse Folder",
+      "expandFolder": "Expand Folder",
+      "duplicate": "Duplicate",
+      "copyPath": "Copy Path",
+      "copyRelativePath": "Copy Relative Path",
+      "revealInFileManager": "Reveal in File Manager",
+      "previewAsset": "Preview Asset",
+      "openFile": "Open File",
+      "setAsMain": "Set as Main Entrypoint",
+      "copyFigureSnippet": "Copy {{engine}} Figure Snippet"
+    },
+    "toast": {
+      "pathCopied": "Path copied",
+      "relativePathCopied": "Relative path copied",
+      "copyPathFailed": "Failed to copy path",
+      "figureSnippetCopied": "Figure snippet copied to clipboard",
+      "copySnippetFailed": "Failed to copy snippet"
+    }
+  },
+  "tabs": {
+    "openFilesAriaLabel": "Open files",
+    "selectEditableSource": "Select an editable {{engine}} source file.",
+    "pinnedTab": "Pinned tab",
+    "pinnedTabTooltip": "{{path}}\nPinned tab",
+    "unsavedChanges": "Unsaved changes",
+    "closeTabAriaLabel": "Close {{name}}",
+    "closeTabTitle": "Close {{name}} (Ctrl/Cmd+W)",
+    "emptyState": "Open a source file or project asset to get started.",
+    "contextMenu": {
+      "pin": "Pin",
+      "unpin": "Unpin",
+      "closeOthers": "Close Others",
+      "closeAllUnpinned": "Close All Unpinned"
+    },
+    "diff": {
+      "openProjectError": "Open a project folder to view this diff.",
+      "loading": "Loading diff…",
+      "ariaLabel": "Diff for {{path}}"
+    },
+    "asset": {
+      "loading": "Loading preview…",
+      "previewError": "Unable to preview this file: {{error}}",
+      "imageUnavailable": "This image is deleted or unavailable in the current project.",
+      "imageAltFallback": "Project image",
+      "pdfLinkTitlePrefix": "{{modifier}}+Click to follow link",
+      "pdfPageAriaLabel": "PDF page {{page}}",
+      "previousPage": "Previous",
+      "pageIndicator": "Page {{current}} of {{total}}",
+      "nextPage": "Next",
+      "contextMenu": {
+        "copyImage": "Copy Image",
+        "selectAll": "Select All"
+      },
+      "toast": {
+        "openLinkFailed": "Failed to open link",
+        "copyFailed": "Copy failed",
+        "imageCopied": "Image copied to clipboard",
+        "copyImageFailed": "Failed to copy image"
+      }
+    }
+  },
+  "search": {
+    "title": "SEARCH",
+    "filtersTooltip": "File inclusion/exclusion filters",
+    "refreshTooltip": "Refresh search (Enter)",
+    "showReplace": "Show replace",
+    "hideReplace": "Hide replace",
+    "searchPlaceholder": "Search...",
+    "searchAriaLabel": "Search in project files",
+    "clearSearch": "Clear search",
+    "matchCaseTooltip": "Match Case (Alt+C)",
+    "wholeWordTooltip": "Match Whole Word (Alt+W)",
+    "regexTooltip": "Use Regular Expression (Alt+R)",
+    "replacePlaceholder": "Replace...",
+    "replaceAriaLabel": "Replace text",
+    "clearField": "Clear field",
+    "replaceAllTooltip": "Replace all in project (Ctrl+Alt+Enter)",
+    "replaceAllButton": "All",
+    "includeLabel": "Include:",
+    "includePlaceholder": "e.g. *.tex, *.typ, *.bib",
+    "excludeLabel": "Exclude:",
+    "excludePlaceholder": "e.g. assets, dist",
+    "invalidRegex": "Invalid regular expression",
+    "searching": "Searching in project...",
+    "resultsPart_one": "<strong>{{count}}</strong> result",
+    "resultsPart_other": "<strong>{{count}}</strong> results",
+    "acrossConnector": "across",
+    "filesPart_one": "<strong>{{count}}</strong> file",
+    "filesPart_other": "<strong>{{count}}</strong> files",
+    "noResults": "No results found",
+    "emptyPrompt": "Type to search in project files",
+    "replaceInFileTooltip": "Replace all occurrences in this file",
+    "matchLineTooltip": "Line {{line}}: {{content}}",
+    "replaceMatchTooltip": "Replace this occurrence",
+    "showMoreMatches_one": "+ Show {{count}} more match...",
+    "showMoreMatches_other": "+ Show {{count}} more matches...",
+    "toast": {
+      "replacedInFile": "Replacements applied in file",
+      "replaceInFileFailed": "Failed to replace in file",
+      "replacedSummary_one": "Replaced {{count}} occurrence across {{files}}",
+      "replacedSummary_other": "Replaced {{count}} occurrences across {{files}}",
+      "replacedFileCount_one": "{{count}} file",
+      "replacedFileCount_other": "{{count}} files",
+      "replacedAtLine": "Occurrence replaced at line {{line}}",
+      "replaceOccurrenceFailed": "Failed to replace occurrence"
+    }
+  },
+  "outline": {
+    "title": "OUTLINE",
+    "documentFallback": "Document",
+    "detectedSectionsTooltip": "Detected outline sections",
+    "clearFilterToToggle": "Clear filter to collapse or expand sections",
+    "expandAllTooltip": "Expand all sections",
+    "collapseAllTooltip": "Collapse all sections",
+    "closePanel": "Close outline panel",
+    "filterPlaceholder": "Filter headings...",
+    "filterAriaLabel": "Filter headings",
+    "clearFilter": "Clear filter",
+    "treeAriaLabel": "Document outline",
+    "noMatchingHeadings": "No matching headings found",
+    "noHeadingsDetected": "No sections or headings detected",
+    "emptyHintTypst": "Add = Heading in your document",
+    "emptyHintLatex": "Use \\section{...} or \\chapter{...}",
+    "itemTooltip": "{{title}} (Line {{line}})",
+    "collapseSection": "Collapse section",
+    "expandSection": "Expand section",
+    "labelTooltip": "Label: {{label}}",
+    "kinds": {
+      "part": "Part",
+      "chapter": "Chapter",
+      "frame": "Frame",
+      "headingLevel": "Heading level {{level}}"
+    },
+    "contextMenu": {
+      "jumpToSection": "Jump to Section",
+      "copyTitle": "Copy Heading Title",
+      "copyReference": "Copy Reference",
+      "expandAll": "Expand All",
+      "collapseAll": "Collapse All"
+    },
+    "toast": {
+      "copyFailed": "Failed to copy to clipboard",
+      "titleCopied": "Heading title copied",
+      "referenceCopied": "Reference copied"
+    }
+  }
+}

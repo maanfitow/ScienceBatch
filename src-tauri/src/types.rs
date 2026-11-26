@@ -8,6 +8,10 @@ pub struct DiagnosticItem {
     #[serde(default)]
     pub file: Option<String>,
     pub suggestion: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub suggestion_code: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub suggestion_params: Option<std::collections::BTreeMap<String, String>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -56,6 +60,10 @@ pub struct CompileResponse {
 pub struct ProgressPayload {
     pub status: String,
     pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub params: Option<std::collections::BTreeMap<String, String>>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -175,6 +183,8 @@ pub struct GitOperationProgressPayload {
     pub operation: String,
     pub status: String,
     pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]

@@ -9,6 +9,21 @@ import { TYPST_WRITING_SYMBOLS } from './writing/typstSymbols';
 
 let typstCompletionDisposable: { dispose: () => void } | null = null;
 
+const tr = (key: string, fallback: string, params?: Record<string, string | number>): string =>
+  (
+    globalThis as {
+      __sciencebatchTranslate?: (
+        key: string,
+        fallback: string,
+        params?: Record<string, string | number>,
+      ) => string;
+    }
+  ).__sciencebatchTranslate?.(`editor:${key}`, fallback, params) ?? fallback;
+
+function getTypstCompletionKey(name: string): string {
+  return name.replace(/[^a-zA-Z0-9_]+/g, '_');
+}
+
 interface TypstCompletionItemDef {
   name: string;
   kind?: number;
@@ -359,7 +374,9 @@ export function registerTypstCompletion(monaco: Monaco) {
                 kind: monaco.languages.CompletionItemKind.Value,
                 insertText: symbol.nativeIdentifier,
                 detail: `${symbol.name} (${symbol.glyph})`,
-                documentation: `Built-in Typst symbol: ${symbol.nativeIdentifier}`,
+                documentation: tr('completion.typst.symbolDocumentation', `Built-in Typst symbol: ${symbol.nativeIdentifier}`, {
+                  id: symbol.nativeIdentifier,
+                }),
                 range: symbolRange,
                 sortText: `${symbol.nativeIdentifier.startsWith(prefix) ? '00' : '10'}_${String(index).padStart(3, '0')}_${symbol.nativeIdentifier}`,
                 filterText: `${symbol.nativeIdentifier} ${symbol.name} ${symbol.aliases.join(' ')}`,
@@ -371,8 +388,11 @@ export function registerTypstCompletion(monaco: Monaco) {
             kind: monaco.languages.CompletionItemKind.Function,
             insertText: 'mat(delim: "(", ${1:1, 2; 3, 4})',
             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-            detail: 'Matrix expression',
-            documentation: 'Creates a matrix in Typst math using commas for columns and semicolons for rows.',
+            detail: tr('completion.typst.matDetail', 'Matrix expression'),
+            documentation: tr(
+              'completion.typst.matDocumentation',
+              'Creates a matrix in Typst math using commas for columns and semicolons for rows.',
+            ),
             range: symbolRange,
             sortText: '00_mat_matrix',
             filterText: 'mat matrix',
@@ -398,8 +418,8 @@ export function registerTypstCompletion(monaco: Monaco) {
             label: imgPath,
             kind: monaco.languages.CompletionItemKind.File,
             insertText: imgPath,
-            detail: 'Project Image Asset',
-            documentation: `Insert image path: ${imgPath}`,
+            detail: tr('completion.typst.imageDetail', 'Project Image Asset'),
+            documentation: tr('completion.typst.imageDocumentation', `Insert image path: ${imgPath}`, { path: imgPath }),
             range: imgRange,
             sortText: `00_img_${String(idx).padStart(3, '0')}_${imgPath}`,
           })),
@@ -423,8 +443,8 @@ export function registerTypstCompletion(monaco: Monaco) {
             label: bFile,
             kind: monaco.languages.CompletionItemKind.File,
             insertText: bFile,
-            detail: 'Project Bibliography File (.bib)',
-            documentation: `Typst bibliography source: ${bFile}`,
+            detail: tr('completion.typst.bibDetail', 'Project Bibliography File (.bib)'),
+            documentation: tr('completion.typst.bibDocumentation', `Typst bibliography source: ${bFile}`, { path: bFile }),
             range: bibRange,
             sortText: `00_bib_${String(idx).padStart(3, '0')}_${bFile}`,
           })),
@@ -448,8 +468,8 @@ export function registerTypstCompletion(monaco: Monaco) {
             label: sFile,
             kind: monaco.languages.CompletionItemKind.File,
             insertText: sFile,
-            detail: 'Typst Submodule File (.typ)',
-            documentation: `Include Typst file: ${sFile}`,
+            detail: tr('completion.typst.includeDetail', 'Typst Submodule File (.typ)'),
+            documentation: tr('completion.typst.includeDocumentation', `Include Typst file: ${sFile}`, { path: sFile }),
             range: incRange,
             sortText: `00_inc_${String(idx).padStart(3, '0')}_${sFile}`,
           })),
@@ -482,8 +502,8 @@ export function registerTypstCompletion(monaco: Monaco) {
           label: `@${lbl}`,
           kind: monaco.languages.CompletionItemKind.Reference,
           insertText: lbl,
-          detail: 'Typst Cross-reference Target',
-          documentation: `Reference label: <${lbl}>`,
+          detail: tr('completion.typst.refDetail', 'Typst Cross-reference Target'),
+          documentation: tr('completion.typst.refDocumentation', `Reference label: <${lbl}>`, { label: lbl }),
           range: refRange,
           sortText: `00_ref_${String(idx).padStart(3, '0')}_${lbl}`,
         }));
@@ -515,6 +535,9 @@ export function registerTypstCompletion(monaco: Monaco) {
         const label = isHashPrefixed ? `#${item.name}` : item.name;
         const insertText = isHashPrefixed ? `#${item.insertText}` : item.insertText;
         const filterText = label;
+        const completionKey = getTypstCompletionKey(item.name);
+        const detail = tr(`typstCompletions.${completionKey}.detail`, item.detail);
+        const documentation = tr(`typstCompletions.${completionKey}.documentation`, item.documentation);
 
         // Rank prefix matches highest (e.g. typing '#a' prioritizes '#align')
         let priority = '20';
@@ -540,9 +563,9 @@ export function registerTypstCompletion(monaco: Monaco) {
           kind: item.kind ?? monaco.languages.CompletionItemKind.Snippet,
           insertText,
           insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-          detail: item.detail,
+          detail,
           documentation: {
-            value: `### \`${label}\`\n\n${item.documentation}`,
+            value: `### \`${label}\`\n\n${documentation}`,
           },
           range,
           sortText: `${priority}_${label}`,
@@ -558,8 +581,8 @@ export function registerTypstCompletion(monaco: Monaco) {
             kind: monaco.languages.CompletionItemKind.Snippet,
             insertText: '= ${1:Section Title} <${2:sec:label}>\n',
             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-            detail: 'Top-level section heading',
-            documentation: 'Top-level section heading with cross-reference label',
+            detail: tr('completion.typst.heading1Detail', 'Top-level section heading'),
+            documentation: tr('completion.typst.heading1Documentation', 'Top-level section heading with cross-reference label'),
             range,
             sortText: '40_=1',
             filterText: '= Heading 1',
@@ -569,8 +592,8 @@ export function registerTypstCompletion(monaco: Monaco) {
             kind: monaco.languages.CompletionItemKind.Snippet,
             insertText: '== ${1:Subsection Title} <${2:subsec:label}>\n',
             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-            detail: 'Second-level subsection heading',
-            documentation: 'Second-level subsection heading with cross-reference label',
+            detail: tr('completion.typst.heading2Detail', 'Second-level subsection heading'),
+            documentation: tr('completion.typst.heading2Documentation', 'Second-level subsection heading with cross-reference label'),
             range,
             sortText: '40_=2',
             filterText: '== Heading 2',
@@ -580,8 +603,8 @@ export function registerTypstCompletion(monaco: Monaco) {
             kind: monaco.languages.CompletionItemKind.Snippet,
             insertText: '$ ${1:E = m c^2} $ <${2:eq:label}>\n',
             insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-            detail: 'Display math equation block',
-            documentation: 'Display math equation block with reference label',
+            detail: tr('completion.typst.blockMathDetail', 'Display math equation block'),
+            documentation: tr('completion.typst.blockMathDocumentation', 'Display math equation block with reference label'),
             range,
             sortText: '40_$eq',
             filterText: '$ equation',

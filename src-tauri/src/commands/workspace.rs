@@ -624,6 +624,10 @@ pub async fn compile_workspace_snapshot(
             "workspaceIdentity": request.workspace_identity.clone(),
             "status": "Started",
             "message": format!("Compiling current workspace snapshot ({})", request.job_id),
+            "code": "compiler.workspace_started",
+            "params": {
+                "jobId": request.job_id,
+            },
         }),
     );
     let result = compile_snapshot(
@@ -645,6 +649,11 @@ pub async fn compile_workspace_snapshot(
         "workspaceIdentity": request.workspace_identity,
         "status": status,
         "message": format!("Workspace compilation {} ({})", status.to_lowercase(), request.job_id),
+        "code": "compiler.workspace_finished",
+        "params": {
+            "status": status,
+            "jobId": request.job_id,
+        },
     }));
     result
 }

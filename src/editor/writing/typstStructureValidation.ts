@@ -1,5 +1,12 @@
 import { TypstStructureError } from '../../types/typstWriting';
 
+type WritingTranslator = (key: string, fallback: string, params?: Record<string, string | number>) => string;
+const wt = (key: string, fallback: string, params?: Record<string, string | number>): string => {
+  const fn = (globalThis as { __sciencebatchTranslate?: WritingTranslator }).__sciencebatchTranslate;
+  if (fn) return fn(`writing:${key}`, fallback, params);
+  return params ? fallback.replace(/\{\{(\w+)\}\}/g, (_m, k) => String(params[k] ?? '')) : fallback;
+};
+
 type ValidationMode = 'content' | 'math';
 type ActiveMode = 'content' | 'math' | 'code';
 type Group = { close: string; open: string; mode: ActiveMode; rootCode: boolean; restoreMode?: ActiveMode };
@@ -17,7 +24,7 @@ export function validateTypstMatrixCell(source: string): void {
 
 function validateBalancedCell(source: string, mode: ValidationMode): void {
   if (/[\r\n\u2028\u2029]/u.test(source)) {
-    throw new TypstStructureError('Cell content must stay on one line.');
+    throw new TypstStructureError(wt('typstValidation.cellSingleLine', 'Cell content must stay on one line.'));
   }
 
   const groups: Group[] = [];
@@ -33,34 +40,34 @@ function validateBalancedCell(source: string, mode: ValidationMode): void {
       continue;
     }
     if (character === '"' && activeMode === 'content' && groups.some((group) => group.restoreMode === 'code')) {
-      throw new TypstStructureError('Quotes in content arguments inside code calls are ambiguous; wrap literal text in #text("...").');
+      throw new TypstStructureError(wt('typstValidation.quotesInContentArguments', 'Quotes in content arguments inside code calls are ambiguous; wrap literal text in #text("...").'));
     }
 
     if (character === '`') {
-      if (activeMode !== 'content') throw new TypstStructureError('Raw content is not allowed in math or code expressions.');
+      if (activeMode !== 'content') throw new TypstStructureError(wt('typstValidation.rawInMathOrCode', 'Raw content is not allowed in math or code expressions.'));
       index = scanRaw(source, index);
       continue;
     }
 
     if (character === '/' && (next === '/' || next === '*')) {
-      throw new TypstStructureError('Comments are not allowed inside a structure cell.');
+      throw new TypstStructureError(wt('typstValidation.commentsInCell', 'Comments are not allowed inside a structure cell.'));
     }
 
     if (character === '\\') {
-      if (initialMode === 'math') throw new TypstStructureError('Code escapes are not allowed inside a matrix cell.');
+      if (initialMode === 'math') throw new TypstStructureError(wt('typstValidation.codeEscapesInMatrix', 'Code escapes are not allowed inside a matrix cell.'));
       // Typst markup escapes punctuation; it cannot open a group or a separator.
-      if (index + 1 >= source.length) throw new TypstStructureError('Cell content ends with an incomplete escape.');
+      if (index + 1 >= source.length) throw new TypstStructureError(wt('typstValidation.incompleteEscape', 'Cell content ends with an incomplete escape.'));
       index += 1;
       continue;
     }
 
     if (character === '$' && activeMode !== 'code') {
-      if (initialMode === 'math') throw new TypstStructureError('Do not add math delimiters inside a matrix cell.');
+      if (initialMode === 'math') throw new TypstStructureError(wt('typstValidation.mathDelimitersInMatrix', 'Do not add math delimiters inside a matrix cell.'));
       if (activeMode === 'content') {
         mathGroupDepth = groups.length;
         activeMode = 'math';
       } else {
-        if (groups.length !== mathGroupDepth) throw new TypstStructureError('Groups cannot cross a math delimiter inside a table cell.');
+        if (groups.length !== mathGroupDepth) throw new TypstStructureError(wt('typstValidation.groupsCrossMathDelimiter', 'Groups cannot cross a math delimiter inside a table cell.'));
         activeMode = 'content';
         mathGroupDepth = undefined;
       }
@@ -68,7 +75,7 @@ function validateBalancedCell(source: string, mode: ValidationMode): void {
     }
 
     if (initialMode === 'math' && (character === '#' || character === '&')) {
-      throw new TypstStructureError(character === '#' ? 'Code escapes are not allowed inside a matrix cell.' : 'Alignment points are not allowed inside a matrix cell.');
+      throw new TypstStructureError(character === '#' ? wt('typstValidation.codeEscapesInMatrix', 'Code escapes are not allowed inside a matrix cell.') : wt('typstValidation.alignmentPointsInMatrix', 'Alignment points are not allowed inside a matrix cell.'));
     }
 
     if (initialMode === 'content' && character === '#' && (activeMode === 'content' || activeMode === 'math')) {
@@ -102,18 +109,18 @@ function validateBalancedCell(source: string, mode: ValidationMode): void {
     const closesGroup = activeMode === 'content' ? character === ']' : character === ')' || character === ']' || character === '}';
     if (closesGroup) {
       const group = groups.pop();
-      if (!group || group.mode !== activeMode || group.close !== character) throw new TypstStructureError('Cell content contains an unbalanced or cross-context group.');
+      if (!group || group.mode !== activeMode || group.close !== character) throw new TypstStructureError(wt('typstValidation.unbalancedOrCrossContextGroup', 'Cell content contains an unbalanced or cross-context group.'));
       if (group.rootCode) activeMode = group.restoreMode ?? 'content';
       else if (group.restoreMode) activeMode = group.restoreMode;
       continue;
     }
 
     if (initialMode === 'math' && groups.length === 0 && (character === ',' || character === ';')) {
-      throw new TypstStructureError('Top-level commas and semicolons are reserved for matrix structure.');
+      throw new TypstStructureError(wt('typstValidation.topLevelSeparatorsReserved', 'Top-level commas and semicolons are reserved for matrix structure.'));
     }
   }
 
-  if (groups.length > 0 || activeMode !== initialMode) throw new TypstStructureError('Cell content contains an unclosed group or math region.');
+  if (groups.length > 0 || activeMode !== initialMode) throw new TypstStructureError(wt('typstValidation.unclosedGroupOrMath', 'Cell content contains an unclosed group or math region.'));
 }
 
 function findCodeCallOpen(source: string, identifierStart: number): number | null {
@@ -128,13 +135,13 @@ function findCodeCallOpen(source: string, identifierStart: number): number | nul
 function scanString(source: string, quoteIndex: number): number {
   for (let index = quoteIndex + 1; index < source.length; index += 1) {
     if (source[index] === '\\') {
-      if (index + 1 >= source.length) throw new TypstStructureError('String literal ends with an incomplete escape.');
+      if (index + 1 >= source.length) throw new TypstStructureError(wt('typstValidation.stringIncompleteEscape', 'String literal ends with an incomplete escape.'));
       index += 1;
       continue;
     }
     if (source[index] === '"') return index;
   }
-  throw new TypstStructureError('Cell content contains an unclosed string literal.');
+  throw new TypstStructureError(wt('typstValidation.unclosedStringLiteral', 'Cell content contains an unclosed string literal.'));
 }
 
 function scanRaw(source: string, openingIndex: number): number {
@@ -142,7 +149,7 @@ function scanRaw(source: string, openingIndex: number): number {
   while (source[delimiterEnd + 1] === '`') delimiterEnd += 1;
   const delimiter = source.slice(openingIndex, delimiterEnd + 1);
   const closingIndex = source.indexOf(delimiter, delimiterEnd + 1);
-  if (closingIndex < 0) throw new TypstStructureError('Cell content contains an unclosed raw span.');
+  if (closingIndex < 0) throw new TypstStructureError(wt('typstValidation.unclosedRawSpan', 'Cell content contains an unclosed raw span.'));
   return closingIndex + delimiter.length - 1;
 }
 

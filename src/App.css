@@ -1816,6 +1816,7 @@ html, body, #root {
    Welcome Screen
    ========================================================================== */
 .welcome-screen {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1827,6 +1828,42 @@ html, body, #root {
   overflow-y: auto;
   -webkit-user-select: none;
   user-select: none;
+}
+
+.welcome-language-switcher {
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.welcome-lang-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.welcome-lang-btn:hover {
+  color: var(--text-primary);
+}
+
+.welcome-lang-btn.is-active {
+  background-color: var(--accent-primary);
+  color: #ffffff;
 }
 
 .welcome-hero {

@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/core';
 import { X, Image as ImageIcon, FileText, Copy, Check, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import i18n from '../i18n';
 import { ContextMenu } from './ContextMenu';
 import {
   canvasRegionToClipboardImage,
@@ -29,6 +31,7 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
   relPath,
   onClose,
 }) => {
+  const { t } = useTranslation(['menu', 'common']);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [dimensions, setDimensions] = useState<{ width: number; height: number } | null>(null);
   const [pageCount, setPageCount] = useState<number | null>(null);
@@ -54,23 +57,23 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
     try {
       if (isPdf) {
         if (!canvasRef.current || canvasRef.current.width === 0 || canvasRef.current.height === 0) {
-          throw new Error('PDF preview is not rendered yet.');
+          throw new Error(t('menu:imageViewerModal.pdfNotRendered'));
         }
         await canvasRegionToClipboardImage(canvasRef.current);
       } else {
         if (!imgRef.current) {
-          throw new Error('Image preview is not loaded yet.');
+          throw new Error(t('menu:imageViewerModal.imageNotLoaded'));
         }
         await imageElementToClipboardImage(imgRef.current);
       }
       setCopiedImage(true);
-      toast.success('Image copied to clipboard');
+      toast.success(t('menu:imageViewerModal.copyImageSuccess'));
       setTimeout(() => setCopiedImage(false), 2000);
     } catch (err: unknown) {
       const details = err instanceof Error ? err.message : String(err);
-      toast.error('Failed to copy image', { description: details });
+      toast.error(t('menu:imageViewerModal.copyImageError'), { description: details });
     }
-  }, [isPdf]);
+  }, [isPdf, t]);
 
   useEffect(() => {
     if (!isOpen || !filePath) return;
@@ -157,7 +160,7 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
           setImageUrl(activeUrl);
         }
       } catch (err) {
-        toast.error('Failed to load asset preview', { description: String(err) });
+        toast.error(i18n.t('menu:imageViewerModal.loadPreviewError'), { description: String(err) });
       } finally {
         setLoading(false);
       }
@@ -195,10 +198,10 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
     try {
       await copyTextToClipboard(latexSnippet);
       setCopiedLatex(true);
-      toast.success('Copied LaTeX figure snippet to clipboard');
+      toast.success(t('menu:imageViewerModal.copyLatexSuccess'));
       setTimeout(() => setCopiedLatex(false), 2000);
     } catch {
-      toast.error('Failed to copy to clipboard');
+      toast.error(t('menu:imageViewerModal.copyClipboardError'));
     }
   };
 
@@ -206,10 +209,10 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
     try {
       await copyTextToClipboard(typstSnippet);
       setCopiedTypst(true);
-      toast.success('Copied Typst figure snippet to clipboard');
+      toast.success(t('menu:imageViewerModal.copyTypstSuccess'));
       setTimeout(() => setCopiedTypst(false), 2000);
     } catch {
-      toast.error('Failed to copy to clipboard');
+      toast.error(t('menu:imageViewerModal.copyClipboardError'));
     }
   };
 
@@ -241,14 +244,19 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
               <p className="modal-subtitle">{targetPath}</p>
             </div>
           </div>
-          <button className="modal-btn-close" onClick={onClose}>
+          <button
+            type="button"
+            className="modal-btn-close"
+            aria-label={t('common:actions.close')}
+            onClick={onClose}
+          >
             <X size={18} />
           </button>
         </div>
 
         <div className="modal-body image-viewer-body">
           <div className="image-preview-stage" onContextMenu={handleStageContextMenu}>
-            {loading && <div className="image-loading">Loading preview...</div>}
+            {loading && <div className="image-loading">{t('menu:imageViewerModal.loadingPreview')}</div>}
             {isPdf ? (
               <canvas ref={canvasRef} className="project-image-view" />
             ) : (
@@ -256,7 +264,7 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
                 <img
                   ref={imgRef}
                   src={imageUrl}
-                  alt={fileName || 'Project Image'}
+                  alt={fileName || t('menu:imageViewerModal.imageAltFallback')}
                   className="project-image-view"
                   onLoad={(e) => {
                     const img = e.currentTarget;
@@ -271,13 +279,13 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
             <div className="image-meta">
               <Info size={15} />
               {pageCount !== null && (
-                <span>Pages: <strong>{pageCount}</strong></span>
+                <span>{t('menu:imageViewerModal.pagesLabel')} <strong>{pageCount}</strong></span>
               )}
               {dimensions && (
-                <span>Dimensions: <strong>{dimensions.width} &times; {dimensions.height} pt</strong></span>
+                <span>{t('menu:imageViewerModal.dimensionsLabel')} <strong>{dimensions.width} &times; {dimensions.height} pt</strong></span>
               )}
               {fileSizeBytes !== null && (
-                <span>Size: <strong>{formatSize(fileSizeBytes)}</strong></span>
+                <span>{t('menu:imageViewerModal.sizeLabel')} <strong>{formatSize(fileSizeBytes)}</strong></span>
               )}
             </div>
 
@@ -288,15 +296,15 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
                 disabled={loading || (!isPdf && !imageUrl)}
               >
                 {copiedImage ? <Check size={14} className="icon-success" /> : <Copy size={14} />}
-                <span>{copiedImage ? 'Copied Image' : 'Copy Image'}</span>
+                <span>{copiedImage ? t('menu:imageViewerModal.copiedImage') : t('menu:imageViewerModal.copyImage')}</span>
               </button>
               <button className="btn btn-secondary btn-sm" onClick={handleCopyLatex}>
                 {copiedLatex ? <Check size={14} className="icon-success" /> : <Copy size={14} />}
-                <span>Copy LaTeX Snippet</span>
+                <span>{t('menu:imageViewerModal.copyLatexSnippet')}</span>
               </button>
               <button className="btn btn-secondary btn-sm" onClick={handleCopyTypst}>
                 {copiedTypst ? <Check size={14} className="icon-success" /> : <Copy size={14} />}
-                <span>Copy Typst Snippet</span>
+                <span>{t('menu:imageViewerModal.copyTypstSnippet')}</span>
               </button>
             </div>
           </div>
@@ -307,7 +315,7 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
             y={contextMenu.y}
             actions={[
               {
-                label: 'Copy Image',
+                label: t('menu:imageViewerModal.copyImage'),
                 onSelect: () => {
                   void handleCopyImage();
                 },

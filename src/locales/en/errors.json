@@ -1,0 +1,279 @@
+{
+  "clipboard": {
+    "copyFailed": "Copy failed",
+    "textUnavailable": "Clipboard access is unavailable in this browser context.",
+    "invalidImageDimensions": "Invalid image dimensions for clipboard copy.",
+    "invalidImageBuffer": "Image RGBA buffer size does not match width and height.",
+    "imageUnavailable": "Image clipboard access is unavailable in this browser context.",
+    "canvasContextFailed": "Failed to create 2D canvas context for image copy.",
+    "emptyCanvas": "Canvas has no rendered image data to copy.",
+    "imageNotLoaded": "Image is not fully loaded yet."
+  },
+  "pdf": {
+    "openLinkFailed": "Failed to open link",
+    "copyImageFailed": "Failed to copy image"
+  },
+  "diagnostics": {
+    "copyFailed": "Failed to copy to clipboard",
+    "copyRawLogFailed": "Failed to copy raw log"
+  },
+  "project": {
+    "gitRefreshDirtyTitle": "Cannot refresh after Git update",
+    "gitRefreshDirtyDescription": "Save or discard unsaved editor changes, then refresh the project.",
+    "gitRefreshInterruptedTitle": "Project refresh was interrupted",
+    "gitRefreshInterruptedDescription": "Unsaved editor changes appeared during refresh and were kept. Refresh again after saving them.",
+    "gitRefreshReadFailedTitle": "Unable to refresh project after Git update",
+    "gitRefreshReadFailedDescription": "The project contents could not be read from disk.",
+    "saveFailed": "Failed to save file to disk",
+    "importFilesFailed": "Failed to import files into project",
+    "folderNotFoundTitle": "Project folder not found",
+    "folderNotFoundDescription": "The folder \"{{path}}\" no longer exists on disk. Removed from recent projects.",
+    "openFolderFailed": "Failed to open project folder",
+    "createFolderError": "Error creating project folder",
+    "extractFailedFallback": "Failed to extract project",
+    "importZipFailedTitle": "Import Failed",
+    "openFileFailed": "Unable to open file",
+    "createFileFailed": "Failed to create file",
+    "createFolderFailed": "Failed to create folder",
+    "invalidNameTitle": "Invalid name",
+    "invalidNameDescription": "Name cannot be empty, \".\", \"..\", or contain path separators.",
+    "renameFailed": "Failed to rename",
+    "moveFailed": "Failed to move",
+    "moveToTrashFailed": "Failed to move to Trash",
+    "duplicateFailed": "Failed to duplicate",
+    "revealFailed": "Failed to reveal in file manager"
+  },
+  "compiler": {
+    "noSourceTitle": "No source document is open",
+    "noSourceDescription": "Open or create a source document before compiling.",
+    "missingResourcesTitle": "Compilation may need project resources",
+    "missingResourcesDescription": "Review the missing resource and prepare it explicitly.",
+    "compilationErrorTitle": "Compilation Error",
+    "unknownError": "Unknown compilation error"
+  },
+  "export": {
+    "noPdf": "No compiled PDF available to export",
+    "pdfExportFailed": "Failed to export PDF",
+    "zipExportFailed": "Failed to export ZIP archive"
+  },
+  "resources": {
+    "operationFailed": "The resource operation failed.",
+    "changedDuringAnalysis": "The workspace or selection changed during resource analysis. Check it again.",
+    "changedDuringPlanning": "The workspace or selection changed during resource planning. Check it again.",
+    "jobNotFound": "The resource preparation is no longer active.",
+    "cacheCannotRemove": "Selected files cannot be removed right now.",
+    "cacheProtectedOrMissing": "Some selected files are protected or no longer available."
+  },
+  "updates": {
+    "checkFailed": "Unable to check for updates."
+  },
+  "git": {
+    "operationFailed": "Git operation failed.",
+    "repositoryRequired": "Open a Git repository before running this operation.",
+    "alreadyRunning": "Another Git operation is already running.",
+    "clonedOpenFailed": "The repository was cloned, but ScienceBatch could not open the project."
+  },
+  "backend": {
+    "gitProgress": {
+      "operation_starting": "Starting Git operation.",
+      "operation_completed": "Git operation completed."
+    },
+    "gitErrors": {
+      "Busy": "Another Git operation is already running for this repository.",
+      "UnsupportedSSHCommand": "The configured SSH command cannot enforce non-interactive authentication and strict host verification.",
+      "EmptyMessage": "Enter a commit message.",
+      "OperationInProgress": "A Git operation is in progress.",
+      "NothingStaged": "There are no staged changes to commit.",
+      "Diverged": "Local and upstream histories have diverged and Git cannot fast-forward this branch.",
+      "AuthenticationFailed": "Git could not authenticate to the remote service.",
+      "PushRefreshRequired": "The last push timed out and its result is unknown.",
+      "DirtyWorktree": "Pull requires a clean working tree, including staged changes.",
+      "NoCommits": "There are no commits to push.",
+      "MultiplePushUrls": "This remote has multiple push URLs, so Git would publish to multiple destinations.",
+      "InvalidRemote": "Remote name is invalid.",
+      "InvalidBranch": "Branch name is invalid.",
+      "CredentialsInUrl": "HTTPS repository URLs must not contain user information, query parameters, or fragments.",
+      "DetachedHeadCommit": "Commits are disabled while HEAD is detached.",
+      "DetachedHeadPull": "Pull requires the current branch to be checked out.",
+      "DetachedHeadPush": "Push requires a local branch to be checked out.",
+      "InvalidIdentityInput": "Enter a non-empty name and a valid email address.",
+      "InvalidIdentityConfig": "Git author and committer name and email must be valid.",
+      "NoUpstreamPull": "The current branch has no configured upstream.",
+      "NoUpstreamPush": "The current branch has no upstream configured.",
+      "InvalidRemoteUrl": "Enter a valid HTTPS or SSH repository URL.",
+      "InvalidRemoteUrlSsh": "Enter a valid SSH repository URL without a password.",
+      "InvalidRemoteUrlProtocol": "Only HTTPS and SSH repository URLs are supported.",
+      "Timeout": "Git operation timed out after five minutes.",
+      "TimeoutWithOp": "Git {{operation}} timed out after five minutes.",
+      "UnknownRemoteNamed": "Git remote '{{remote}}' does not exist.",
+      "UnknownRemoteNoFetchUrl": "Git remote does not have a fetch URL.",
+      "InvalidDestinationFolderName": "Folder name must be a new folder name without path separators.",
+      "InvalidDestinationParentMissing": "The selected parent folder does not exist or is not a directory.",
+      "GitFailedNoDetail": "Git {{operation}} failed.",
+      "GitInspectChangesFailed": "Git could not inspect repository changes."
+    },
+    "gitRecovery": {
+      "busy": "Wait for it to finish, then refresh the repository status.",
+      "unsupportedSshCommand": "Configure OpenSSH as the Git SSH command or use a credential manager.",
+      "timeoutUnknownPush": "The remote may have received the push. Run Fetch to reconcile repository status before retrying.",
+      "timeout": "Retry after checking repository and network status.",
+      "diverged": "Resolve the history with Git outside ScienceBatch, then fetch and retry.",
+      "authenticationFailed": "Configure an HTTPS credential manager or SSH keys and known hosts outside ScienceBatch, then retry.",
+      "gitFailed": "Check the repository status and configured credentials, then retry.",
+      "detachedHeadCommit": "Switch to a branch before committing.",
+      "detachedHeadPull": "Switch to a branch with an upstream before pulling.",
+      "detachedHeadPush": "Switch to a local branch before publishing commits.",
+      "operationInProgressCommit": "Complete or abort the active operation in Git before committing.",
+      "operationInProgressPull": "Complete or abort the active operation in Git before pulling.",
+      "invalidIdentity": "Configure valid name and email values in this repository.",
+      "nothingStaged": "Stage the files you want to include, then try again.",
+      "credentialsInUrl": "Use an HTTPS credential manager or configure SSH authentication outside ScienceBatch.",
+      "dirtyWorktree": "Commit or discard local changes before pulling.",
+      "noUpstreamPull": "Configure an upstream branch before pulling.",
+      "noUpstreamPush": "Enable Set upstream on the first push.",
+      "pushRefreshRequired": "Fetch from the same remote push destination to reconcile the result before retrying.",
+      "multiplePushUrls": "Configure one push URL for this remote, then retry."
+    },
+    "codes": {
+      "updates": {
+        "invalid_endpoint": "Invalid update endpoint URL.",
+        "missing_host": "Update endpoint HTTPS URL is missing a host.",
+        "unsupported_endpoint": "Unsupported update endpoint protocol or host.",
+        "unsupported_endpoint_detailed": "Unsupported update endpoint protocol or host: {{endpoint}}",
+        "parse_failed": "Failed to parse GitHub release response.",
+        "missing_tag": "GitHub release response is missing tag_name.",
+        "client_init_failed": "Failed to initialize update HTTP client.",
+        "request_failed": "Failed to check for updates.",
+        "http_error": "Update server returned an HTTP error.",
+        "http_error_detailed": "Update server returned HTTP {{status}} ({{reason}}).",
+        "response_too_large": "Update response exceeded the 512 KiB size limit.",
+        "read_failed": "Failed to read update response body.",
+        "invalid_utf8": "Update response was not valid UTF-8."
+      },
+      "git_auth": {
+        "unsupported_provider": "Unsupported Git provider. Expected GitHub or GitLab.",
+        "unsupported_provider_detailed": "Unsupported Git provider '{{provider}}'. Expected 'github' or 'gitlab'.",
+        "keyring_failed": "Failed to access the OS keyring.",
+        "session_corrupted": "Stored OAuth session in OS keyring is corrupted.",
+        "http_init_failed": "Failed to initialize OAuth HTTP client.",
+        "random_failed": "Failed to generate cryptographically secure random bytes.",
+        "device_flow_request_failed": "Failed to reach GitHub OAuth device endpoint.",
+        "device_flow_failed": "GitHub device flow failed.",
+        "missing_device_code": "GitHub device_code cannot be empty.",
+        "poll_failed": "Failed to poll GitHub OAuth token endpoint.",
+        "oauth_error": "GitHub OAuth authorization failed.",
+        "profile_fetch_failed": "Failed to fetch user profile from Git provider.",
+        "browser_open_failed": "Failed to open system browser for sign-in.",
+        "callback_bind_failed": "Failed to bind local OAuth callback listener.",
+        "callback_timeout": "GitLab sign-in timed out after 180 seconds waiting for browser callback.",
+        "token_exchange_failed": "Failed to exchange GitLab authorization code.",
+        "authorization_failed": "GitLab authorization failed.",
+        "state_mismatch": "GitLab OAuth callback failed state verification.",
+        "missing_code": "GitLab OAuth callback did not include an authorization code.",
+        "token_refresh_failed": "Failed to refresh GitLab OAuth token.",
+        "list_repos_failed": "Failed to list repositories from Git provider.",
+        "empty_repo_name": "Repository name cannot be empty.",
+        "create_repo_failed": "Failed to create repository on Git provider.",
+        "credential_helper_failed": "Failed to prepare Git credential helper."
+      },
+      "files": {
+        "path_traversal": "Path traverses above filesystem root.",
+        "empty_path": "Path must be non-empty and cannot contain NUL bytes.",
+        "invalid_project_root": "Project root is invalid.",
+        "not_a_directory": "Project root is not a directory.",
+        "path_escapes_root": "Path escapes the project root.",
+        "no_ancestor": "Path has no existing ancestor inside the project root.",
+        "read_dir_failed": "Directory does not exist or could not be read.",
+        "read_failed": "Failed to read file.",
+        "write_failed": "Failed to write file.",
+        "source_missing": "Source file does not exist.",
+        "invalid_file_name": "Invalid file name.",
+        "copy_failed": "Failed to copy file.",
+        "invalid_project_name": "Project name must be a single safe folder name of at most 100 characters.",
+        "unsupported_engine": "Engine must be latex or typst.",
+        "folder_already_exists": "Project folder already exists.",
+        "create_folder_failed": "Failed to create project folder.",
+        "cannot_create_at_root": "Cannot create a file at the project root path.",
+        "file_already_exists": "File already exists.",
+        "create_file_failed": "Failed to create file.",
+        "file_exists_at_dir_path": "Cannot create directory: a file already exists at that path.",
+        "cannot_rename_root": "Cannot rename or overwrite the project root directory.",
+        "source_not_found": "Source path does not exist.",
+        "destination_exists": "Destination path already exists.",
+        "cannot_move_into_self": "Cannot move a directory into a subdirectory of itself.",
+        "rename_failed": "Failed to rename path.",
+        "cannot_delete_root": "Cannot delete the project root directory.",
+        "path_not_found": "Path does not exist.",
+        "trash_failed": "Failed to move path to trash.",
+        "cannot_duplicate_root": "Cannot duplicate or overwrite the project root directory.",
+        "cannot_duplicate_into_self": "Cannot duplicate a directory into a subdirectory of itself.",
+        "duplicate_failed": "Failed to duplicate path.",
+        "reveal_failed": "Failed to reveal path in file manager.",
+        "unsupported_url": "Unsupported or unsafe URL protocol.",
+        "browser_open_failed": "Failed to launch system browser."
+      },
+      "export": {
+        "create_folder_failed": "Failed to create destination folder.",
+        "create_zip_failed": "Failed to create destination ZIP file.",
+        "read_dir_failed": "Failed to read project directory.",
+        "zip_write_failed": "Failed to write entry to ZIP archive.",
+        "zip_finalize_failed": "Failed to finalize ZIP archive.",
+        "zip_not_found": "ZIP archive does not exist.",
+        "invalid_dest_dir": "Target directory does not exist.",
+        "open_zip_failed": "Failed to open ZIP archive.",
+        "read_zip_failed": "Failed to read ZIP archive.",
+        "extract_failed": "Failed to extract ZIP archive.",
+        "save_pdf_failed": "Failed to save PDF file."
+      },
+      "git": {
+        "locked": "Another Git operation is already running for this repository.",
+        "not_a_repo": "Project is not a Git repository.",
+        "invalid_branch": "Branch name is invalid.",
+        "branch_list_failed": "Git could not list local branches.",
+        "branch_switch_failed": "Failed to switch Git branch.",
+        "stage_failed": "Failed to stage Git files.",
+        "unstage_failed": "Failed to unstage Git files.",
+        "empty_file_path": "File path cannot be empty.",
+        "absolute_path_not_allowed": "Absolute paths are not allowed.",
+        "parent_traversal_not_allowed": "Parent directory traversal ('..') is not allowed.",
+        "path_escapes_repo": "Path escapes project directory.",
+        "diff_failed": "Failed to compute Git diff.",
+        "initialize_failed": "Failed to initialize Git repository.",
+        "unknown_remote": "Git remote does not exist.",
+        "unknown_remote_detailed": "Git remote '{{remote}}' does not exist."
+      },
+      "operation": {
+        "interrupted": "Operation was cancelled.",
+        "shutting_down": "The application is shutting down.",
+        "kind_mismatch": "Operation type does not match the active job."
+      },
+      "worker": {
+        "busy": "Another operation is already running.",
+        "capture_failed": "Failed to prepare workspace snapshot.",
+        "crashed": "The companion compiler process stopped unexpectedly."
+      },
+      "project": {
+        "main_missing": "The main project file could not be found.",
+        "main_engine_mismatch": "The selected engine does not match the workspace main file."
+      },
+      "dependency": {
+        "external_tool_unsupported": "This document requests an external bibliography tool such as Biber. ScienceBatch supports in-memory BibTeX; use backend=bibtex or provide a compatible bibliography workflow."
+      },
+      "path": {
+        "outside_roots": "Project is outside the authorized roots.",
+        "symlink_rejected": "Project path must be a real directory without symlink escapes."
+      },
+      "io": {
+        "project_unavailable": "Project directory is unavailable.",
+        "output_failed": "Failed to write compilation output."
+      },
+      "resource": {
+        "limit_exceeded": "Project size exceeds the allowed limit."
+      },
+      "resources": {
+        "template_grant_invalid": "Template asset grant is invalid for this workspace.",
+        "catalog_invalid": "The embedded resource catalog is invalid."
+      }
+    }
+  }
+}

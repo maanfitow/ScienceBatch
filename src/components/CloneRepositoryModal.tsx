@@ -1,5 +1,6 @@
 import React, { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { useTranslation } from 'react-i18next';
 import { Folder, GitBranch, LoaderCircle, Lock, RefreshCw, Search, X } from 'lucide-react';
 import { open } from '@tauri-apps/plugin-dialog';
 import type {
@@ -11,6 +12,7 @@ import type {
 } from '../types/git';
 import { GitAccountSection } from './sidebar/GitAccountSection';
 import { GitProviderIcon } from './sidebar/GitProviderIcon';
+import { translateBackendError, translateGitProgress } from '../i18n/backendMessages';
 import './cloneRepository.css';
 
 interface CloneRepositoryModalProps {
@@ -34,6 +36,7 @@ export const CloneRepositoryModal: React.FC<CloneRepositoryModalProps> = ({
   onOpenExisting,
   onClone,
 }) => {
+  const { t } = useTranslation(['git', 'common']);
   const [url, setUrl] = useState('');
   const [parentDir, setParentDir] = useState('');
   const [directoryName, setDirectoryName] = useState('');
@@ -119,12 +122,15 @@ export const CloneRepositoryModal: React.FC<CloneRepositoryModalProps> = ({
 
   if (!isOpen) return null;
 
+  const providerLabel = (provider: GitProvider) =>
+    provider === 'github' ? t('git:providers.github') : t('git:providers.gitlab');
+
   const handleBrowse = async () => {
     try {
-      const selected = await open({ directory: true, multiple: false, title: 'Select Parent Folder for Repository' });
+      const selected = await open({ directory: true, multiple: false, title: t('git:clone.selectParentDialogTitle') });
       if (selected && typeof selected === 'string') setParentDir(selected);
     } catch {
-      setSubmitError('Unable to open the folder picker. Enter the parent folder path manually.');
+      setSubmitError(t('git:clone.errors.folderPickerFailed'));
     }
   };
 
@@ -156,7 +162,7 @@ export const CloneRepositoryModal: React.FC<CloneRepositoryModalProps> = ({
     const normalizedName = directoryName.trim();
     if (!url.trim() || !parentDir.trim() || !normalizedName) return;
     if (normalizedName === '.' || normalizedName === '..' || /[/\\]/.test(normalizedName)) {
-      setSubmitError('Enter a folder name without path separators.');
+      setSubmitError(t('git:clone.errors.invalidFolderName'));
       return;
     }
     setSubmitError(null);
@@ -170,7 +176,7 @@ export const CloneRepositoryModal: React.FC<CloneRepositoryModalProps> = ({
         ? reason.projectPath
         : null;
       if (path) setOpenFailurePath(path);
-      setSubmitError('Clone failed. Review the details below and try again.');
+      setSubmitError(t('git:clone.errors.cloneFailed'));
     } finally {
       setIsSubmitting(false);
     }
@@ -183,9 +189,9 @@ export const CloneRepositoryModal: React.FC<CloneRepositoryModalProps> = ({
     try {
       const opened = await onOpenExisting(openFailurePath);
       if (opened) onClose();
-      else setSubmitError('ScienceBatch could not open the cloned repository. Its files are still available at the path below.');
+      else setSubmitError(t('git:clone.errors.openClonedFailed'));
     } catch {
-      setSubmitError('ScienceBatch could not open the cloned repository. Its files are still available at the path below.');
+      setSubmitError(t('git:clone.errors.openClonedFailed'));
     } finally {
       setIsSubmitting(false);
     }
@@ -214,10 +220,13 @@ export const CloneRepositoryModal: React.FC<CloneRepositoryModalProps> = ({
       setReposByProvider(current => ({ ...current, [provider]: repos }));
     } catch (reason) {
       if (requestId !== repoRequestIdRef.current) return;
-      const message = reason && typeof reason === 'object' && 'message' in reason && typeof reason.message === 'string'
+      const fallback = t('git:clone.errors.loadProviderReposFailed', { provider: providerLabel(provider) });
+      const rawMessage = reason && typeof reason === 'object' && 'message' in reason && typeof reason.message === 'string'
         ? reason.message
-        : `Could not load ${provider === 'github' ? 'GitHub' : 'GitLab'} repositories.`;
-      setProviderError(safeMessage(message));
+        : typeof reason === 'string'
+          ? reason
+          : fallback;
+      setProviderError(safeMessage(translateBackendError(rawMessage, null, fallback)));
     } finally {
       if (requestId === repoRequestIdRef.current) {
         setLoadingProvider(null);
@@ -258,9 +267,9 @@ export const CloneRepositoryModal: React.FC<CloneRepositoryModalProps> = ({
         <div className="modal-header">
           <div className="modal-title-group">
             <GitBranch size={18} className="modal-title-icon" />
-            <h3 id="clone-repository-title">Clone Repository</h3>
+            <h3 id="clone-repository-title">{t('git:clone.title')}</h3>
           </div>
-          <button className="btn-modal-close" type="button" aria-label="Close dialog" disabled={busy} onClick={onClose}>
+          <button className="btn-modal-close" type="button" aria-label={t('git:clone.closeAria')} disabled={busy} onClick={onClose}>
             <X size={17} />
           </button>
         </div>
@@ -268,7 +277,7 @@ export const CloneRepositoryModal: React.FC<CloneRepositoryModalProps> = ({
         <form onSubmit={handleSubmit}>
           <div className="modal-body clone-repository-body">
             <div className="clone-repository-intro-row">
-              <p className="clone-repository-help">Clone a repository from a signed-in account or using your existing Git credential manager or SSH configuration.</p>
+              <p className="clone-repository-help">{t('git:clone.intro')}</p>
               <button
                 type="button"
                 className="clone-repository-manage-accounts"
@@ -277,10 +286,10 @@ export const CloneRepositoryModal: React.FC<CloneRepositoryModalProps> = ({
                 onClick={() => setAccountsExpanded(current => !current)}
               >
                 {accountsExpanded
-                  ? 'Hide Accounts'
+                  ? t('git:clone.hideAccounts')
                   : signedInAccounts.length > 0
-                    ? 'Manage Accounts'
-                    : 'Sign In to GitHub / GitLab'}
+                    ? t('git:clone.manageAccounts')
+                    : t('git:clone.signInPrompt')}
               </button>
             </div>
 
@@ -291,11 +300,11 @@ export const CloneRepositoryModal: React.FC<CloneRepositoryModalProps> = ({
             {signedInAccounts.length > 0 && (
               <div className="modal-field clone-repository-accounts">
                 <div className="clone-repository-accounts-header">
-                  <span className="modal-label">Your Repositories</span>
+                  <span className="modal-label">{t('git:clone.yourRepositories')}</span>
                   <div className="clone-repository-account-buttons">
                     {signedInAccounts.map(account => {
                       const isActive = selectedProvider === account.provider;
-                      const label = account.provider === 'github' ? 'GitHub' : 'GitLab';
+                      const label = providerLabel(account.provider);
                       const handle = account.username ? `@${account.username}` : label;
                       return (
                         <button
@@ -325,8 +334,8 @@ export const CloneRepositoryModal: React.FC<CloneRepositoryModalProps> = ({
                           className="clone-repository-filter-input"
                           value={repoFilter}
                           onChange={event => setRepoFilter(event.target.value)}
-                          placeholder={`Filter ${selectedProvider === 'github' ? 'GitHub' : 'GitLab'} repositories…`}
-                          aria-label="Filter repositories"
+                          placeholder={t('git:clone.filterPlaceholder', { provider: providerLabel(selectedProvider) })}
+                          aria-label={t('git:clone.filterAria')}
                           disabled={busy}
                         />
                       </div>
@@ -335,8 +344,8 @@ export const CloneRepositoryModal: React.FC<CloneRepositoryModalProps> = ({
                         className="clone-repository-refresh"
                         onClick={() => void loadProviderRepositories(selectedProvider, true)}
                         disabled={busy || loadingProvider === selectedProvider}
-                        title="Refresh repository list"
-                        aria-label="Refresh repository list"
+                        title={t('git:clone.refreshTitle')}
+                        aria-label={t('git:clone.refreshTitle')}
                       >
                         <RefreshCw size={13} className={loadingProvider === selectedProvider ? 'spin' : undefined} />
                       </button>
@@ -345,7 +354,7 @@ export const CloneRepositoryModal: React.FC<CloneRepositoryModalProps> = ({
                     {loadingProvider === selectedProvider && (
                       <div className="clone-repository-picker-status" role="status">
                         <LoaderCircle size={13} className="spin" />
-                        <span>Loading repositories…</span>
+                        <span>{t('git:clone.loadingRepositories')}</span>
                       </div>
                     )}
 
@@ -355,7 +364,7 @@ export const CloneRepositoryModal: React.FC<CloneRepositoryModalProps> = ({
 
                     {loadingProvider !== selectedProvider && !providerError && (
                       filteredRepos.length > 0 ? (
-                        <div className="clone-repository-list" role="listbox" aria-label="Available repositories">
+                        <div className="clone-repository-list" role="listbox" aria-label={t('git:clone.availableRepositoriesAria')}>
                           {filteredRepos.map(repo => {
                             const selected = url.trim() === repo.cloneUrl;
                             return (
@@ -371,8 +380,8 @@ export const CloneRepositoryModal: React.FC<CloneRepositoryModalProps> = ({
                                 <span className="clone-repository-item-name" title={repo.fullName}>{repo.fullName}</span>
                                 <span className="clone-repository-item-meta">
                                   {repo.private && (
-                                    <span className="clone-repository-private-badge" title="Private repository">
-                                      <Lock size={10} aria-hidden="true" /> Private
+                                    <span className="clone-repository-private-badge" title={t('git:clone.privateRepoTitle')}>
+                                      <Lock size={10} aria-hidden="true" /> {t('git:clone.privateBadge')}
                                     </span>
                                   )}
                                   {repo.defaultBranch && <span>{repo.defaultBranch}</span>}
@@ -383,7 +392,7 @@ export const CloneRepositoryModal: React.FC<CloneRepositoryModalProps> = ({
                         </div>
                       ) : (
                         <p className="clone-repository-picker-empty">
-                          {repoFilter.trim() ? 'No matching repositories found.' : 'No repositories found for this account.'}
+                          {repoFilter.trim() ? t('git:clone.noMatchingRepos') : t('git:clone.noAccountRepos')}
                         </p>
                       )
                     )}
@@ -393,14 +402,14 @@ export const CloneRepositoryModal: React.FC<CloneRepositoryModalProps> = ({
             )}
 
             <div className="modal-field">
-              <label className="modal-label" htmlFor="clone-repository-url">Repository URL</label>
+              <label className="modal-label" htmlFor="clone-repository-url">{t('git:clone.repositoryUrlLabel')}</label>
               <input
                 ref={urlInputRef}
                 id="clone-repository-url"
                 className="modal-input"
                 value={url}
-              onChange={event => setUrl(event.target.value)}
-                placeholder="https://github.com/owner/project.git or git@gitlab.com:owner/project.git"
+                onChange={event => setUrl(event.target.value)}
+                placeholder={t('git:clone.repositoryUrlPlaceholder')}
                 autoComplete="url"
                 required
                 disabled={busy}
@@ -408,63 +417,71 @@ export const CloneRepositoryModal: React.FC<CloneRepositoryModalProps> = ({
             </div>
 
             <div className="modal-field">
-              <label className="modal-label" htmlFor="clone-repository-parent">Parent Folder</label>
+              <label className="modal-label" htmlFor="clone-repository-parent">{t('git:clone.parentFolderLabel')}</label>
               <div className="clone-repository-folder-row">
                 <input
                   id="clone-repository-parent"
                   className="modal-input folder-path-input truncate"
                   value={parentDir}
                   onChange={event => setParentDir(event.target.value)}
-                  placeholder="Choose where the repository folder will be created"
+                  placeholder={t('git:clone.parentFolderPlaceholder')}
                   required
                   disabled={busy}
                 />
-                <button className="clone-repository-browse" type="button" onClick={handleBrowse} disabled={busy} aria-label="Browse for parent folder">
-                  <Folder size={15} /> Browse
+                <button className="clone-repository-browse" type="button" onClick={handleBrowse} disabled={busy} aria-label={t('git:clone.browseAria')}>
+                  <Folder size={15} /> {t('git:clone.browse')}
                 </button>
               </div>
             </div>
 
             <div className="modal-field">
-              <label className="modal-label" htmlFor="clone-repository-name">New Folder Name</label>
+              <label className="modal-label" htmlFor="clone-repository-name">{t('git:clone.newFolderNameLabel')}</label>
               <input
                 id="clone-repository-name"
                 className="modal-input"
                 value={directoryName}
                 onChange={event => setDirectoryName(event.target.value)}
-                placeholder="science-project"
+                placeholder={t('git:clone.newFolderNamePlaceholder')}
                 required
                 disabled={busy}
               />
-            <span className="clone-repository-hint">The destination must be a new folder. Existing files will not be overwritten.</span>
-          </div>
+              <span className="clone-repository-hint">{t('git:clone.destinationHint')}</span>
+            </div>
 
             {busy && (
               <div className="clone-repository-progress" role="status" aria-live="polite">
                 <LoaderCircle size={15} className="spin" />
-                <span>{running ? safeMessage(progress?.message || 'Starting clone…') : 'Opening cloned project…'}</span>
+                <span>{running ? safeMessage(progress ? translateGitProgress(progress) : t('git:clone.startingClone')) : t('git:clone.openingProject')}</span>
               </div>
             )}
-            {(submitError || safeError) && <div className="clone-repository-error" role="alert">{openFailurePath ? 'The repository cloned successfully, but ScienceBatch could not open it.' : safeError || submitError}</div>}
+            {(submitError || safeError) && (
+              <div className="clone-repository-error" role="alert">
+                {openFailurePath ? t('git:clone.errors.clonedButOpenFailed') : safeError || submitError}
+              </div>
+            )}
             {error?.partialPath && (
               <div className="clone-repository-recovery">
-                Partial repository retained at <code>{error.partialPath}</code>.
+                {t('git:clone.partialRetainedPrefix')}
+                <code>{error.partialPath}</code>
+                {t('git:clone.partialRetainedSuffix')}
                 {safeRecovery && <span>{safeRecovery}</span>}
               </div>
             )}
             {openFailurePath && (
               <div className="clone-repository-recovery">
-                Cloned repository retained at <code>{openFailurePath}</code>.
-                <button type="button" className="clone-repository-open-existing" disabled={busy} onClick={() => void handleOpenExisting()}>Open Existing Repository</button>
+                {t('git:clone.clonedRetainedPrefix')}
+                <code>{openFailurePath}</code>
+                {t('git:clone.clonedRetainedSuffix')}
+                <button type="button" className="clone-repository-open-existing" disabled={busy} onClick={() => void handleOpenExisting()}>{t('git:clone.openExisting')}</button>
               </div>
             )}
             {safeRecovery && !error?.partialPath && <div className="clone-repository-recovery">{safeRecovery}</div>}
           </div>
 
           <div className="modal-footer clone-repository-footer">
-            <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>Cancel</button>
+            <button type="button" className="btn-secondary" disabled={busy} onClick={onClose}>{t('common:actions.cancel')}</button>
             <button type="submit" className="btn-primary" disabled={busy || !!openFailurePath || !url.trim() || !parentDir.trim() || !directoryName.trim()}>
-              {running ? 'Cloning…' : busy ? 'Opening…' : 'Clone Repository'}
+              {running ? t('git:clone.cloning') : busy ? t('git:clone.opening') : t('git:clone.submit')}
             </button>
           </div>
         </form>

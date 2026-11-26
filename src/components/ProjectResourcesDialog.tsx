@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AlertCircle,
   AlertTriangle,
@@ -46,6 +47,7 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
   onRecompile,
   onSelectLine,
 }) => {
+  const { t } = useTranslation(['resources', 'common']);
   const dialogRef = useRef<HTMLElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const onCloseRef = useRef(onClose);
@@ -124,7 +126,7 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
       if (returnTarget?.isConnected) returnTarget.focus();
       else {
         Array.from(document.querySelectorAll<HTMLElement>('.menu-button'))
-          .find(button => button.textContent?.trim() === 'Tools')
+          .find(button => button.dataset.menuId === 'tools')
           ?.focus();
       }
     };
@@ -209,25 +211,25 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
     : (summary?.unresolvedCount ?? 0);
 
   const statusText = (() => {
-    if (isTypst) return 'Typst Engine Ready';
+    if (isTypst) return t('resources:dialog.typstReadyTitle');
     if (resources.activeJobId) return friendlyPhase(resources.progress?.phase, resources.progress?.status);
     if (resources.isAnalyzing || !plan || !resources.isPlanFresh) {
       return resources.errorAction === 'check' && resources.error
-        ? 'Could not check project resources'
-        : 'Checking project resources…';
+        ? t('resources:dialog.status.checkFailed')
+        : t('resources:dialog.status.checking');
     }
-    if (metadataInvalid) return 'Resource information could not be verified';
-    if (blocked) return 'Project resources are unavailable';
-    if (resources.error && resources.errorAction === 'prepare') return 'The download did not finish';
-    if (ready) return 'Detected resources are ready';
-    if (cancelled) return 'Download paused';
-    if (metadataOnly) return 'Bundle setup is needed';
+    if (metadataInvalid) return t('resources:dialog.status.notVerified');
+    if (blocked) return t('resources:dialog.status.unavailable');
+    if (resources.error && resources.errorAction === 'prepare') return t('resources:dialog.status.downloadFailed');
+    if (ready) return t('resources:phases.finished');
+    if (cancelled) return t('resources:phases.cancelled');
+    if (metadataOnly) return t('resources:dialog.status.bundleSetupNeeded');
     if (needsPreparation) {
       return hasInvalidFiles
-        ? `${summary?.invalidResources ?? 0} ${summary?.invalidResources === 1 ? 'file needs' : 'files need'} repairing`
-        : `${summary?.missingResources ?? 0} ${summary?.missingResources === 1 ? 'file needs' : 'files need'} downloading`;
+        ? t('resources:dialog.status.repairNeeded', { count: summary?.invalidResources ?? 0 })
+        : t('resources:dialog.status.downloadNeeded', { count: summary?.missingResources ?? 0 });
     }
-    return 'Checking project resources…';
+    return t('resources:dialog.status.checking');
   })();
 
   const statusToneClass = (() => {
@@ -239,14 +241,14 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
   })();
 
   const primaryLabel = (() => {
-    if (isTypst) return 'Done';
-    if (resources.isAnalyzing || !plan || !resources.isPlanFresh) return resources.error ? 'Try again' : 'Checking…';
-    if (blocked) return 'Unavailable';
-    if (resources.error) return 'Try again';
-    if (cancelled) return 'Resume download';
-    if (canPrepare) return metadataOnly ? 'Finish setup' : 'Download required files';
-    if (ready) return 'Done';
-    return 'Checking…';
+    if (isTypst) return t('common:actions.done');
+    if (resources.isAnalyzing || !plan || !resources.isPlanFresh) return resources.error ? t('resources:common.tryAgain') : t('resources:common.checking');
+    if (blocked) return t('resources:common.unavailable');
+    if (resources.error) return t('resources:common.tryAgain');
+    if (cancelled) return t('resources:common.resumeDownload');
+    if (canPrepare) return metadataOnly ? t('resources:common.finishSetup') : t('resources:common.downloadRequiredFiles');
+    if (ready) return t('common:actions.done');
+    return t('resources:common.checking');
   })();
 
   const primaryDisabled = isTypst
@@ -260,8 +262,8 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
   const progressPercent = progressTotal > 0 ? Math.min(100, Math.round((progressCompleted / progressTotal) * 100)) : null;
 
   const errorText = resources.errorAction === 'prepare'
-    ? 'The download could not be completed. You can try again.'
-    : 'Project resources could not be checked. You can try again.';
+    ? t('resources:dialog.errors.prepareFailed')
+    : t('resources:dialog.errors.checkFailed');
 
   const onPrimary = () => {
     if (isTypst || (ready && !resources.error)) {
@@ -335,7 +337,7 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
             type="button"
             className="project-resources-jump-link"
             onClick={() => onSelectLine(firstEvidence.line ?? 1, firstEvidence.file)}
-            title={`Jump to ${locationLabel}`}
+            title={t('resources:common.jumpTo', { location: locationLabel })}
           >
             {locationLabel}
           </button>
@@ -345,7 +347,7 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
           </span>
         ) : null}
         <span className={`project-resources-pill is-${tone}`}>
-          {preparing ? 'Preparing' : availabilityLabel(row.availability, downloaded)}
+          {preparing ? t('resources:dialog.inspect.preparing') : availabilityLabel(row.availability, downloaded)}
         </span>
       </li>
     );
@@ -371,25 +373,25 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
           <div className="project-resources-header-left">
             <div className="project-resources-title-line">
               <Package size={18} aria-hidden="true" />
-              <h2 id="project-resources-title">Project Resources</h2>
+              <h2 id="project-resources-title">{t('resources:dialog.title')}</h2>
               <span className={`project-resources-engine-pill is-${resolvedEngine}`}>
                 {resolvedEngine === 'typst' ? 'TYPST' : 'LATEX'}
               </span>
             </div>
-            <p id="project-resources-description">{projectName || 'Untitled project'}</p>
+            <p id="project-resources-description">{projectName || t('resources:dialog.untitledProject')}</p>
           </div>
           <button
             type="button"
             ref={closeButtonRef}
             className="project-resources-icon-button"
-            aria-label="Close Project Resources"
+            aria-label={t('resources:dialog.closeAria')}
             onClick={onClose}
           >
             <X size={17} />
           </button>
         </header>
 
-        <div className="project-resources-tabs" role="tablist" aria-label="Project resource views">
+        <div className="project-resources-tabs" role="tablist" aria-label={t('resources:dialog.tabsAria')}>
           <button
             type="button"
             role="tab"
@@ -400,7 +402,7 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
             onClick={() => setActiveTab('project')}
           >
             <Package size={14} aria-hidden="true" />
-            <span>Project</span>
+            <span>{t('resources:dialog.projectTab')}</span>
           </button>
           <button
             type="button"
@@ -412,7 +414,7 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
             onClick={() => setActiveTab('cache')}
           >
             <HardDrive size={14} aria-hidden="true" />
-            <span>Shared Cache</span>
+            <span>{t('resources:dialog.cacheTab')}</span>
           </button>
         </div>
 
@@ -425,37 +427,37 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
               className="project-resources-body"
             >
               {isTypst ? (
-                <section className="project-resources-status-card is-ready" aria-label="Project resource status">
+                <section className="project-resources-status-card is-ready" aria-label={t('resources:dialog.statusAria')}>
                   <div className="project-resources-main-status" role="status" aria-live="polite">
                     <CheckCircle2 size={18} aria-hidden="true" />
-                    <strong>Typst Engine Ready</strong>
+                    <strong>{t('resources:dialog.typstReadyTitle')}</strong>
                   </div>
                   <p className="project-resources-note">
-                    Typst assets and system fonts are bundled with ScienceBatch. No package downloads are needed.
+                    {t('resources:dialog.typstNote')}
                   </p>
                   <div className="project-resources-metrics">
                     <div className="project-resources-metric">
-                      <span>Engine</span>
-                      <strong>Built-in</strong>
+                      <span>{t('resources:dialog.engineLabel')}</span>
+                      <strong>{t('resources:availability.builtIn')}</strong>
                     </div>
                     <div className="project-resources-metric">
-                      <span>Local files</span>
-                      <strong>{resources.isAnalyzing || !plan ? 'Checking…' : `${summary?.totalResources ?? 0} files`}</strong>
+                      <span>{t('resources:dialog.localFilesLabel')}</span>
+                      <strong>{resources.isAnalyzing || !plan ? t('resources:common.checking') : t('resources:common.fileCount', { count: summary?.totalResources ?? 0 })}</strong>
                     </div>
                     <div className="project-resources-metric">
-                      <span>Unresolved</span>
+                      <span>{t('resources:dialog.unresolvedLabel')}</span>
                       <strong>
                         {resources.isAnalyzing || !plan
-                          ? 'Checking…'
+                          ? t('resources:common.checking')
                           : unknownCount > 0
-                            ? `${unknownCount} dynamic`
-                            : 'None'}
+                            ? t('resources:dialog.dynamicCount', { count: unknownCount })
+                            : t('resources:dialog.none')}
                       </strong>
                     </div>
                   </div>
                 </section>
               ) : (
-                <section className={`project-resources-status-card ${statusToneClass}`} aria-label="Project resource status">
+                <section className={`project-resources-status-card ${statusToneClass}`} aria-label={t('resources:dialog.statusAria')}>
                   <div className="project-resources-main-status" role="status" aria-live="polite">
                     {resources.isAnalyzing || resources.activeJobId ? (
                       <Loader2 className="spin" size={18} aria-hidden="true" />
@@ -473,23 +475,23 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
 
                   <div className="project-resources-metrics">
                     <div className="project-resources-metric">
-                      <span>Required</span>
-                      <strong>{resources.isAnalyzing || !plan ? 'Checking…' : `${summary?.totalResources ?? 0} files`}</strong>
+                      <span>{t('resources:dialog.requiredLabel')}</span>
+                      <strong>{resources.isAnalyzing || !plan ? t('resources:common.checking') : t('resources:common.fileCount', { count: summary?.totalResources ?? 0 })}</strong>
                     </div>
                     <div className="project-resources-metric">
-                      <span>Download</span>
+                      <span>{t('resources:dialog.downloadLabel')}</span>
                       <strong>
-                        {resources.isAnalyzing || !plan ? 'Checking…' : formatBytes(summary?.estimatedTransferBytes)}
+                        {resources.isAnalyzing || !plan ? t('resources:common.checking') : formatBytes(summary?.estimatedTransferBytes)}
                       </strong>
                     </div>
                     <div className="project-resources-metric">
-                      <span>Unresolved</span>
+                      <span>{t('resources:dialog.unresolvedLabel')}</span>
                       <strong>
                         {resources.isAnalyzing || !plan
-                          ? 'Checking…'
+                          ? t('resources:common.checking')
                           : unknownCount > 0
-                            ? `${unknownCount} dynamic`
-                            : 'None'}
+                            ? t('resources:dialog.dynamicCount', { count: unknownCount })
+                            : t('resources:dialog.none')}
                       </strong>
                     </div>
                   </div>
@@ -499,7 +501,9 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
                       <div className="project-resources-progress-copy">
                         <strong>{friendlyPhase(resources.progress?.phase, resources.progress?.status)}</strong>
                         <span>
-                          {progressPercent != null ? `${progressCompleted} of ${progressTotal} files` : 'Working…'}
+                          {progressPercent != null
+                            ? t('resources:dialog.progress.files', { completed: progressCompleted, total: progressTotal })
+                            : t('resources:dialog.progress.working')}
                           {resources.progress?.downloadedBytes != null
                             ? ` · ${formatBytes(resources.progress.downloadedBytes)}`
                             : ''}
@@ -509,7 +513,7 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
                         <div
                           className="project-resources-progress-track"
                           role="progressbar"
-                          aria-label="Download progress"
+                          aria-label={t('resources:dialog.progress.ariaLabel')}
                           aria-valuemin={0}
                           aria-valuemax={100}
                           aria-valuenow={progressPercent}
@@ -523,7 +527,7 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
                         onClick={() => void resources.cancel()}
                         disabled={resources.progress?.status?.toLowerCase() === 'cancelling'}
                       >
-                        Cancel
+                        {t('common:actions.cancel')}
                       </button>
                     </div>
                   )}
@@ -535,31 +539,31 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
                   )}
                   {!resources.activeJobId && metadataInvalid && (
                     <p className="project-resources-friendly-error" role="alert">
-                      Resource information could not be verified, so downloads are unavailable.
+                      {t('resources:dialog.errors.notVerifiedNote')}
                     </p>
                   )}
                   {!resources.activeJobId && blocked && !metadataInvalid && (
                     <p className="project-resources-friendly-error" role="alert">
-                      Resources cannot be prepared for this project right now.
+                      {t('resources:dialog.errors.blockedNote')}
                     </p>
                   )}
                   {!resources.activeJobId && cancelled && (
-                    <p className="project-resources-note">The download was paused. You can resume it now.</p>
+                    <p className="project-resources-note">{t('resources:dialog.notes.paused')}</p>
                   )}
                   {!resources.activeJobId && metadataOnly && !metadataInvalid && (
-                    <p className="project-resources-note">All files are already downloaded. No download is needed.</p>
+                    <p className="project-resources-note">{t('resources:dialog.notes.metadataOnly')}</p>
                   )}
                   {!resources.activeJobId && ready && !resources.error && (
-                    <p className="project-resources-note">You can compile this project now.</p>
+                    <p className="project-resources-note">{t('resources:dialog.notes.ready')}</p>
                   )}
                   {resources.recoveryPaths.length > 0 && (
                     <p className="project-resources-note">
-                      Includes possible files identified during the last compile.
+                      {t('resources:dialog.notes.recoveryPaths')}
                     </p>
                   )}
                   {unknownCount > 0 && (
                     <p className="project-resources-note">
-                      Some dynamic references can only be checked when you compile.
+                      {t('resources:dialog.notes.dynamicCompileCheck')}
                     </p>
                   )}
                 </section>
@@ -583,35 +587,35 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
                 }}
               >
                 <summary>
-                  <span>Inspect detected files</span>
+                  <span>{t('resources:dialog.inspect.summary')}</span>
                   {summary ? <span className="project-resources-details-count">{summary.totalResources}</span> : null}
                 </summary>
                 <div className="project-resources-details-body">
                   {resources.resourcePageError && (
                     <p className="project-resources-friendly-error" role="alert">
-                      Detected files could not be loaded.{' '}
+                      {t('resources:dialog.inspect.loadError')}{' '}
                       <button
                         type="button"
                         className="project-resources-inline-link"
                         onClick={() => void resources.loadResourcePage(null, true)}
                       >
-                        Retry
+                        {t('common:actions.retry')}
                       </button>
                     </p>
                   )}
                   {resources.isAnalyzing || (resources.isResourcePageLoading && !resources.resourcePage) ? (
-                    <p className="project-resources-muted">Loading detected files…</p>
+                    <p className="project-resources-muted">{t('resources:dialog.inspect.loading')}</p>
                   ) : (
                     <>
                       {directRows.length > 0 && (
                         <div className="project-resources-inspect-group">
-                          <h4>Direct dependencies</h4>
+                          <h4>{t('resources:dialog.inspect.directHeading')}</h4>
                           <ul>{directRows.map(renderInspectRequirement)}</ul>
                         </div>
                       )}
                       {projectUnknowns.length > 0 && (
                         <div className="project-resources-inspect-group">
-                          <h4>Unresolved references</h4>
+                          <h4>{t('resources:dialog.inspect.unresolvedHeading')}</h4>
                           <ul>
                             {projectUnknowns.map(item => {
                               const trimmedExpression = item.expression?.trim() ?? '';
@@ -633,14 +637,14 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
                                     className="project-resources-inspect-label"
                                     title={trimmedExpression || reasonLabel}
                                   >
-                                    {trimmedExpression ? <code>{trimmedExpression}</code> : <em>Dynamic expression</em>}
+                                    {trimmedExpression ? <code>{trimmedExpression}</code> : <em>{t('resources:common.dynamicExpression')}</em>}
                                   </span>
                                   {item.file && canJump && onSelectLine ? (
                                     <button
                                       type="button"
                                       className="project-resources-jump-link"
                                       onClick={() => onSelectLine(item.line ?? 1, item.file)}
-                                      title={`Jump to ${locationLabel}`}
+                                      title={t('resources:common.jumpTo', { location: locationLabel })}
                                     >
                                       {locationLabel}
                                     </button>
@@ -660,24 +664,25 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
                       )}
                       {(transitiveRows.length > 0 || catalogUnknowns.length > 0) && (
                         <p className="project-resources-muted">
-                          Supporting resources:{' '}
-                          {[
-                            transitiveRows.length > 0
-                              ? `${transitiveRows.length} transitive ${transitiveRows.length === 1 ? 'file' : 'files'}`
-                              : null,
-                            catalogUnknowns.length > 0
-                              ? `${catalogUnknowns.length} package-internal dynamic ${catalogUnknowns.length === 1 ? 'hook' : 'hooks'}`
-                              : null,
-                          ]
-                            .filter(Boolean)
-                            .join(' · ')}
+                          {t('resources:common.supportingSummary', {
+                            details: [
+                              transitiveRows.length > 0
+                                ? t('resources:common.transitiveFiles', { count: transitiveRows.length })
+                                : null,
+                              catalogUnknowns.length > 0
+                                ? t('resources:common.catalogHooks', { count: catalogUnknowns.length })
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(' · '),
+                          })}
                         </p>
                       )}
                       {directRows.length === 0
                         && projectUnknowns.length === 0
                         && transitiveRows.length === 0
                         && catalogUnknowns.length === 0 && (
-                        <p className="project-resources-muted">No detected resource files.</p>
+                        <p className="project-resources-muted">{t('resources:dialog.inspect.noDetectedFiles')}</p>
                       )}
                       {resources.resourcePage?.nextCursor && (
                         <button
@@ -686,7 +691,7 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
                           disabled={resources.isResourcePageLoading}
                           onClick={() => void resources.loadResourcePage(resources.resourcePage?.nextCursor ?? null)}
                         >
-                          {resources.isResourcePageLoading ? 'Loading…' : 'Load more detected files'}
+                          {resources.isResourcePageLoading ? t('resources:common.loading') : t('resources:dialog.inspect.loadMore')}
                         </button>
                       )}
                     </>
@@ -697,7 +702,7 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
 
             <footer className="project-resources-footer">
               <button type="button" className="project-resources-secondary" onClick={onClose}>
-                Close
+                {t('common:actions.close')}
               </button>
               {!resources.activeJobId && (
                 <div className="project-resources-footer-actions">
@@ -708,7 +713,7 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
                       onClick={() => void handleDownloadAndRecompile()}
                     >
                       <RefreshCw size={14} aria-hidden="true" />
-                      <span>Download &amp; Recompile</span>
+                      <span>{t('resources:dialog.downloadAndRecompile')}</span>
                     </button>
                   )}
                   <button
@@ -736,7 +741,7 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
               aria-labelledby="project-resources-tab-cache"
               className="project-resources-body"
             >
-              <section className="project-resources-storage-card" aria-label="Shared cache summary">
+              <section className="project-resources-storage-card" aria-label={t('resources:dialog.cache.summaryAria')}>
                 <div className="project-resources-storage-bar" aria-hidden="true">
                   {installedBytes > 0 && (
                     <span
@@ -762,36 +767,42 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
                   <div className="project-resources-legend-item">
                     <span className="project-resources-legend-label">
                       <i className="is-installed" aria-hidden="true" />
-                      Downloaded
+                      {t('resources:dialog.cache.downloaded')}
                     </span>
                     <strong>
-                      {cacheSummary?.installedFiles ?? 0} files · {formatBytes(cacheSummary?.installedBytes)}
+                      {t('resources:dialog.cache.summaryItem', {
+                        files: t('resources:common.fileCount', { count: cacheSummary?.installedFiles ?? 0 }),
+                        size: formatBytes(cacheSummary?.installedBytes),
+                      })}
                     </strong>
                   </div>
                   <div className="project-resources-legend-item">
                     <span className="project-resources-legend-label">
                       <i className="is-embedded" aria-hidden="true" />
-                      Built-in starter
+                      {t('resources:dialog.cache.builtInStarter')}
                     </span>
                     <strong>
-                      {cacheSummary?.embeddedFiles ?? 0} files · {formatBytes(cacheSummary?.embeddedBytes)}
+                      {t('resources:dialog.cache.summaryItem', {
+                        files: t('resources:common.fileCount', { count: cacheSummary?.embeddedFiles ?? 0 }),
+                        size: formatBytes(cacheSummary?.embeddedBytes),
+                      })}
                     </strong>
                   </div>
                   <div className="project-resources-legend-item">
                     <span className="project-resources-legend-label">
                       <i className="is-metadata" aria-hidden="true" />
-                      Metadata &amp; formats
+                      {t('resources:dialog.cache.metadataAndFormats')}
                     </span>
                     <strong>{formatBytes(metadataAndOtherBytes)}</strong>
                   </div>
                 </div>
 
                 <p className="project-resources-note">
-                  Shared across LaTeX projects. Files used by this project and built-in app resources are protected.
+                  {t('resources:dialog.cache.sharedNote')}
                 </p>
                 {isReadOnlyCache && (
                   <p className="project-resources-note project-resources-readonly-note">
-                    Shared cache pruning is read-only on Windows in v0.1.0.
+                    {t('resources:dialog.cache.readOnlyNote')}
                   </p>
                 )}
               </section>
@@ -801,8 +812,8 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
                 <input
                   type="text"
                   className="project-resources-filter-input"
-                  aria-label="Filter loaded files"
-                  placeholder="Filter cached paths…"
+                  aria-label={t('resources:dialog.cache.filterAria')}
+                  placeholder={t('resources:dialog.cache.filterPlaceholder')}
                   value={cacheFilter}
                   onChange={event => setCacheFilter(event.target.value)}
                 />
@@ -810,7 +821,7 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
                   <button
                     type="button"
                     className="project-resources-filter-clear"
-                    aria-label="Clear cache filter"
+                    aria-label={t('resources:dialog.cache.clearFilterAria')}
                     onClick={() => setCacheFilter('')}
                   >
                     <X size={13} />
@@ -826,26 +837,27 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
                     className="project-resources-inline-link"
                     onClick={() => void resources.loadCachePage(null, true)}
                   >
-                    Reload inventory
+                    {t('resources:dialog.cache.reloadInventory')}
                   </button>
                 </p>
               )}
 
               {resources.cacheRemovalResult && (
                 <p className="project-resources-removal-result" role="status">
-                  Removed {resources.cacheRemovalResult.removedFiles}{' '}
-                  {resources.cacheRemovalResult.removedFiles === 1 ? 'file' : 'files'} ·{' '}
-                  {formatBytes(resources.cacheRemovalResult.removedBytes)}
+                  {t('resources:dialog.cache.removedResult', {
+                    count: resources.cacheRemovalResult.removedFiles,
+                    bytes: formatBytes(resources.cacheRemovalResult.removedBytes),
+                  })}
                 </p>
               )}
 
               <div className="project-resources-cache-list" aria-live="polite">
                 {!resources.isPlanFresh ? (
-                  <p className="project-resources-muted">Waiting for current project analysis…</p>
+                  <p className="project-resources-muted">{t('resources:dialog.cache.waitingAnalysis')}</p>
                 ) : resources.isCachePageLoading && !currentCachePage ? (
-                  <p className="project-resources-muted">Loading installed resources…</p>
+                  <p className="project-resources-muted">{t('resources:dialog.cache.loadingInstalled')}</p>
                 ) : visibleCacheItems.length === 0 ? (
-                  <p className="project-resources-muted">No matching installed files in the loaded list.</p>
+                  <p className="project-resources-muted">{t('resources:dialog.cache.noMatchingInstalled')}</p>
                 ) : (
                   visibleCacheItems.map(item => {
                     const { fileName, dirPath } = splitCachePath(item.path);
@@ -869,12 +881,12 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
                           {dirPath && <span className="project-resources-cache-dir">{dirPath}</span>}
                         </div>
                         {item.requiredByProject ? (
-                          <span className="project-resources-cache-badge is-in-use">In use</span>
+                          <span className="project-resources-cache-badge is-in-use">{t('resources:dialog.cache.inUse')}</span>
                         ) : !item.removable ? (
                           isReadOnlyCache ? (
-                            <span className="project-resources-cache-badge is-read-only">Read-only</span>
+                            <span className="project-resources-cache-badge is-read-only">{t('resources:dialog.cache.readOnly')}</span>
                           ) : (
-                            <span className="project-resources-cache-badge is-built-in">Built-in</span>
+                            <span className="project-resources-cache-badge is-built-in">{t('resources:availability.builtIn')}</span>
                           )
                         ) : null}
                         <span className="project-resources-cache-size">{formatBytes(item.bytes)}</span>
@@ -890,18 +902,18 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
                     disabled={resources.isCachePageLoading}
                     onClick={() => void resources.loadCachePage(currentCachePage.nextCursor)}
                   >
-                    {resources.isCachePageLoading ? 'Loading…' : 'Load more installed files'}
+                    {resources.isCachePageLoading ? t('resources:common.loading') : t('resources:dialog.cache.loadMore')}
                   </button>
                 )}
               </div>
 
               {confirmRemoval && (
-                <div className="project-resources-confirm" role="alertdialog" aria-label="Confirm resource removal">
+                <div className="project-resources-confirm" role="alertdialog" aria-label={t('resources:dialog.cache.confirmAria')}>
                   <strong>
-                    Remove {selectedPaths.length} selected {selectedPaths.length === 1 ? 'file' : 'files'}?
+                    {t('resources:dialog.cache.confirmTitle', { count: selectedPaths.length })}
                   </strong>
                   <span>
-                    They will be removed from the shared cache and may be downloaded again by other projects.
+                    {t('resources:dialog.cache.confirmBody')}
                   </span>
                 </div>
               )}
@@ -915,7 +927,7 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
                     className="project-resources-secondary"
                     onClick={() => setConfirmRemoval(false)}
                   >
-                    Keep files
+                    {t('resources:dialog.cache.keepFiles')}
                   </button>
                   <button
                     type="button"
@@ -931,24 +943,24 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
                       setConfirmRemoval(false);
                     }}
                   >
-                    {resources.isRemovingResources ? 'Removing…' : 'Remove selected files'}
+                    {resources.isRemovingResources ? t('resources:dialog.cache.removing') : t('resources:dialog.cache.removeSelectedFiles')}
                   </button>
                 </>
               ) : (
                 <>
                   <span className="project-resources-selection-summary">
                     {isReadOnlyCache
-                      ? 'Shared cache pruning is read-only on Windows in v0.1.0.'
+                      ? t('resources:dialog.cache.readOnlyNote')
                       : (
                         <>
-                          {selectedPaths.length} selected
-                          {selectableCount > 0 ? ` · ${selectableCount} removable on this page` : ''}
+                          {t('resources:dialog.cache.selectedCount', { count: selectedPaths.length })}
+                          {selectableCount > 0 ? ` · ${t('resources:dialog.cache.removableCount', { count: selectableCount })}` : ''}
                         </>
                       )}
                   </span>
                   <div className="project-resources-footer-actions">
                     <button type="button" className="project-resources-secondary" onClick={onClose}>
-                      Done
+                      {t('common:actions.done')}
                     </button>
                     <button
                       type="button"
@@ -961,12 +973,12 @@ export const ProjectResourcesDialog: React.FC<ProjectResourcesDialogProps> = ({
                       }
                       title={
                         isReadOnlyCache
-                          ? 'Shared cache pruning is read-only on Windows in v0.1.0.'
+                          ? t('resources:dialog.cache.readOnlyNote')
                           : undefined
                       }
                       onClick={() => setConfirmRemoval(true)}
                     >
-                      Remove selected
+                      {t('resources:dialog.cache.removeSelected')}
                     </button>
                   </div>
                 </>

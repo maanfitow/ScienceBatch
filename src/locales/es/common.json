@@ -1,0 +1,32 @@
+{
+  "appName": "ScienceBatch",
+  "appStudioName": "ScienceBatch Studio",
+  "appVersion": "ScienceBatch Studio v0.1.0",
+  "appWindowTitle": "ScienceBatch — Editor local de escritorio para LaTeX y Typst",
+  "actions": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "close": "Cerrar",
+    "done": "Listo",
+    "retry": "Reintentar",
+    "clear": "Limpiar",
+    "copy": "Copiar",
+    "delete": "Eliminar",
+    "rename": "Renombrar",
+    "create": "Crear",
+    "open": "Abrir",
+    "compile": "Compilar",
+    "stop": "Detener",
+    "export": "Exportar"
+  },
+  "languages": {
+    "en": "English",
+    "es": "Español",
+    "shortEn": "EN",
+    "shortEs": "ES"
+  },
+  "engines": {
+    "latex": "LaTeX",
+    "typst": "Typst"
+  }
+}

@@ -5,6 +5,13 @@ import { classifyTypstContext, classifyTypstRange } from './typstContext';
 import { searchTypstSymbols, TYPST_WRITING_SYMBOLS, type TypstSymbolEntry } from './typstSymbols';
 import { typstSymbolInsertion } from './typstGenerate';
 
+type WritingTranslator = (key: string, fallback: string, params?: Record<string, string | number>) => string;
+const wt = (key: string, fallback: string, params?: Record<string, string | number>): string => {
+  const fn = (globalThis as { __sciencebatchTranslate?: WritingTranslator }).__sciencebatchTranslate;
+  if (fn) return fn(`writing:${key}`, fallback, params);
+  return params ? fallback.replace(/\{\{(\w+)\}\}/g, (_m, k) => String(params[k] ?? '')) : fallback;
+};
+
 export interface WritingSymbolAdapter {
   language: 'latex' | 'typst';
   previewKind: 'latex' | 'glyph';
@@ -34,7 +41,7 @@ const typstAdapter: WritingSymbolAdapter = {
   searchSymbols: searchTypstSymbols,
   symbolInsertion(command, context, source, start, end) {
     const entry = TYPST_WRITING_SYMBOLS.find((symbol) => symbol.nativeIdentifier === command) as TypstSymbolEntry | undefined;
-    if (!entry) return { text: '', reason: 'Choose a symbol from the Typst catalog.' };
+    if (!entry) return { text: '', reason: wt('adapters.chooseFromTypstCatalog', 'Choose a symbol from the Typst catalog.') };
     return typstSymbolInsertion(entry, context, source, start, end);
   },
 };

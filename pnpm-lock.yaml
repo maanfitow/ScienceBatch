@@ -32,6 +32,9 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
+      i18next:
+        specifier: ^27.2.7
+        version: 27.2.7(typescript@5.9.3)
       katex:
         specifier: ^0.19.0
         version: 0.19.0
@@ -53,6 +56,9 @@ importers:
       react-hotkeys-hook:
         specifier: ^4.6.1
         version: 4.6.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      react-i18next:
+        specifier: ^18.0.3
+        version: 18.0.3(@types/react@18.3.31)(i18next@27.2.7(typescript@5.9.3))(react@18.3.1)(typescript@5.9.3)
       react-resizable-panels:
         specifier: ^2.1.7
         version: 2.1.9(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -776,6 +782,18 @@ packages:
     resolution: {integrity: sha512-3hN7NaskYvMDLQY55gnW3NQ+mesEAepTqlg+VEbj7zzqEMBVNhzcGYYeqFo/TlYz6eQiFcp1HcsCZO+nGgS8zg==}
     engines: {node: '>=6.9.0'}
 
+  html-parse-stringify@4.0.1:
+    resolution: {integrity: sha512-0zHsZJrK7S3K2aucXWL6ycoYJ/iNtIcFHC/nYQgFklPtrv5LpJctIiSCroWZWeuoXvuyFdzp6KzjJQ+OT5MfFw==}
+
+  i18next@27.2.7:
+    resolution: {integrity: sha512-q3XlM8YSo6Nmomd+MQ4JPGJGvhgHwfCRXNeFrM8l0F4TuIuoJBqhCxQrdGDHNMjObRuw5O0ReuU968ZeMVlfnw==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      typescript: ^5 || ^6 || ^7
+    peerDependenciesMeta:
+      typescript:
+        optional: true
+
   js-tokens@4.0.0:
     resolution: {integrity: sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==}
 
@@ -845,6 +863,20 @@ packages:
     peerDependencies:
       react: '>=16.8.1'
       react-dom: '>=16.8.1'
+
+  react-i18next@18.0.3:
+    resolution: {integrity: sha512-S84rtVuaKuiRtoCOspbGEaDlFjka+KvK/A5YCOr4LQ41XF3iJOrJ5rqQTD/jJHFVUf6X1i4ZMN5PGGgpz8NN6g==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      '@types/react': '*'
+      i18next: '>= 27.0.1'
+      react: '>= 18.0.0'
+      typescript: ^5 || ^6 || ^7
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      typescript:
+        optional: true
 
   react-refresh@0.17.0:
     resolution: {integrity: sha512-z6F7K9bV85EfseRCp2bzrpyQ0Gkw1uLoCel9XBVWPg/TjRj94SkJzUTGfOa4bs7iJvBWtQG0Wq7wnI0syw3EBQ==}
@@ -1486,6 +1518,12 @@ snapshots:
 
   gensync@1.0.0-beta.2: {}
 
+  html-parse-stringify@4.0.1: {}
+
+  i18next@27.2.7(typescript@5.9.3):
+    optionalDependencies:
+      typescript: 5.9.3
+
   js-tokens@4.0.0: {}
 
   jsesc@3.1.0: {}
@@ -1540,6 +1578,15 @@ snapshots:
     dependencies:
       react: 18.3.1
       react-dom: 18.3.1(react@18.3.1)
+
+  react-i18next@18.0.3(@types/react@18.3.31)(i18next@27.2.7(typescript@5.9.3))(react@18.3.1)(typescript@5.9.3):
+    dependencies:
+      html-parse-stringify: 4.0.1
+      i18next: 27.2.7(typescript@5.9.3)
+      react: 18.3.1
+    optionalDependencies:
+      '@types/react': 18.3.31
+      typescript: 5.9.3
 
   react-refresh@0.17.0: {}
 

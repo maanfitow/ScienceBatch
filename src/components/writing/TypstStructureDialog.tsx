@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ArrowDownToLine, Braces, ChevronDown, Grid2X2, Table2, X } from 'lucide-react';
 import type { MathContext, WritingEditorBridge, WritingSession } from '../../types/writing';
 import type {
@@ -24,6 +25,14 @@ interface TypstStructureDialogProps {
   onApplied: (session: WritingSession) => void;
 }
 
+const CONTEXT_KEY_BY_VALUE: Record<MathContext, 'text' | 'mathInline' | 'mathDisplay' | 'mathEnvironment' | 'blocked'> = {
+  text: 'text',
+  'math-inline': 'mathInline',
+  'math-display': 'mathDisplay',
+  'math-environment': 'mathEnvironment',
+  blocked: 'blocked',
+};
+
 const tableDefaults = (): TypstTableOptions => ({
   rows: 3,
   columns: 3,
@@ -41,21 +50,6 @@ const matrixDefaults = (): TypstMatrixOptions => ({
   cells: Array.from({ length: 2 }, () => Array(2).fill('')),
   delimiter: 'parentheses',
 });
-
-const delimiterOptions: Array<{ value: TypstMatrixDelimiter; label: string }> = [
-  { value: 'none', label: 'None' },
-  { value: 'parentheses', label: 'Parentheses' },
-  { value: 'brackets', label: 'Brackets' },
-  { value: 'braces', label: 'Braces' },
-  { value: 'single-bars', label: 'Single bars' },
-  { value: 'double-bars', label: 'Double bars' },
-];
-
-const alignmentOptions: Array<{ value: TypstAlignment; label: string }> = [
-  { value: 'left', label: 'Left' },
-  { value: 'center', label: 'Center' },
-  { value: 'right', label: 'Right' },
-];
 
 function ensureTableDimensions(options: TypstTableOptions, rows: number, columns: number): TypstTableOptions {
   return {
@@ -106,6 +100,7 @@ function formatIndexes(indexes: number[]): string {
 export const TypstStructureDialog: React.FC<TypstStructureDialogProps> = ({
   kind, session, bridge, context, rangeContext, parsed, sectionRef, onKeyDown, onCancel, onApplied,
 }) => {
+  const { t } = useTranslation(['editor', 'common']);
   const parsedTable = parsed?.kind === 'table' ? parsed.value : null;
   const parsedMatrix = parsed?.kind === 'matrix' ? parsed.value : null;
   const [table, setTable] = useState<TypstTableOptions>(() => parsedTable ?? tableDefaults());
@@ -125,23 +120,54 @@ export const TypstStructureDialog: React.FC<TypstStructureDialogProps> = ({
       : context;
   const activeRangeContext = editing ? insertionContext : rangeContext;
   const focusTarget = parsed ? { start: parsed.start, end: parsed.end } : { start: session.start, end: session.end };
-  const cellError = useMemo(() => {
+
+  const delimiterOptions: Array<{ value: TypstMatrixDelimiter; label: string }> = useMemo(() => [
+    { value: 'none', label: t('editor:dialogs.delimiters.none') },
+    { value: 'parentheses', label: t('editor:dialogs.delimiters.parentheses') },
+    { value: 'brackets', label: t('editor:dialogs.delimiters.brackets') },
+    { value: 'braces', label: t('editor:dialogs.delimiters.braces') },
+    { value: 'single-bars', label: t('editor:dialogs.delimiters.singleBars') },
+    { value: 'double-bars', label: t('editor:dialogs.delimiters.doubleBars') },
+  ], [t]);
+
+  const alignmentOptions: Array<{ value: TypstAlignment; label: string }> = useMemo(() => [
+    { value: 'left', label: t('editor:dialogs.alignLeft') },
+    { value: 'center', label: t('editor:dialogs.alignCenter') },
+    { value: 'right', label: t('editor:dialogs.alignRight') },
+  ], [t]);
+
+  const cellErrorInfo = useMemo<{ row: number; column: number; message: string } | null>(() => {
     if (kind === 'table') {
       for (let row = 0; row < table.rows; row += 1) for (let column = 0; column < table.columns; column += 1) {
         const content = table.cells[row]?.[column] ?? '';
         try {
           if (table.cellTypst?.[row]?.[column]) validateTypstTableCell(content);
-          else if (/[\r\n\u2028\u2029]/u.test(content)) throw new Error('Cell content must stay on one line.');
-        } catch (error) { return `Row ${row + 1}, column ${column + 1}: ${error instanceof Error ? error.message : 'Invalid Typst content.'}`; }
+          else if (/[\r\n\u2028\u2029]/u.test(content)) throw new Error(t('editor:dialogs.typstCellSingleLineError'));
+        } catch (error) {
+          const errorDetail = error instanceof Error ? error.message : t('editor:dialogs.invalidTypstContent');
+          return {
+            row,
+            column,
+            message: t('editor:dialogs.typstCellError', { row: row + 1, column: column + 1, error: errorDetail }),
+          };
+        }
       }
     } else {
       for (let row = 0; row < matrix.rows; row += 1) for (let column = 0; column < matrix.columns; column += 1) {
         try { validateTypstMatrixCell(matrix.cells[row]?.[column] ?? ''); }
-        catch (error) { return `Row ${row + 1}, column ${column + 1}: ${error instanceof Error ? error.message : 'Invalid Typst math expression.'}`; }
+        catch (error) {
+          const errorDetail = error instanceof Error ? error.message : t('editor:dialogs.invalidTypstMath');
+          return {
+            row,
+            column,
+            message: t('editor:dialogs.typstCellError', { row: row + 1, column: column + 1, error: errorDetail }),
+          };
+        }
       }
     }
-    return '';
-  }, [kind, table, matrix]);
+    return null;
+  }, [kind, table, matrix, t]);
+  const cellError = cellErrorInfo?.message ?? '';
 
   let generated = '';
   let generationError = '';
@@ -153,7 +179,7 @@ export const TypstStructureDialog: React.FC<TypstStructureDialogProps> = ({
       generated = generateTypstMatrix(matrix, generationContext, { source: session.source, start: focusTarget.start, end: focusTarget.end });
     }
   } catch (error) {
-    generationError = error instanceof Error ? error.message : 'Unable to generate this structure.';
+    generationError = error instanceof Error ? error.message : t('editor:writing.unableToGenerateStructure');
   }
 
   const populatedCellsAffected = (rows: number, columns: number): { rows: number[]; columns: number[] } => {
@@ -169,7 +195,11 @@ export const TypstStructureDialog: React.FC<TypstStructureDialogProps> = ({
     return { rows: [...affectedRows], columns: [...affectedColumns] };
   };
   const affected = pendingDimensions ? populatedCellsAffected(pendingDimensions.rows, pendingDimensions.columns) : { rows: [], columns: [] };
-  const shrinkMessage = [affected.rows.length ? `rows ${formatIndexes(affected.rows)}` : '', affected.columns.length ? `columns ${formatIndexes(affected.columns)}` : ''].filter(Boolean).join(' and ');
+  const rowsLocationText = affected.rows.length ? t('editor:dialogs.shrinkRows', { indexes: formatIndexes(affected.rows) }) : '';
+  const columnsLocationText = affected.columns.length ? t('editor:dialogs.shrinkColumns', { indexes: formatIndexes(affected.columns) }) : '';
+  const shrinkMessage = rowsLocationText && columnsLocationText
+    ? t('editor:dialogs.shrinkAndJoiner', { rows: rowsLocationText, columns: columnsLocationText })
+    : rowsLocationText || columnsLocationText;
 
   const commitDimensions = (rows: number, columns: number) => {
     if (kind === 'table') setTable((current) => ensureTableDimensions(current, rows, columns));
@@ -213,88 +243,96 @@ export const TypstStructureDialog: React.FC<TypstStructureDialogProps> = ({
 
   const sourceValidation = useMemo(() => {
     if (editing) return '';
-    if (rangeContext === 'blocked') return 'The current selection crosses an unavailable Typst context.';
-    if (kind === 'table' && rangeContext !== 'text') return 'Tables can only be inserted in Typst markup.';
+    if (rangeContext === 'blocked') return t('editor:dialogs.typstSelectionBlocked');
+    if (kind === 'table' && rangeContext !== 'text') return t('editor:dialogs.typstTablesOnlyInMarkup');
     return '';
-  }, [editing, rangeContext, kind]);
+  }, [editing, rangeContext, kind, t]);
 
   const applyStructure = () => {
-    if (!sessionCurrent) { setValidation('The editor changed while this dialog was open. Close it and try again.'); return; }
-    if (confirmShrink && pendingDimensions) { setValidation('Confirm or cancel the dimension change before inserting.'); return; }
+    if (!sessionCurrent) { setValidation(t('editor:dialogs.typstDialogChangedTryAgain')); return; }
+    if (confirmShrink && pendingDimensions) { setValidation(t('editor:dialogs.confirmDimensionChangeBeforeInsert')); return; }
     if (sourceValidation) { setValidation(sourceValidation); return; }
     if (cellError) { setValidation(cellError); return; }
-    if (!generated || generationError) { setValidation(generationError || 'Unable to generate this structure.'); return; }
+    if (!generated || generationError) { setValidation(generationError || t('editor:writing.unableToGenerateStructure')); return; }
     const caret = focusTarget.start + generated.length;
     const result = bridge.apply(session, { ...focusTarget, text: generated, selection: { anchor: caret, active: caret } });
-    if (!result) { setValidation('The editor changed before this structure could be applied.'); return; }
+    if (!result) { setValidation(t('editor:dialogs.editorChangedBeforeStructure')); return; }
     onApplied(result);
   };
 
   const currentRows = kind === 'table' ? table.rows : matrix.rows;
   const currentColumns = kind === 'table' ? table.columns : matrix.columns;
-  const title = kind === 'table' ? (editing ? 'Edit table' : 'Create a table') : (editing ? 'Edit matrix' : 'Create a matrix');
+  const title = kind === 'table'
+    ? (editing ? t('editor:dialogs.editTable') : t('editor:dialogs.createTable'))
+    : (editing ? t('editor:dialogs.editMatrix') : t('editor:dialogs.createMatrix'));
   const icon = kind === 'table' ? <Table2 size={18} aria-hidden="true" /> : <Grid2X2 size={18} aria-hidden="true" />;
+  const contextLabel = t(`editor:writing.contexts.${CONTEXT_KEY_BY_VALUE[activeRangeContext]}`);
 
   return <section className="writing-dialog writing-dialog-builder writing-dialog-typst-structure" role="dialog" aria-modal="true" aria-labelledby="writing-typst-structure-title" ref={sectionRef} onKeyDown={onKeyDown}>
     <header className="writing-dialog-header">
-      <div className="writing-dialog-heading">{icon}<div><h2 id="writing-typst-structure-title">{title}</h2><p>{sessionCurrent ? `Typst · ${activeRangeContext.replace('-', ' ')}` : 'The editor session is no longer current.'}</p></div></div>
-      <button type="button" className="writing-icon-button" aria-label="Close writing tools" onClick={onCancel}><X size={17} /></button>
+      <div className="writing-dialog-heading">{icon}<div><h2 id="writing-typst-structure-title">{title}</h2><p>{sessionCurrent ? `${t('common:engines.typst')} · ${contextLabel}` : t('editor:writing.sessionNoLongerCurrent')}</p></div></div>
+      <button type="button" className="writing-icon-button" aria-label={t('editor:writing.closeWritingTools')} onClick={onCancel}><X size={17} /></button>
     </header>
-    {!sessionCurrent && <p className="writing-alert" role="alert">The editor changed while this dialog was open. Close it and retry.</p>}
+    {!sessionCurrent && <p className="writing-alert" role="alert">{t('editor:dialogs.typstDialogChangedRetry')}</p>}
     <div className="writing-builder-body">
-      <div className="writing-builder-tabs" role="tablist" aria-label="Builder view">
-        <button type="button" role="tab" aria-selected={!sourceTab} className={!sourceTab ? 'is-active' : ''} onClick={() => setSourceTab(false)}>Build</button>
-        <button type="button" role="tab" aria-selected={sourceTab} className={sourceTab ? 'is-active' : ''} onClick={() => setSourceTab(true)}>Source</button>
+      <div className="writing-builder-tabs" role="tablist" aria-label={t('editor:dialogs.builderViewLabel')}>
+        <button type="button" role="tab" aria-selected={!sourceTab} className={!sourceTab ? 'is-active' : ''} onClick={() => setSourceTab(false)}>{t('editor:dialogs.buildTab')}</button>
+        <button type="button" role="tab" aria-selected={sourceTab} className={sourceTab ? 'is-active' : ''} onClick={() => setSourceTab(true)}>{t('editor:dialogs.sourceTab')}</button>
       </div>
       {!sourceTab ? <div className="writing-builder-grid">
         <div className="writing-builder-controls">
-          <fieldset className="writing-dimensions"><legend>Dimensions</legend>
-            <label>Rows<input ref={setRowsInput} type="number" min="1" max={kind === 'table' ? 20 : 12} value={pendingDimensions?.rows ?? currentRows} onChange={(event) => requestDimensions(Number(event.target.value), pendingDimensions?.columns ?? currentColumns)} /></label>
-            <label>Columns<input type="number" min="1" max={kind === 'table' ? 10 : 12} value={pendingDimensions?.columns ?? currentColumns} onChange={(event) => requestDimensions(pendingDimensions?.rows ?? currentRows, Number(event.target.value))} /></label>
+          <fieldset className="writing-dimensions"><legend>{t('editor:dialogs.dimensions')}</legend>
+            <label>{t('editor:dialogs.rows')}<input ref={setRowsInput} type="number" min="1" max={kind === 'table' ? 20 : 12} value={pendingDimensions?.rows ?? currentRows} onChange={(event) => requestDimensions(Number(event.target.value), pendingDimensions?.columns ?? currentColumns)} /></label>
+            <label>{t('editor:dialogs.columns')}<input type="number" min="1" max={kind === 'table' ? 10 : 12} value={pendingDimensions?.columns ?? currentColumns} onChange={(event) => requestDimensions(pendingDimensions?.rows ?? currentRows, Number(event.target.value))} /></label>
           </fieldset>
-          {confirmShrink && <div className="writing-confirm-shrink" role="alert"><span>Reducing dimensions will remove populated cells in {shrinkMessage}.</span><button type="button" onClick={() => { setConfirmShrink(false); setPendingDimensions(null); window.requestAnimationFrame(() => rowsInput?.focus()); }}>Keep cells</button><button type="button" onClick={confirmReduction}>Confirm reduction</button></div>}
+          {confirmShrink && <div className="writing-confirm-shrink" role="alert"><span>{t('editor:dialogs.shrinkWarningLocations', { locations: shrinkMessage })}</span><button type="button" onClick={() => { setConfirmShrink(false); setPendingDimensions(null); window.requestAnimationFrame(() => rowsInput?.focus()); }}>{t('editor:dialogs.keepCells')}</button><button type="button" onClick={confirmReduction}>{t('editor:dialogs.confirmReduction')}</button></div>}
           {kind === 'table' ? <>
-            <fieldset className="writing-dimensions"><legend>Column alignment</legend><div className="writing-alignment-row">{Array.from({ length: table.columns }, (_, column) => <div className="writing-alignment-field" key={column}><span>Column {column + 1}</span><WritingSelect label={`Column ${column + 1} alignment`} value={table.alignment?.[column] ?? 'left'} options={alignmentOptions} onValueChange={(value) => setTable((current) => ({ ...current, alignment: current.alignment?.map((alignment, index) => index === column ? value as TypstAlignment : alignment) }))} /></div>)}</div></fieldset>
-            <button type="button" className="writing-more-toggle" aria-expanded={moreOptions} onClick={() => setMoreOptions((value) => !value)}>More options <ChevronDown size={14} className={moreOptions ? 'is-open' : ''} /></button>
+            <fieldset className="writing-dimensions"><legend>{t('editor:dialogs.columnAlignment')}</legend><div className="writing-alignment-row">{Array.from({ length: table.columns }, (_, column) => <div className="writing-alignment-field" key={column}><span>{t('editor:dialogs.columnLabel', { index: column + 1 })}</span><WritingSelect label={t('editor:dialogs.columnAlignmentLabel', { index: column + 1 })} value={table.alignment?.[column] ?? 'left'} options={alignmentOptions} onValueChange={(value) => setTable((current) => ({ ...current, alignment: current.alignment?.map((alignment, index) => index === column ? value as TypstAlignment : alignment) }))} /></div>)}</div></fieldset>
+            <button type="button" className="writing-more-toggle" aria-expanded={moreOptions} onClick={() => setMoreOptions((value) => !value)}>{t('editor:dialogs.moreOptions')} <ChevronDown size={14} className={moreOptions ? 'is-open' : ''} /></button>
             {moreOptions && <div className="writing-more-options">
-              <div className="writing-select-field"><span>Format</span><WritingSelect label="Format" value={table.format ?? 'plain'} options={[{ value: 'plain', label: 'Plain' }, { value: 'grid', label: 'Grid' }, { value: 'booktabs', label: 'Booktabs' }]} onValueChange={(value) => setTable((current) => ({ ...current, format: value as TypstTableFormat }))} /></div>
-              <label className="writing-check"><input type="checkbox" checked={table.header ?? false} onChange={(event) => setTable((current) => ({ ...current, header: event.target.checked }))} />Header row</label>
-              <label className="writing-check"><input type="checkbox" checked={table.wrapInFigure ?? false} onChange={(event) => setTable((current) => ({ ...current, wrapInFigure: event.target.checked }))} />Wrap in figure</label>
-              {table.wrapInFigure && <><label>Caption<input value={table.caption ?? ''} onChange={(event) => setTable((current) => ({ ...current, caption: event.target.value }))} placeholder="Optional caption" /></label><label>Label<input value={table.label ?? ''} onChange={(event) => setTable((current) => ({ ...current, label: event.target.value }))} placeholder="Optional label" /></label><p className="writing-table-preview-note">Captions are literal text. Custom numbering and placement are not evaluated.</p></>}
+              <div className="writing-select-field"><span>{t('editor:dialogs.format')}</span><WritingSelect label={t('editor:dialogs.format')} value={table.format ?? 'plain'} options={[{ value: 'plain', label: t('editor:dialogs.formatPlain') }, { value: 'grid', label: t('editor:dialogs.formatGrid') }, { value: 'booktabs', label: t('editor:dialogs.formatBooktabs') }]} onValueChange={(value) => setTable((current) => ({ ...current, format: value as TypstTableFormat }))} /></div>
+              <label className="writing-check"><input type="checkbox" checked={table.header ?? false} onChange={(event) => setTable((current) => ({ ...current, header: event.target.checked }))} />{t('editor:dialogs.headerRow')}</label>
+              <label className="writing-check"><input type="checkbox" checked={table.wrapInFigure ?? false} onChange={(event) => setTable((current) => ({ ...current, wrapInFigure: event.target.checked }))} />{t('editor:dialogs.wrapInFigure')}</label>
+              {table.wrapInFigure && <><label>{t('editor:dialogs.caption')}<input value={table.caption ?? ''} onChange={(event) => setTable((current) => ({ ...current, caption: event.target.value }))} placeholder={t('editor:dialogs.optionalCaption')} /></label><label>{t('editor:dialogs.label')}<input value={table.label ?? ''} onChange={(event) => setTable((current) => ({ ...current, label: event.target.value }))} placeholder={t('editor:dialogs.optionalLabel')} /></label><p className="writing-table-preview-note">{t('editor:dialogs.captionLiteralNote')}</p></>}
             </div>}
-          </> : <div className="writing-select-field"><span>Matrix delimiters</span><WritingSelect label="Matrix delimiters" value={matrix.delimiter ?? 'parentheses'} options={delimiterOptions} onValueChange={(value) => setMatrix((current) => ({ ...current, delimiter: value as TypstMatrixDelimiter }))} /></div>}
+          </> : <div className="writing-select-field"><span>{t('editor:dialogs.matrixDelimiters')}</span><WritingSelect label={t('editor:dialogs.matrixDelimiters')} value={matrix.delimiter ?? 'parentheses'} options={delimiterOptions} onValueChange={(value) => setMatrix((current) => ({ ...current, delimiter: value as TypstMatrixDelimiter }))} /></div>}
         </div>
-        <div className="writing-cell-editor" aria-label="Structure cells">
+        <div className="writing-cell-editor" aria-label={t('editor:dialogs.structureCellsLabel')}>
           {Array.from({ length: currentRows }, (_, row) => <div className="writing-cell-row" key={row}>{Array.from({ length: currentColumns }, (_, column) => {
             const isTypst = kind === 'table' && Boolean(table.cellTypst?.[row]?.[column]);
             const value = kind === 'table' ? table.cells[row]?.[column] ?? '' : matrix.cells[row]?.[column] ?? '';
+            const isInvalidCell = cellErrorInfo?.row === row && cellErrorInfo?.column === column;
             return <div className={`writing-cell ${kind === 'table' && table.header && row === 0 ? 'is-header' : ''}`} key={column}>
-              <span className="sr-only">Row {row + 1}, column {column + 1}{kind === 'table' && table.header && row === 0 ? ', header' : ''}</span>
-              <input aria-label={`Row ${row + 1}, column ${column + 1}${kind === 'table' ? (isTypst ? ', Typst markup' : ', text') : ', Typst math expression'}`} aria-invalid={cellError.startsWith(`Row ${row + 1}, column ${column + 1}:`) || undefined} aria-describedby={cellError.startsWith(`Row ${row + 1}, column ${column + 1}:`) ? 'writing-typst-cell-error' : undefined} value={value} onChange={(event) => kind === 'table' ? updateTableCell(row, column, event.target.value) : updateMatrixCell(row, column, event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); (event.currentTarget.closest('.writing-cell')?.nextElementSibling?.querySelector('input') as HTMLInputElement | null)?.focus(); } }} />
-              {kind === 'table' && <button type="button" className="writing-cell-mode" title={isTypst ? 'Cell content is Typst markup' : 'Cell content is literal text'} aria-label={`Toggle Typst markup for row ${row + 1}, column ${column + 1}`} aria-pressed={isTypst} onClick={() => toggleCellTypst(row, column)}><Braces size={12} /></button>}
+              <span className="sr-only">{kind === 'table' && table.header && row === 0 ? t('editor:dialogs.cellHeaderAria', { row: row + 1, column: column + 1 }) : t('editor:dialogs.cellAria', { row: row + 1, column: column + 1 })}</span>
+              <input aria-label={kind === 'table' ? (isTypst ? t('editor:dialogs.cellTypstMarkupAria', { row: row + 1, column: column + 1 }) : t('editor:dialogs.cellTextAria', { row: row + 1, column: column + 1 })) : t('editor:dialogs.cellTypstMathAria', { row: row + 1, column: column + 1 })} aria-invalid={isInvalidCell || undefined} aria-describedby={isInvalidCell ? 'writing-typst-cell-error' : undefined} value={value} onChange={(event) => kind === 'table' ? updateTableCell(row, column, event.target.value) : updateMatrixCell(row, column, event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); (event.currentTarget.closest('.writing-cell')?.nextElementSibling?.querySelector('input') as HTMLInputElement | null)?.focus(); } }} />
+              {kind === 'table' && <button type="button" className="writing-cell-mode" title={isTypst ? t('editor:dialogs.cellIsTypstTooltip') : t('editor:dialogs.cellIsLiteralTooltip')} aria-label={t('editor:dialogs.toggleTypstMarkupAria', { row: row + 1, column: column + 1 })} aria-pressed={isTypst} onClick={() => toggleCellTypst(row, column)}><Braces size={12} /></button>}
             </div>;
           })}</div>)}
           {cellError && <p id="writing-typst-cell-error" className="writing-note" role="alert">{cellError}</p>}
           {kind === 'table' ? <TypstTablePreview options={table} /> : <TypstMatrixPreview options={matrix} />}
-          <p className="writing-table-preview-note">Schematic preview. Final font and size depend on the document rules.</p>
+          <p className="writing-table-preview-note">{t('editor:dialogs.typstPreviewNote')}</p>
         </div>
       </div> : <div className="writing-source-pane"><pre>{generated}</pre></div>}
-      <div className="writing-dialog-footer"><span className="writing-inline-status" role={validation || generationError ? 'alert' : 'status'}>{validation || cellError || sourceValidation || generationError}</span><button type="button" className="writing-secondary-button" onClick={onCancel}>Cancel</button><button type="button" className="writing-primary-button" onClick={applyStructure} disabled={!sessionCurrent || confirmShrink || Boolean(sourceValidation || cellError || generationError)}><ArrowDownToLine size={15} />{editing ? 'Update' : 'Insert'}</button></div>
+      <div className="writing-dialog-footer"><span className="writing-inline-status" role={validation || generationError ? 'alert' : 'status'}>{validation || cellError || sourceValidation || generationError}</span><button type="button" className="writing-secondary-button" onClick={onCancel}>{t('common:actions.cancel')}</button><button type="button" className="writing-primary-button" onClick={applyStructure} disabled={!sessionCurrent || confirmShrink || Boolean(sourceValidation || cellError || generationError)}><ArrowDownToLine size={15} />{editing ? t('editor:dialogs.update') : t('editor:writing.insert')}</button></div>
     </div>
   </section>;
 };
 
 const TypstTablePreview: React.FC<{ options: TypstTableOptions }> = ({ options }) => {
+  const { t } = useTranslation(['editor']);
   const format = options.format ?? 'plain';
-  return <div className={`writing-table-preview format-${format} ${options.header ? 'has-header' : ''}`} aria-label="Schematic table preview">
-    <div className="writing-table-preview-scroll" tabIndex={0} aria-label="Scrollable table preview">
+  return <div className={`writing-table-preview format-${format} ${options.header ? 'has-header' : ''}`} aria-label={t('editor:dialogs.schematicTablePreviewLabel')}>
+    <div className="writing-table-preview-scroll" tabIndex={0} aria-label={t('editor:dialogs.scrollableTablePreviewLabel')}>
       <table><tbody>{options.cells.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, columnIndex) => <td className={options.header && rowIndex === 0 ? 'is-header' : ''} style={{ textAlign: options.alignment?.[columnIndex] ?? 'left' }} key={columnIndex}>{options.cellTypst?.[rowIndex]?.[columnIndex] ? <code>{cell || ' '}</code> : cell || ' '}</td>)}</tr>)}</tbody></table>
     </div>
   </div>;
 };
 
-const TypstMatrixPreview: React.FC<{ options: TypstMatrixOptions }> = ({ options }) => <div className="writing-typst-matrix-preview" aria-label={`${displayLabel(options.delimiter ?? 'parentheses')} matrix preview`}>
-  <span className="writing-typst-matrix-delimiter" aria-hidden="true">{displayLabel(options.delimiter ?? 'parentheses').split(' ')[0]}</span>
-  <table><tbody>{options.cells.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, columnIndex) => <td key={columnIndex}><code>{cell || ' '}</code></td>)}</tr>)}</tbody></table>
-  <span className="writing-typst-matrix-delimiter" aria-hidden="true">{displayLabel(options.delimiter ?? 'parentheses').split(' ')[1]}</span>
-</div>;
+const TypstMatrixPreview: React.FC<{ options: TypstMatrixOptions }> = ({ options }) => {
+  const { t } = useTranslation(['editor']);
+  return <div className="writing-typst-matrix-preview" aria-label={t('editor:dialogs.typstMatrixPreviewLabel', { delimiter: displayLabel(options.delimiter ?? 'parentheses') })}>
+    <span className="writing-typst-matrix-delimiter" aria-hidden="true">{displayLabel(options.delimiter ?? 'parentheses').split(' ')[0]}</span>
+    <table><tbody>{options.cells.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, columnIndex) => <td key={columnIndex}><code>{cell || ' '}</code></td>)}</tr>)}</tbody></table>
+    <span className="writing-typst-matrix-delimiter" aria-hidden="true">{displayLabel(options.delimiter ?? 'parentheses').split(' ')[1]}</span>
+  </div>;
+};

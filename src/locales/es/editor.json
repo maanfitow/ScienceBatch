@@ -1,0 +1,1602 @@
+{
+  "pdf": {
+    "tabs": {
+      "preview": "Vista previa del PDF",
+      "diagnostics": "Registros y problemas"
+    },
+    "contextMenu": {
+      "copyImage": "Copiar imagen",
+      "selectAll": "Seleccionar todo",
+      "goToSource": "Ir al código fuente",
+      "doubleClickShortcut": "Doble clic",
+      "zoomIn": "Acercar",
+      "zoomOut": "Alejar",
+      "fitToWidth": "Ajustar al ancho",
+      "resetZoom": "Restablecer zoom (100%)"
+    },
+    "linkTitlePrefix": "{{modifier}}+clic para abrir enlace",
+    "holdToFollowLink": "Mantén {{modifier}} + clic para abrir el enlace",
+    "holdToJumpDestination": "Mantén {{modifier}} + clic para ir al destino",
+    "jumpAction": "Ir",
+    "noSourceMapping": "No se encontró correspondencia con el código fuente en esta ubicación",
+    "imageCopied": "Imagen copiada al portapapeles",
+    "renderingPages": "Renderizando páginas del PDF...",
+    "retryRendering": "Reintentar renderizado",
+    "emptyTitle": "Documento sin compilar",
+    "emptyHint": "Pulsa <shortcutTag>{{shortcut}}</shortcutTag> o haz clic en <actionTag>{{action}}</actionTag> para previsualizar el PDF compilado.",
+    "compilingInMemory": "Compilando con {{engine}} en memoria...",
+    "tectonicEngine": "Tectonic",
+    "pageOf": "Página {{current}} de {{total}}"
+  },
+  "diagnostics": {
+    "errorSingular": "{{count}} error",
+    "errorPlural": "{{count}} errores",
+    "warningSingular": "{{count}} advertencia",
+    "warningPlural": "{{count}} advertencias",
+    "cleanCompilation": "Compilación limpia",
+    "copyErrorsTooltip": "Copiar resumen conciso de errores para análisis",
+    "copyErrors": "Copiar errores",
+    "copiedBang": "¡Copiado!",
+    "copied": "Copiado",
+    "copyRawLogTooltip": "Copiar registro completo del compilador (texput.log)",
+    "copyRawLog": "Copiar registro",
+    "recompileTooltip": "Iniciar recompilación de {{engine}} (Ctrl + S)",
+    "compiling": "Compilando...",
+    "recompile": "Recompilar",
+    "typstError": "Error de Typst",
+    "latexError": "Error de LaTeX",
+    "typstWarning": "Advertencia de Typst",
+    "latexWarning": "Advertencia de LaTeX",
+    "openFileAtLineTooltip": "Abrir {{file}} en la línea {{line}}",
+    "openFileTooltip": "Abrir {{file}}",
+    "jumpToLineTooltip": "Ir a la línea {{line}}",
+    "lineLabel": "Línea {{line}}",
+    "copyErrorTooltip": "Copiar este mensaje de error",
+    "copyWarningTooltip": "Copiar este mensaje de advertencia",
+    "suggestedFix": "Solución sugerida:",
+    "note": "Nota:",
+    "emptyTitle": "Sin errores de compilación",
+    "emptyDescription": "El código fuente del documento se compiló sin errores ni advertencias.",
+    "rawLogTitle": "Registro completo del compilador",
+    "copyEntireRawLogTooltip": "Copiar todo el registro",
+    "errorsCopied": "Resumen de errores copiado al portapapeles",
+    "rawLogCopied": "Registro completo del compilador copiado al portapapeles",
+    "copiedToClipboard": "Copiado al portapapeles",
+    "summaryHeader": "=== Diagnósticos de compilación ({{engine}}) ===",
+    "summaryErrorsSection": "[Errores ({{count}})]",
+    "summaryWarningsSection": "[Advertencias ({{count}})]",
+    "summaryLinePrefix": "(Línea {{line}}) ",
+    "summarySuggestedFix": "Solución sugerida: {{suggestion}}",
+    "summaryNote": "Nota: {{suggestion}}"
+  },
+  "writing": {
+    "categories": {
+      "all": "Todas las categorías",
+      "greek": "Letras griegas",
+      "operators": "Operadores",
+      "relations": "Relaciones",
+      "arrows": "Flechas",
+      "logic": "Conjuntos y lógica",
+      "misc": "Varios"
+    },
+    "contexts": {
+      "text": "texto",
+      "mathInline": "matemática en línea",
+      "mathDisplay": "matemática en bloque",
+      "mathEnvironment": "entorno matemático",
+      "blocked": "bloqueado"
+    },
+    "toolbarLabel": "Herramientas de escritura",
+    "formattingGroupLabel": "Formato de texto",
+    "selectLatexSource": "Selecciona un archivo fuente LaTeX editable.",
+    "symbols": "Símbolos",
+    "symbolsTooltip": "Explorar e insertar símbolos matemáticos",
+    "table": "Tabla",
+    "tableTooltip": "Crear una tabla",
+    "tableUnavailable": "La creación de tablas no está disponible para este lenguaje.",
+    "matrix": "Matriz",
+    "matrixTooltip": "Crear una matriz",
+    "matrixUnavailable": "La creación de matrices no está disponible para este lenguaje.",
+    "editTable": "Editar tabla",
+    "editMatrix": "Editar matriz",
+    "editTableTooltip": "Editar tabla compatible en el cursor",
+    "editMatrixTooltip": "Editar matriz compatible en el cursor",
+    "bold": "Negrita",
+    "italic": "Cursiva",
+    "insert": "Insertar",
+    "closeWritingTools": "Cerrar herramientas de escritura",
+    "boldApplied": "Formato de negrita aplicado.",
+    "boldRemoved": "Formato de negrita quitado.",
+    "italicApplied": "Formato de cursiva aplicado.",
+    "italicRemoved": "Formato de cursiva quitado.",
+    "previewUnavailableExpression": "La vista previa no está disponible para esta expresión.",
+    "closePanelBeforeFormatting": "Cierra el panel de escritura antes de dar formato al texto.",
+    "selectEditableSource": "Selecciona una fuente editable antes de dar formato al texto.",
+    "sessionNotReady": "El formato no está disponible porque la sesión del editor no está lista.",
+    "selectActiveSourceEditor": "Selecciona un editor de código activo antes de dar formato al texto.",
+    "sessionChangedRefresh": "La sesión del editor cambió. Reintenta cuando se actualice.",
+    "manualEditRequired": "Esta estructura requiere edición manual en el código fuente.",
+    "selectionCannotBeFormatted": "No se puede dar formato a esta selección aquí.",
+    "editorChangedRetry": "El editor cambió. Reintenta la acción de formato.",
+    "editorChangedBeforeApply": "El editor cambió antes de aplicar el formato. Reintenta la acción.",
+    "noCompatibleTable": "No se encontró ninguna tabla compatible en el cursor.",
+    "noCompatibleMatrix": "No se encontró ninguna matriz compatible en el cursor.",
+    "editorChangedWhileOpen": "El editor cambió mientras esta herramienta estaba abierta. Ciérrala e inténtalo de nuevo.",
+    "editCouldNotBeApplied": "No se pudo aplicar la edición porque cambió la sesión del editor.",
+    "symbolCannotBeInserted": "Este símbolo no se puede insertar en la selección actual.",
+    "editorChangedBeforeSymbol": "El editor cambió antes de poder insertar el símbolo.",
+    "unableToGenerateStructure": "No se puede generar esta estructura.",
+    "selectionCrossesLatexBoundary": "La selección actual cruza un límite de LaTeX.",
+    "tablesOnlyInTextMode": "Las tablas solo se pueden insertar en modo texto.",
+    "packagesUnverified": "No se pudieron verificar automáticamente los paquetes requeridos.",
+    "packagesAlreadyDeclared": "Todos los paquetes requeridos ya están declarados.",
+    "editorChangedBeforePackages": "El editor cambió antes de poder añadir los paquetes.",
+    "packagesAddedForStructure": "Paquetes añadidos. Revisa el código generado e inserta cuando quieras.",
+    "packagesAddedForSymbol": "Paquetes añadidos. Se conservó el punto de inserción del símbolo.",
+    "sessionNoLongerCurrent": "La sesión del editor ya no está vigente.",
+    "panelChangedRetry": "El editor cambió mientras este panel estaba abierto. Ciérralo y reintenta."
+  },
+  "dialogs": {
+    "insertSymbolTitle": "Insertar un símbolo",
+    "searchSymbolsLabel": "Buscar símbolos",
+    "searchTypstPlaceholder": "Buscar por nombre, identificador o alias",
+    "searchLatexPlaceholder": "Buscar por nombre, comando o alias",
+    "mathSymbolsLabel": "Símbolos matemáticos",
+    "noMatchingSymbols": "Ningún símbolo coincide con la búsqueda.",
+    "categoryLabel": "Categoría",
+    "symbolIllustrationLabel": "Ilustración del símbolo {{name}}",
+    "glyphIllustrationTitle": "Solo ilustración del glifo; no es salida compilada de Typst y puede diferir de la fuente del documento.",
+    "glyphIllustrationNote": "Solo ilustración del glifo. No es salida compilada de Typst y puede diferir de la fuente del documento.",
+    "unavailableInContext": "No disponible en este contexto",
+    "symbolPreviewUnavailable": "Vista previa no disponible. Aun así se insertará el comando LaTeX.",
+    "requiresPackages": "Requiere {{packages}}",
+    "packagesLoadedSuffix": " · cargado",
+    "packagesUncertainSuffix": " · no se pudo verificar la carga",
+    "addPackages": "Añadir paquetes",
+    "openMainFile": "Abrir archivo principal",
+    "openMainFileToAddPackages": "Abre el archivo principal para añadir paquetes.",
+    "selectSymbolHint": "Selecciona un símbolo para previsualizar su sintaxis.",
+    "insertSymbolAria": "Insertar {{name}} ({{command}})",
+    "insertSymbolFallbackAria": "Insertar símbolo",
+    "editTable": "Editar tabla",
+    "createTable": "Crear una tabla",
+    "editMatrix": "Editar matriz",
+    "createMatrix": "Crear una matriz",
+    "builderViewLabel": "Vista del constructor",
+    "buildTab": "Construir",
+    "sourceTab": "Código",
+    "dimensions": "Dimensiones",
+    "rows": "Filas",
+    "columns": "Columnas",
+    "shrinkWarning": "Reducir las dimensiones eliminará celdas con contenido.",
+    "shrinkWarningLocations": "Reducir las dimensiones eliminará celdas con contenido en {{locations}}.",
+    "shrinkRows": "filas {{indexes}}",
+    "shrinkColumns": "columnas {{indexes}}",
+    "shrinkAndJoiner": "{{rows}} y {{columns}}",
+    "keepCells": "Mantener celdas",
+    "confirmReduction": "Confirmar reducción",
+    "columnAlignment": "Alineación de columnas",
+    "columnLabel": "Columna {{index}}",
+    "columnAlignmentLabel": "Alineación de la columna {{index}}",
+    "alignLeft": "Izquierda",
+    "alignCenter": "Centro",
+    "alignRight": "Derecha",
+    "moreOptions": "Más opciones",
+    "format": "Formato",
+    "formatPlain": "Simple",
+    "formatGrid": "Cuadrícula",
+    "formatBooktabs": "Booktabs",
+    "boldHeaderRow": "Fila de encabezado en negrita",
+    "headerRow": "Fila de encabezado",
+    "wrapInTable": "Envolver en entorno table",
+    "wrapInFigure": "Envolver en figura",
+    "caption": "Leyenda",
+    "optionalCaption": "Leyenda opcional",
+    "captionIsLatex": "La leyenda es LaTeX",
+    "label": "Etiqueta",
+    "optionalLabel": "Etiqueta opcional",
+    "captionLiteralNote": "Las leyendas son texto literal. La numeración y ubicación personalizadas no se evalúan.",
+    "matrixDelimiters": "Delimitadores de matriz",
+    "delimiters": {
+      "none": "Ninguno",
+      "parentheses": "Paréntesis",
+      "brackets": "Corchetes",
+      "braces": "Llaves",
+      "singleBars": "Barras simples",
+      "doubleBars": "Barras dobles"
+    },
+    "structureCellsLabel": "Celdas de la estructura",
+    "cellHeaderAria": "Fila {{row}}, columna {{column}}, encabezado",
+    "cellAria": "Fila {{row}}, columna {{column}}",
+    "typstCellPrefix": "Fila {{row}}, columna {{column}}",
+    "typstCellError": "Fila {{row}}, columna {{column}}: {{error}}",
+    "cellTypstMarkupAria": "Fila {{row}}, columna {{column}}, marcado Typst",
+    "cellTextAria": "Fila {{row}}, columna {{column}}, texto",
+    "cellTypstMathAria": "Fila {{row}}, columna {{column}}, expresión matemática Typst",
+    "cellIsLatexTooltip": "El contenido de la celda es LaTeX",
+    "cellIsEscapedTooltip": "El contenido de la celda es texto escapado",
+    "cellIsTypstTooltip": "El contenido de la celda es marcado Typst",
+    "cellIsLiteralTooltip": "El contenido de la celda es texto literal",
+    "toggleLatexInputAria": "Alternar entrada LaTeX para la fila {{row}}, columna {{column}}",
+    "toggleTypstMarkupAria": "Alternar marcado Typst para la fila {{row}}, columna {{column}}",
+    "previewUnavailableWithError": "Vista previa no disponible: {{error}}",
+    "update": "Actualizar",
+    "tablePreviewLabel": "Vista previa de la tabla",
+    "tableLayoutPreviewLabel": "Vista previa del diseño de tabla",
+    "tablePreviewNote": "Vista esquemática. El tamaño y la fuente finales dependen del documento LaTeX.",
+    "tablePreviewLatexCellsNote": "Vista esquemática. El tamaño y la fuente finales dependen del documento LaTeX. Las celdas LaTeX se muestran como código.",
+    "typstCellSingleLineError": "El contenido de la celda debe permanecer en una sola línea.",
+    "invalidTypstContent": "Contenido de Typst no válido.",
+    "invalidTypstMath": "Expresión matemática de Typst no válida.",
+    "typstSelectionBlocked": "La selección actual cruza un contexto de Typst no disponible.",
+    "typstTablesOnlyInMarkup": "Las tablas solo se pueden insertar en marcado Typst.",
+    "typstDialogChangedTryAgain": "El editor cambió mientras este diálogo estaba abierto. Ciérralo e inténtalo de nuevo.",
+    "typstDialogChangedRetry": "El editor cambió mientras este diálogo estaba abierto. Ciérralo y reintenta.",
+    "confirmDimensionChangeBeforeInsert": "Confirma o cancela el cambio de dimensiones antes de insertar.",
+    "editorChangedBeforeStructure": "El editor cambió antes de poder aplicar esta estructura.",
+    "typstPreviewNote": "Vista esquemática. La fuente y el tamaño finales dependen de las reglas del documento.",
+    "schematicTablePreviewLabel": "Vista previa esquemática de la tabla",
+    "scrollableTablePreviewLabel": "Vista previa desplazable de la tabla",
+    "typstMatrixPreviewLabel": "Vista previa de matriz {{delimiter}}"
+  },
+  "project": {
+    "unsavedChangesTitle": "Cambios sin guardar",
+    "discardTabsMessage": "¿Descartar los cambios sin guardar en las pestañas que se van a cerrar?",
+    "discardPreviewTabMessage": "¿Descartar los cambios sin guardar en la pestaña de vista previa?",
+    "discardOpenProjectMessage": "¿Descartar los cambios sin guardar antes de abrir otro proyecto?",
+    "discardCloseProjectMessage": "¿Descartar los cambios sin guardar y cerrar este proyecto?",
+    "discard": "Descartar",
+    "discardAndOpen": "Descartar y abrir",
+    "discardAndClose": "Descartar y cerrar",
+    "gitDeletedOpenFilesWarning": "Algunos archivos abiertos fueron eliminados por la actualización de Git",
+    "fileSaved": "Archivo guardado",
+    "importFilesTitle": "Seleccionar archivos o imágenes para importar al proyecto",
+    "importAssetsFilter": "Recursos y fuentes del proyecto",
+    "allFilesFilter": "Todos los archivos",
+    "importedFilesSingular": "Se importó {{count}} archivo al proyecto",
+    "importedFilesPlural": "Se importaron {{count}} archivos al proyecto",
+    "openProjectFolderTitle": "Abrir carpeta de proyecto LaTeX o Typst",
+    "defaultProjectName": "Proyecto",
+    "openedProject": "Abierto {{name}}",
+    "openedProjectDescription": "Motor: {{engine}} — Principal: {{main}}",
+    "selectZipArchiveTitle": "Seleccionar archivo ZIP de proyecto LaTeX o Typst",
+    "zipArchivesFilter": "Archivos ZIP (*.zip)",
+    "selectExtractFolderTitle": "Seleccionar carpeta de destino para extraer el proyecto",
+    "extractingZip": "Extrayendo y configurando el archivo del proyecto...",
+    "zipImported": "Proyecto importado correctamente",
+    "scratchpadName": "Borrador",
+    "engineSetTo": "Motor de composición cambiado a {{engine}}",
+    "mainEntrypointSet": "Archivo principal establecido en {{file}}",
+    "createdFile": "Archivo creado: {{name}}",
+    "createdFolder": "Carpeta creada: {{name}}",
+    "renamedTo": "Renombrado a {{name}}",
+    "projectRootFallback": "raíz del proyecto",
+    "movedTo": "Se movió \"{{name}}\" a {{target}}",
+    "moveFolderTrashTitle": "Mover carpeta a la papelera",
+    "moveFileTrashTitle": "Mover archivo a la papelera",
+    "moveFolderTrashPrompt": "¿Mover la carpeta \"{{name}}\" y su contenido a la papelera? Podrás restaurarla desde la papelera del sistema.",
+    "moveFileTrashPrompt": "¿Mover \"{{name}}\" a la papelera? Podrás restaurarlo desde la papelera del sistema.",
+    "moveFolderTrashDirtySuffix": "Se descartarán los cambios sin guardar en las pestañas abiertas de esta carpeta.",
+    "moveFileTrashDirtySuffix": "Se descartarán los cambios sin guardar en las pestañas abiertas de este archivo.",
+    "moveToTrashAction": "Mover a la papelera",
+    "movedToTrash": "Se movió \"{{name}}\" a la papelera",
+    "duplicatedAs": "Duplicado como {{name}}"
+  },
+  "compiler": {
+    "preparingWorkspace": "Preparando instantánea del espacio de trabajo {{engine}} en memoria...",
+    "compilingWorkspace": "Compilando espacio de trabajo {{engine}}...",
+    "compilingWorkspaceDescription": "Procesando los búferes actuales del editor en memoria",
+    "preparingCompiler": "Preparando compilador {{engine}} en memoria...",
+    "compilingDocument": "Compilando documento {{engine}}...",
+    "compilingDocumentDescription": "Procesando en VFS en RAM",
+    "pdfGenerated": "PDF generado",
+    "compileSuccessTitle": "Compilación de {{engine}} completada",
+    "compileSuccessWarningsSingular": "Renderizado con {{count}} advertencia.",
+    "compileSuccessWarningsPlural": "Renderizado con {{count}} advertencias.",
+    "compileSuccessDescription": "Documento renderizado y actualizado en el visor.",
+    "compilationFailed": "La compilación falló.",
+    "engineErrorTitle": "Error de {{engine}}",
+    "checkWorkspaceDiagnosticsSuggestion": "Revisa los diagnósticos del espacio de trabajo y vuelve a compilar.",
+    "checkLogsSuggestion": "Revisa los registros de la consola o vuelve a compilar."
+  },
+  "export": {
+    "savePdfTitle": "Guardar documento PDF como...",
+    "pdfFilterName": "Documento PDF",
+    "pdfSaved": "PDF guardado correctamente",
+    "pdfDownloaded": "PDF descargado",
+    "exportZipTitle": "Exportar proyecto como archivo ZIP",
+    "zipFilterName": "Archivo ZIP",
+    "packagingZip": "Empaquetando archivo del proyecto...",
+    "zipExported": "Archivo del proyecto exportado correctamente"
+  },
+  "resources": {
+    "untitledWorkspace": "Espacio de trabajo sin título",
+    "preparingKnown": "Preparando los recursos conocidos seleccionados.",
+    "detectedReady": "Los recursos detectados están listos.",
+    "downloadPaused": "La descarga se pausó. Puedes reanudarla cuando quieras.",
+    "cancelling": "Deteniendo y finalizando el proceso de recursos...",
+    "downloadStillRunning": "La descarga sigue en curso.",
+    "openDialogAction": "Recursos del proyecto…",
+    "packs": {
+      "latexBasic": "LaTeX básico",
+      "latexIeeetran": "Artículo IEEEtran",
+      "latexResumeFonts": "Fuentes para currículum",
+      "typstEngineAssets": "Recursos del motor Typst",
+      "basePackage": "Paquete base"
+    }
+  },
+  "updates": {
+    "availableTitle": "Actualización disponible: v{{version}}",
+    "availableDescription": "Hay una nueva versión de ScienceBatch disponible.",
+    "viewDetails": "Ver detalles"
+  },
+  "suggestions": {
+    "latex": {
+      "misplaced_ampersand": "Se usó '&' literal en modo texto. Usa '\\&' para escribir un ampersand o encierra las columnas dentro de un entorno de alineación como 'tabular' o 'align'.",
+      "undefined_control_sequence": "Comando o macro de LaTeX no reconocido. Revisa si hay errores tipográficos o verifica que el paquete requerido esté importado en el preámbulo.",
+      "undefined_environment": "No se reconoce el entorno '{{env}}'. Verifica la ortografía o importa el paquete de LaTeX que proporciona '\\begin{{lb}}{{env}}{{rb}}'.",
+      "undefined_environment_generic": "Entorno no reconocido. Verifica la ortografía o comprueba que el paquete correspondiente esté importado en el preámbulo.",
+      "missing_dollar": "Se usó un símbolo matemático en modo texto. Envuelve las fórmulas en '$ ... $' para matemática en línea o '\\[ ... \\]' para matemática en bloque.",
+      "extra_brace_or_dollar": "Delimitador o llave desbalanceada. Comprueba que cada '{' y '$' tenga su cierre correspondiente.",
+      "mismatched_env": "Cierre de entorno no coincidente: '\\begin{{lb}}{{beginEnv}}{{rb}}' se cerró con '\\end{{lb}}{{endEnv}}{{rb}}'. Asegúrate de que las etiquetas coincidan y estén bien anidadas.",
+      "mismatched_env_generic": "Etiquetas de entorno no coincidentes. Asegúrate de que cada '\\begin{...}' tenga su '\\end{...}' correspondiente.",
+      "undefined_reference": "No se encontró la clave de referencia cruzada '{{key}}'. Asegúrate de que exista un '\\label{{lb}}{{key}}{{rb}}' coincidente en el documento.",
+      "undefined_reference_generic": "No se encontró la clave de referencia cruzada. Asegúrate de que exista un ancla '\\label{...}' coincidente en el documento.",
+      "undefined_citation": "No se encontró la clave de cita '{{key}}'. Comprueba que la entrada exista en tu archivo .bib y coincida respetando mayúsculas y minúsculas.",
+      "undefined_citation_generic": "No se encontró la clave de cita en la bibliografía (.bib). Verifica mayúsculas/minúsculas y las claves de las entradas.",
+      "font_not_found": "XeTeX no encontró la fuente '{{font}}'. Asegúrate de que esté instalada en el sistema o cárgala por su nombre exacto de archivo (p. ej. '\\setmainfont{{lb}}{{font}}.otf{{rb}}') si está en el proyecto.",
+      "font_not_found_generic": "XeTeX no encontró la fuente. Asegúrate de que esté instalada en el sistema o especifica el nombre exacto del archivo OpenType/TrueType.",
+      "inputenc_ignored": "Tectonic se ejecuta sobre XeTeX, que admite UTF-8 de forma nativa. Puedes eliminar '\\usepackage[utf8]{inputenc}' sin problemas.",
+      "pagelabels_info": "Aviso informativo de hyperref. El esquema del documento y las etiquetas de página se sincronizarán automáticamente en compilaciones posteriores.",
+      "option_clash": "El paquete '{{pkg}}' se cargó varias veces con opciones en conflicto. Declara las opciones globalmente con '\\PassOptionsToPackage{options}{{lb}}{{pkg}}{{rb}}' antes de \\documentclass o unifica las importaciones.",
+      "option_clash_generic": "El paquete se cargó varias veces con opciones en conflicto. Declara las opciones globalmente con '\\PassOptionsToPackage{options}{package}' antes de \\documentclass.",
+      "unknown_docclass_caption": "La clase de documento tiene un formato de leyendas personalizado que puede entrar en conflicto con el paquete 'caption'. Configura el estilo con '\\captionsetup' o suprime el aviso con '\\WarningFilter{caption}{Unknown document class}'.",
+      "asset_not_found": "No se encontró la figura o recurso '{{file}}'. Verifica que la ruta relativa coincida con la estructura de carpetas del proyecto.",
+      "asset_not_found_generic": "No se encontró la figura o recurso. Verifica que la ruta relativa coincida con la estructura de carpetas del proyecto (p. ej. 'figures/image.pdf').",
+      "sty_not_found": "No se encontró el paquete de LaTeX '{{file}}'. Verifica el nombre del paquete o coloca '{{file}}' en la carpeta del proyecto.",
+      "sty_not_found_generic": "No se encontró el paquete de LaTeX (.sty) en el bundle ni en el proyecto. Verifica el nombre o coloca el archivo '.sty' en la carpeta del proyecto.",
+      "cls_not_found": "No se encontró la clase de documento '{{file}}'. Asegúrate de que '{{file}}' esté en el directorio raíz del proyecto.",
+      "cls_not_found_generic": "No se encontró el archivo de clase de documento (.cls). Asegúrate de que la clase personalizada esté en el directorio del proyecto.",
+      "bib_not_found": "No se encontró la base bibliográfica '{{file}}'. Verifica el nombre y la ruta del archivo en el directorio del proyecto.",
+      "bib_not_found_generic": "No se encontró el archivo de bibliografía (.bib). Verifica que el nombre coincida con la estructura de carpetas del proyecto.",
+      "graphic_not_found": "No se encontró el archivo gráfico '{{file}}'. Verifica que la ruta coincida con la estructura de carpetas del proyecto.",
+      "file_not_found": "No se encontró el archivo '{{file}}' en el bundle ni en el proyecto. Verifica el nombre y la ruta relativa.",
+      "float_specifier": "El especificador de posición '[h]' por sí solo es demasiado restrictivo. Usa '[htbp]' para que LaTeX pueda ubicar el flotante arriba o abajo si no cabe en línea.",
+      "usepackage_before_documentclass": "Todas las declaraciones '\\usepackage{...}' deben ir en el preámbulo, después de '\\documentclass{...}' y antes de '\\begin{document}'.",
+      "fallback_bibtex": "Aviso informativo: BibLaTeX está usando el motor BibTeX integrado en memoria sin requerir Biber externo.",
+      "empty_bibliography": "No se encontraron entradas coincidentes en .bib para esta categoría o filtro. Comenta este comando \\printbibliography si no tienes publicaciones de este tipo."
+    },
+    "typst": {
+      "font_not_found_linux": "La fuente '{{font}}' no está instalada en tu sistema Linux. Para instalarla: '{{installCmd}}'. También puedes usar fuentes integradas: 'Libertinus Serif' o 'New Computer Modern', o definir un respaldo: font: (\"{{font}}\", \"Libertinus Serif\").",
+      "font_not_found_windows": "No se encontró la fuente '{{font}}' en tu sistema Windows. Descárgala e instálala en Configuración > Personalización > Fuentes (o clic derecho > 'Instalar para todos los usuarios'). Como alternativa, usa 'Libertinus Serif' o define un respaldo: font: (\"{{font}}\", \"Libertinus Serif\").",
+      "font_not_found_macos": "No se encontró la fuente '{{font}}' en macOS. Instálala en Catálogo Tipográfico o mediante Homebrew ('brew install --cask font-{{brewName}}'). Como alternativa, usa 'Libertinus Serif' o define un respaldo: font: (\"{{font}}\", \"Libertinus Serif\").",
+      "font_not_found_other": "La fuente '{{font}}' no está disponible. Instálala en tu sistema o usa la fuente integrada 'Libertinus Serif'.",
+      "equation_numbering": "Para referenciar ecuaciones con @label, activa la numeración añadiendo: #set math.equation(numbering: \"(1)\") a tu documento.",
+      "unknown_variable": "La variable '{{name}}' no está definida. Revisa la ortografía o declárala con #let: '#let {{name}} = ...'.",
+      "unknown_variable_generic": "Variable no definida. Revisa la ortografía o declárala con una sentencia #let.",
+      "delimiter_mismatch": "Delimitador sin cerrar o no coincidente. Comprueba paréntesis (), corchetes [] o llaves {}.",
+      "generic_syntax": "Revisa la sintaxis de Typst o los argumentos de la función."
+    }
+  },
+  "compilerProgress": {
+    "compiler": {
+      "starting": "Iniciando compilador {{engine}} en memoria...",
+      "compiling": "Compilando documento {{engine}} en RAM (trabajo {{jobId}})...",
+      "completed": "PDF generado correctamente.",
+      "error": "La compilación informó errores.",
+      "cancelled": "Compilación cancelada.",
+      "workspace_started": "Compilando la instantánea actual del espacio de trabajo ({{jobId}})",
+      "workspace_finished": "Compilación del espacio de trabajo {{status}} ({{jobId}})"
+    },
+    "workspaceFinishedStatuses": {
+      "finished": "finalizada",
+      "cancelled": "cancelada",
+      "error": "con error"
+    }
+  },
+  "linter": {
+    "unexpectedEnd": "'\\end{{lb}}{{env}}{{rb}}' inesperado sin su '\\begin{{lb}}{{env}}{{rb}}' correspondiente",
+    "mismatchedEnv": "Entorno no coincidente: '\\begin{{lb}}{{beginEnv}}{{rb}}' se cerró con '\\end{{lb}}{{endEnv}}{{rb}}'",
+    "unclosedEnv": "Entorno LaTeX sin cerrar: a '\\begin{{lb}}{{env}}{{rb}}' le falta un '\\end{{lb}}{{env}}{{rb}}' coincidente.",
+    "misplacedAmpersand": "Carácter de tabulación de alineación '&' mal ubicado. Usa '\\&' para un ampersand literal o colócalo dentro de un entorno de alineación ('align', 'tabular', 'pmatrix').",
+    "undefinedRef": "Ancla de referencia no definida: '\\ref{{lb}}{{key}}{{rb}}'. No se encontró un '\\label{{lb}}{{key}}{{rb}}' coincidente en el documento.",
+    "unescapedUnderscore": "Guion bajo '_' sin escapar en modo texto. En LaTeX esto provoca '! Missing $ inserted'. Usa '\\_' para un guion bajo literal o envuélvelo en modo matemático '$ ... $'.",
+    "didYouMeanOne": " ¿Quisiste decir '\\{{first}}'?",
+    "didYouMeanTwo": " ¿Quisiste decir '\\{{first}}' o '\\{{second}}'?",
+    "didYouMeanThree": " ¿Quisiste decir '\\{{first}}', '\\{{second}}' o '\\{{third}}'?",
+    "unknownCommand": "Comando LaTeX desconocido o mal escrito: '\\{{command}}'.{{tip}}"
+  },
+  "codeActions": {
+    "changeToCommand": "Cambiar a '\\{{command}}'",
+    "escapeUnderscore": "Escapar como '\\_'",
+    "wrapMathUnderscore": "Envolver en modo matemático '$_$'",
+    "escapeAmpersand": "Escapar como '\\&'"
+  },
+  "completion": {
+    "latex": {
+      "refDetail": "Ancla \\label detectada",
+      "refDocumentation": "Ancla de referencia cruzada: {{label}}",
+      "citeDetail": "Entrada de cita BibTeX",
+      "citeDocumentation": "Clave de cita: {{key}}",
+      "imageDetail": "Recurso de imagen del proyecto",
+      "imageDocumentation": "Ruta relativa: {{path}}",
+      "bibDetail": "Archivo de bibliografía del proyecto",
+      "bibDocumentation": "Ruta: {{path}}",
+      "clsDetail": "Clase de documento personalizada (.cls)",
+      "clsDocumentation": "Archivo de clase local: {{path}}",
+      "subfileDetail": "Archivo submódulo LaTeX",
+      "subfileDocumentation": "Incluir archivo LaTeX: {{path}}",
+      "environmentDetail": "Entorno: {{detail}}",
+      "environmentHeading": "Entorno",
+      "customMacroDetail": "Macro del proyecto (clase/paquete)",
+      "customMacroDocumentation": "Comando personalizado definido en un archivo de clase (.cls) o estilo (.sty) del espacio de trabajo.",
+      "hoverCommandHeading": "Comando LaTeX",
+      "hoverEnvironmentHeading": "Entorno LaTeX"
+    },
+    "typst": {
+      "symbolDocumentation": "Símbolo integrado de Typst: {{id}}",
+      "matDetail": "Expresión de matriz",
+      "matDocumentation": "Crea una matriz en modo matemático de Typst usando comas para columnas y punto y coma para filas.",
+      "imageDetail": "Recurso de imagen del proyecto",
+      "imageDocumentation": "Insertar ruta de imagen: {{path}}",
+      "bibDetail": "Archivo de bibliografía del proyecto (.bib)",
+      "bibDocumentation": "Fuente bibliográfica de Typst: {{path}}",
+      "includeDetail": "Archivo submódulo de Typst (.typ)",
+      "includeDocumentation": "Incluir archivo Typst: {{path}}",
+      "refDetail": "Destino de referencia cruzada Typst",
+      "refDocumentation": "Etiqueta de referencia: <{{label}}>",
+      "heading1Detail": "Encabezado de sección de nivel superior",
+      "heading1Documentation": "Encabezado de sección de nivel superior con etiqueta de referencia cruzada",
+      "heading2Detail": "Encabezado de subsección de segundo nivel",
+      "heading2Documentation": "Encabezado de subsección de segundo nivel con etiqueta de referencia cruzada",
+      "blockMathDetail": "Bloque de ecuación matemática",
+      "blockMathDocumentation": "Bloque de ecuación matemática con etiqueta de referencia"
+    }
+  },
+  "latexCommands": {
+    "documentclass": {
+      "detail": "Clase de documento",
+      "documentation": "Establece el tipo de documento (article, report, book, beamer)."
+    },
+    "usepackage": {
+      "detail": "Importar paquete CTAN",
+      "documentation": "Carga un paquete o extensión de LaTeX en el preámbulo."
+    },
+    "geometry": {
+      "detail": "Geometría y márgenes de página",
+      "documentation": "Configura el tamaño de papel y los márgenes mediante el paquete geometry (p. ej. margin=2.5cm, top=2cm, left=3cm)."
+    },
+    "newtheorem": {
+      "detail": "Definir entorno de teorema",
+      "documentation": "Define un entorno personalizado de tipo teorema (amsthm)."
+    },
+    "hypersetup": {
+      "detail": "Configurar enlaces hyperref",
+      "documentation": "Establece el estilo de hipervínculos y metadatos del PDF mediante el paquete hyperref."
+    },
+    "graphicspath": {
+      "detail": "Rutas de búsqueda de imágenes",
+      "documentation": "Define directorios raíz donde graphicx buscará archivos de imagen."
+    },
+    "setlength": {
+      "detail": "Establecer parámetro de longitud",
+      "documentation": "Asigna el valor de una variable de longitud de LaTeX (p. ej. \\parindent, \\parskip)."
+    },
+    "newcommand": {
+      "detail": "Definir macro personalizada",
+      "documentation": "Crea una nueva macro de comando LaTeX definida por el usuario."
+    },
+    "renewcommand": {
+      "detail": "Redefinir macro existente",
+      "documentation": "Sobrescribe una macro de comando LaTeX existente."
+    },
+    "DeclareRobustCommand": {
+      "detail": "Definir macro robusta",
+      "documentation": "Crea una macro robusta que no se expandirá prematuramente en argumentos móviles."
+    },
+    "IEEEoverridecommandlockouts": {
+      "detail": "Desbloquear comandos IEEEtran",
+      "documentation": "Desbloquea comandos en IEEEtran para habilitar agradecimientos de financiamiento en notas al pie del título."
+    },
+    "IEEEauthorblockN": {
+      "detail": "Bloque de nombres de autor IEEEtran",
+      "documentation": "Da formato a los nombres de autores en bloques de título de conferencias IEEE."
+    },
+    "IEEEauthorblockA": {
+      "detail": "Bloque de afiliación de autor IEEEtran",
+      "documentation": "Da formato a la afiliación y correo electrónico del autor en bloques de título de conferencias IEEE."
+    },
+    "title": {
+      "detail": "Título del documento",
+      "documentation": "Establece el título principal del documento."
+    },
+    "author": {
+      "detail": "Autor del documento",
+      "documentation": "Establece el autor o autores del documento."
+    },
+    "date": {
+      "detail": "Fecha del documento",
+      "documentation": "Establece la fecha (usa \\today para la fecha actual)."
+    },
+    "today": {
+      "detail": "Fecha actual",
+      "documentation": "Genera dinámicamente la fecha actual (p. ej. 15 de marzo de 2026)."
+    },
+    "maketitle": {
+      "detail": "Renderizar encabezado de título",
+      "documentation": "Compone el bloque de título, autor y fecha."
+    },
+    "tableofcontents": {
+      "detail": "Tabla de contenidos",
+      "documentation": "Genera la tabla de contenidos o índice."
+    },
+    "listoffigures": {
+      "detail": "Índice de figuras",
+      "documentation": "Genera una lista automática de figuras flotantes."
+    },
+    "listoftables": {
+      "detail": "Índice de tablas",
+      "documentation": "Genera una lista automática de tablas flotantes."
+    },
+    "appendix": {
+      "detail": "Iniciar sección de apéndice",
+      "documentation": "Cambia la numeración de secciones a letras (A, B, C...) para los apéndices."
+    },
+    "pagenumbering": {
+      "detail": "Estilo de numeración de páginas",
+      "documentation": "Establece el formato de numeración de páginas (arabic, roman, Roman, alph, Alph)."
+    },
+    "setcounter": {
+      "detail": "Establecer valor de contador",
+      "documentation": "Asigna un valor numérico a un contador."
+    },
+    "addtocounter": {
+      "detail": "Incrementar contador",
+      "documentation": "Incrementa un contador en un entero dado."
+    },
+    "newpage": {
+      "detail": "Salto de página",
+      "documentation": "Fuerza un salto a una nueva página."
+    },
+    "clearpage": {
+      "detail": "Vaciar flotantes y saltar página",
+      "documentation": "Fuerza un salto de página y coloca todas las figuras y tablas flotantes pendientes."
+    },
+    "tiny": {
+      "detail": "Tamaño de fuente: tiny (~5pt)",
+      "documentation": "Cambia el tamaño de fuente a muy pequeño (tiny)."
+    },
+    "scriptsize": {
+      "detail": "Tamaño de fuente: scriptsize (~7pt)",
+      "documentation": "Cambia el tamaño de fuente a tamaño de sub/superíndice."
+    },
+    "footnotesize": {
+      "detail": "Tamaño de fuente: footnotesize (~8pt)",
+      "documentation": "Cambia el tamaño de fuente a tamaño de nota al pie."
+    },
+    "small": {
+      "detail": "Tamaño de fuente: small (~9pt)",
+      "documentation": "Cambia el tamaño de fuente a pequeño (común en resúmenes y afiliaciones)."
+    },
+    "normalsize": {
+      "detail": "Tamaño de fuente: normal (~10-12pt)",
+      "documentation": "Restablece el tamaño de fuente al tamaño base predeterminado del documento."
+    },
+    "large": {
+      "detail": "Tamaño de fuente: large (~12-14pt)",
+      "documentation": "Cambia el tamaño de fuente a grande."
+    },
+    "Large": {
+      "detail": "Tamaño de fuente: Large (~14-17pt)",
+      "documentation": "Cambia el tamaño de fuente a más grande."
+    },
+    "LARGE": {
+      "detail": "Tamaño de fuente: LARGE (~17-20pt)",
+      "documentation": "Cambia el tamaño de fuente a extra grande."
+    },
+    "huge": {
+      "detail": "Tamaño de fuente: huge (~20-25pt)",
+      "documentation": "Cambia el tamaño de fuente a enorme."
+    },
+    "Huge": {
+      "detail": "Tamaño de fuente: Huge (~25pt+)",
+      "documentation": "Cambia el tamaño de fuente al tamaño más grande disponible."
+    },
+    "textbf": {
+      "detail": "Fuente en negrita",
+      "documentation": "Aplica peso de fuente negrita al texto encerrado entre llaves."
+    },
+    "textit": {
+      "detail": "Fuente en cursiva",
+      "documentation": "Aplica forma cursiva (itálica) al texto."
+    },
+    "underline": {
+      "detail": "Subrayar texto",
+      "documentation": "Subraya el argumento de texto especificado."
+    },
+    "texttt": {
+      "detail": "Fuente monoespaciada / máquina de escribir",
+      "documentation": "Aplica fuente de ancho fijo adecuada para código en línea, nombres de archivo o variables."
+    },
+    "emph": {
+      "detail": "Énfasis contextual",
+      "documentation": "Enfatiza el texto poniendo en cursiva el texto normal o enderezando texto ya en cursiva."
+    },
+    "textsc": {
+      "detail": "Versalitas",
+      "documentation": "Da formato al texto en letras mayúsculas pequeñas (versalitas)."
+    },
+    "text": {
+      "detail": "Texto en línea en modo matemático",
+      "documentation": "Inserta texto normal dentro de ecuaciones matemáticas (amsmath)."
+    },
+    "textcolor": {
+      "detail": "Texto con color",
+      "documentation": "Establece el color de primer plano del texto (paquete xcolor)."
+    },
+    "colorbox": {
+      "detail": "Caja con fondo resaltado",
+      "documentation": "Coloca texto sobre un recuadro con color de fondo."
+    },
+    "textbackslash": {
+      "detail": "Barra invertida literal (\\)",
+      "documentation": "Produce una barra invertida literal en modo texto."
+    },
+    "textsuperscript": {
+      "detail": "Superíndice en modo texto",
+      "documentation": "Da formato al texto como superíndice en modo texto (p. ej. para afiliaciones de autores)."
+    },
+    "textsubscript": {
+      "detail": "Subíndice en modo texto",
+      "documentation": "Da formato al texto como subíndice en modo texto."
+    },
+    "textdaggerdbl": {
+      "detail": "Símbolo de doble daga (‡)",
+      "documentation": "Produce un símbolo de doble daga en modo texto (común para notas de autor)."
+    },
+    "textdagger": {
+      "detail": "Símbolo de daga (†)",
+      "documentation": "Produce un símbolo de daga en modo texto."
+    },
+    "textwidth": {
+      "detail": "Dimensión de ancho de texto",
+      "documentation": "El ancho del cuerpo de texto en la página."
+    },
+    "linewidth": {
+      "detail": "Dimensión de ancho de línea",
+      "documentation": "El ancho de línea actual dentro del entorno o columna activa."
+    },
+    "columnwidth": {
+      "detail": "Dimensión de ancho de columna",
+      "documentation": "El ancho de una sola columna en un diseño multicolumna."
+    },
+    "makecell": {
+      "detail": "Celda de tabla multilínea",
+      "documentation": "Permite saltos de línea manuales y contenido alineado dentro de celdas tabulares (paquete makecell)."
+    },
+    "centering": {
+      "detail": "Alineación centrada",
+      "documentation": "Centra el contenido dentro del entorno o ámbito actual."
+    },
+    "raggedright": {
+      "detail": "Texto alineado a la izquierda",
+      "documentation": "Alinea el texto al margen izquierdo sin justificación en el borde derecho."
+    },
+    "raggedleft": {
+      "detail": "Texto alineado a la derecha",
+      "documentation": "Alinea el texto al margen derecho."
+    },
+    "item": {
+      "detail": "Elemento de lista",
+      "documentation": "Añade una viñeta o entrada numerada dentro de entornos itemize o enumerate."
+    },
+    "item_opt": {
+      "detail": "Elemento de lista con etiqueta",
+      "documentation": "Añade un elemento con una etiqueta personalizada (p. ej. para listas de descripción)."
+    },
+    "section": {
+      "detail": "Sección numerada",
+      "documentation": "Crea un encabezado de sección numerada de primer nivel."
+    },
+    "subsection": {
+      "detail": "Subsección numerada",
+      "documentation": "Crea un encabezado de subsección numerada de segundo nivel."
+    },
+    "subsubsection": {
+      "detail": "Subsubsección numerada",
+      "documentation": "Crea un encabezado de subsubsección numerada de tercer nivel."
+    },
+    "paragraph": {
+      "detail": "Encabezado de párrafo en línea",
+      "documentation": "Crea un encabezado de párrafo en negrita sin numerar."
+    },
+    "includegraphics": {
+      "detail": "Incluir gráfico externo",
+      "documentation": "Inserta un archivo de imagen en el documento (paquete graphicx)."
+    },
+    "caption": {
+      "detail": "Leyenda de figura o tabla",
+      "documentation": "Establece la leyenda descriptiva para una figura o tabla flotante."
+    },
+    "toprule": {
+      "detail": "Línea superior booktabs",
+      "documentation": "Añade una regla superior profesional dentro de un entorno tabular (booktabs)."
+    },
+    "midrule": {
+      "detail": "Línea intermedia booktabs",
+      "documentation": "Añade una regla profesional entre el encabezado y el cuerpo de la tabla (booktabs)."
+    },
+    "bottomrule": {
+      "detail": "Línea inferior booktabs",
+      "documentation": "Añade una regla inferior profesional dentro de un entorno tabular (booktabs)."
+    },
+    "textasciicircum": {
+      "detail": "Acento circunflejo literal",
+      "documentation": "Imprime un carácter circunflejo literal en modo texto."
+    },
+    "textasciitilde": {
+      "detail": "Virgulilla literal",
+      "documentation": "Imprime una virgulilla (~) literal en modo texto."
+    },
+    "vspace": {
+      "detail": "Espacio vertical",
+      "documentation": "Inserta espacio en blanco vertical de la dimensión especificada."
+    },
+    "hspace": {
+      "detail": "Espacio horizontal",
+      "documentation": "Inserta espacio en blanco horizontal de la dimensión especificada."
+    },
+    "hfill": {
+      "detail": "Relleno horizontal elástico",
+      "documentation": "Se expande horizontalmente para empujar el contenido hacia los márgenes."
+    },
+    "vfill": {
+      "detail": "Relleno vertical elástico",
+      "documentation": "Se expande verticalmente para empujar el contenido hacia el final de la página."
+    },
+    "quad": {
+      "detail": "Espacio: quad de 1em",
+      "documentation": "Inserta espacio horizontal igual al tamaño de fuente actual."
+    },
+    "qquad": {
+      "detail": "Espacio: doble quad de 2em",
+      "documentation": "Inserta espacio horizontal doble igual a 2em."
+    },
+    "frac": {
+      "detail": "Fracción (num/den)",
+      "documentation": "Inserta una fracción con numerador y denominador."
+    },
+    "sqrt": {
+      "detail": "Raíz cuadrada",
+      "documentation": "Inserta una raíz cuadrada, o raíz n-ésima con \\sqrt[n]{x}."
+    },
+    "sum": {
+      "detail": "Operador sumatoria (∑)",
+      "documentation": "Inserta el símbolo de sumatoria con límites inferior y superior."
+    },
+    "int": {
+      "detail": "Integral definida (∫)",
+      "documentation": "Inserta una integral con límites inferior y superior y diferencial."
+    },
+    "iint": {
+      "detail": "Integral doble (∬)",
+      "documentation": "Inserta una integral doble de área."
+    },
+    "iiint": {
+      "detail": "Integral triple (∭)",
+      "documentation": "Inserta una integral triple de volumen."
+    },
+    "oint": {
+      "detail": "Integral de contorno cerrada (∮)",
+      "documentation": "Inserta una integral de línea sobre curva cerrada."
+    },
+    "prod": {
+      "detail": "Operador producto (∏)",
+      "documentation": "Inserta el operador de productoria con límites."
+    },
+    "lim": {
+      "detail": "Notación de límite",
+      "documentation": "Inserta un límite con el destino de aproximación de la variable."
+    },
+    "partial": {
+      "detail": "Derivada parcial (∂)",
+      "documentation": "Símbolo de diferenciación parcial."
+    },
+    "nabla": {
+      "detail": "Operador nabla / del (∇)",
+      "documentation": "Operador diferencial vectorial para gradiente, divergencia y rotacional."
+    },
+    "infty": {
+      "detail": "Infinito (∞)",
+      "documentation": "Símbolo matemático de infinito."
+    },
+    "vec": {
+      "detail": "Acento flecha de vector",
+      "documentation": "Coloca una flecha vectorial sobre el símbolo (p. ej. \\vec{v})."
+    },
+    "hat": {
+      "detail": "Acento sombrero / vector unitario",
+      "documentation": "Coloca un acento circunflejo sobre el símbolo."
+    },
+    "bar": {
+      "detail": "Acento barra / media",
+      "documentation": "Coloca una barra horizontal sobre el símbolo."
+    },
+    "tilde": {
+      "detail": "Acento virgulilla (~)",
+      "documentation": "Coloca una virgulilla sobre el símbolo."
+    },
+    "dot": {
+      "detail": "Punto / primera derivada temporal",
+      "documentation": "Coloca un punto simple sobre el símbolo (derivada temporal newtoniana)."
+    },
+    "ddot": {
+      "detail": "Doble punto / segunda derivada",
+      "documentation": "Coloca dos puntos sobre el símbolo."
+    },
+    "overline": {
+      "detail": "Barra superior continua",
+      "documentation": "Dibuja una línea horizontal continua encima de toda la expresión."
+    },
+    "boxed": {
+      "detail": "Fórmula en recuadro",
+      "documentation": "Encierra una fórmula dentro de un cuadro delimitador rectangular (amsmath)."
+    },
+    "overbrace": {
+      "detail": "Llave superior con nota",
+      "documentation": "Dibuja una llave encima de una expresión con una anotación."
+    },
+    "underbrace": {
+      "detail": "Llave inferior con nota",
+      "documentation": "Dibuja una llave debajo de una expresión con una anotación."
+    },
+    "left_paren": {
+      "detail": "Paréntesis autoajustables ()",
+      "documentation": "Encierra matemáticas entre paréntesis que se escalan automáticamente a la altura del contenido."
+    },
+    "left_bracket": {
+      "detail": "Corchetes autoajustables []",
+      "documentation": "Encierra matemáticas entre corchetes que se escalan automáticamente a la altura del contenido."
+    },
+    "left_brace": {
+      "detail": "Llaves autoajustables {}",
+      "documentation": "Encierra matemáticas entre llaves que se escalan automáticamente a la altura del contenido."
+    },
+    "left_bar": {
+      "detail": "Valor absoluto autoajustable ||",
+      "documentation": "Encierra matemáticas entre barras verticales simples para valor absoluto o determinante."
+    },
+    "left_double_bar": {
+      "detail": "Norma autoajustable ‖‖",
+      "documentation": "Encierra matemáticas entre barras verticales dobles para norma vectorial o matricial."
+    },
+    "dots": {
+      "detail": "Puntos en línea base (...)",
+      "documentation": "Puntos suspensivos colocados a lo largo de la línea base."
+    },
+    "cdots": {
+      "detail": "Puntos centrados (⋯)",
+      "documentation": "Puntos suspensivos centrados entre operadores (p. ej. 1 + 2 + \\cdots + n)."
+    },
+    "vdots": {
+      "detail": "Puntos verticales (⋮)",
+      "documentation": "Puntos suspensivos verticales para matrices."
+    },
+    "ddots": {
+      "detail": "Puntos diagonales (⋱)",
+      "documentation": "Puntos suspensivos diagonales para diagonales de matrices."
+    },
+    "alpha": {
+      "detail": "Alfa griega (α)",
+      "documentation": "Letra griega minúscula alfa."
+    },
+    "beta": {
+      "detail": "Beta griega (β)",
+      "documentation": "Letra griega minúscula beta."
+    },
+    "gamma": {
+      "detail": "Gamma griega (γ)",
+      "documentation": "Letra griega minúscula gamma."
+    },
+    "Gamma": {
+      "detail": "Gamma griega mayúscula (Γ)",
+      "documentation": "Letra griega mayúscula Gamma."
+    },
+    "delta": {
+      "detail": "Delta griega (δ)",
+      "documentation": "Letra griega minúscula delta."
+    },
+    "Delta": {
+      "detail": "Delta griega mayúscula (Δ)",
+      "documentation": "Letra griega mayúscula Delta (laplaciano o diferencia)."
+    },
+    "epsilon": {
+      "detail": "Épsilon griega (ε)",
+      "documentation": "Letra griega minúscula épsilon."
+    },
+    "varepsilon": {
+      "detail": "Varépsilon griega (𝜀)",
+      "documentation": "Variante curva de épsilon minúscula."
+    },
+    "zeta": {
+      "detail": "Dseta griega (ζ)",
+      "documentation": "Letra griega minúscula dseta."
+    },
+    "eta": {
+      "detail": "Eta griega (η)",
+      "documentation": "Letra griega minúscula eta."
+    },
+    "theta": {
+      "detail": "Theta griega (θ)",
+      "documentation": "Letra griega minúscula theta."
+    },
+    "Theta": {
+      "detail": "Theta griega mayúscula (Θ)",
+      "documentation": "Letra griega mayúscula Theta."
+    },
+    "lambda": {
+      "detail": "Lambda griega (λ)",
+      "documentation": "Letra griega minúscula lambda (longitud de onda o autovalor)."
+    },
+    "Lambda": {
+      "detail": "Lambda griega mayúscula (Λ)",
+      "documentation": "Letra griega mayúscula Lambda."
+    },
+    "mu": {
+      "detail": "Mi griega (μ)",
+      "documentation": "Letra griega minúscula mi (micro o media)."
+    },
+    "nu": {
+      "detail": "Ni griega (ν)",
+      "documentation": "Letra griega minúscula ni."
+    },
+    "xi": {
+      "detail": "Xi griega (ξ)",
+      "documentation": "Letra griega minúscula xi."
+    },
+    "pi": {
+      "detail": "Constante Pi (π)",
+      "documentation": "Constante matemática circular π ≈ 3.14159."
+    },
+    "rho": {
+      "detail": "Ro griega (ρ)",
+      "documentation": "Letra griega minúscula ro (densidad o resistividad)."
+    },
+    "sigma": {
+      "detail": "Sigma griega (σ)",
+      "documentation": "Letra griega minúscula sigma (desviación estándar o tensión)."
+    },
+    "Sigma": {
+      "detail": "Sigma griega mayúscula (Σ)",
+      "documentation": "Letra griega mayúscula Sigma (sumatoria o covarianza)."
+    },
+    "tau": {
+      "detail": "Tau griega (τ)",
+      "documentation": "Letra griega minúscula tau (par o constante de tiempo)."
+    },
+    "phi": {
+      "detail": "Fi griega (ϕ)",
+      "documentation": "Letra griega minúscula fi."
+    },
+    "varphi": {
+      "detail": "Varfi griega (φ)",
+      "documentation": "Letra minúscula curva varfi."
+    },
+    "Phi": {
+      "detail": "Fi griega mayúscula (Φ)",
+      "documentation": "Letra griega mayúscula Fi."
+    },
+    "psi": {
+      "detail": "Psi griega (ψ)",
+      "documentation": "Letra griega minúscula psi (función de onda)."
+    },
+    "Psi": {
+      "detail": "Psi griega mayúscula (Ψ)",
+      "documentation": "Letra griega mayúscula Psi."
+    },
+    "omega": {
+      "detail": "Omega griega (ω)",
+      "documentation": "Letra griega minúscula omega (frecuencia angular)."
+    },
+    "Omega": {
+      "detail": "Omega griega mayúscula (Ω)",
+      "documentation": "Letra griega mayúscula Omega (resistencia en ohmios)."
+    },
+    "leq": {
+      "detail": "Menor o igual que (≤)",
+      "documentation": "Relación de orden menor o igual."
+    },
+    "geq": {
+      "detail": "Mayor o igual que (≥)",
+      "documentation": "Relación de orden mayor o igual."
+    },
+    "neq": {
+      "detail": "Distinto de (≠)",
+      "documentation": "Relación de desigualdad."
+    },
+    "approx": {
+      "detail": "Aproximadamente igual (≈)",
+      "documentation": "Aproximación asintótica o numérica."
+    },
+    "equiv": {
+      "detail": "Equivalente / Idéntico (≡)",
+      "documentation": "Congruencia o igualdad por definición."
+    },
+    "times": {
+      "detail": "Cruz de multiplicación (×)",
+      "documentation": "Producto cartesiano o multiplicación aritmética."
+    },
+    "cdot": {
+      "detail": "Producto punto (·)",
+      "documentation": "Punto centrado para producto escalar o multiplicación."
+    },
+    "pm": {
+      "detail": "Más-menos (±)",
+      "documentation": "Signo de incertidumbre más o menos."
+    },
+    "mp": {
+      "detail": "Menos-más (∓)",
+      "documentation": "Signo menos o más."
+    },
+    "rightarrow": {
+      "detail": "Flecha derecha (→)",
+      "documentation": "Flecha simple a la derecha (mapeo o límite)."
+    },
+    "Leftarrow": {
+      "detail": "Implica hacia la izquierda (⇐)",
+      "documentation": "Implicación lógica hacia la izquierda."
+    },
+    "Rightarrow": {
+      "detail": "Implica hacia la derecha (⇒)",
+      "documentation": "Implicación lógica hacia la derecha."
+    },
+    "Leftrightarrow": {
+      "detail": "Si y solo si (⇔)",
+      "documentation": "Equivalencia lógica."
+    },
+    "forall": {
+      "detail": "Cuantificador universal (∀)",
+      "documentation": "Para todos los elementos del conjunto."
+    },
+    "exists": {
+      "detail": "Cuantificador existencial (∃)",
+      "documentation": "Existe al menos un elemento."
+    },
+    "in": {
+      "detail": "Pertenece al conjunto (∈)",
+      "documentation": "Indica pertenencia a un conjunto."
+    },
+    "notin": {
+      "detail": "No pertenece al conjunto (∉)",
+      "documentation": "Indica no pertenencia a un conjunto."
+    },
+    "subset": {
+      "detail": "Subconjunto (⊂)",
+      "documentation": "Inclusión estricta de subconjunto."
+    },
+    "subseteq": {
+      "detail": "Subconjunto o igual (⊆)",
+      "documentation": "Inclusión de subconjunto permitiendo igualdad."
+    },
+    "cup": {
+      "detail": "Unión de conjuntos (∪)",
+      "documentation": "Unión de conjuntos."
+    },
+    "cap": {
+      "detail": "Intersección de conjuntos (∩)",
+      "documentation": "Intersección de conjuntos."
+    },
+    "mathbb": {
+      "detail": "Negrita de pizarra (ℝ, ℂ, ℕ, ℤ)",
+      "documentation": "Conjuntos numéricos en fuente negrita de pizarra."
+    },
+    "mathcal": {
+      "detail": "Caligráfica (ℒ, ℋ)",
+      "documentation": "Fuente caligráfica para operadores y espacios."
+    },
+    "label": {
+      "detail": "Etiqueta de ancla",
+      "documentation": "Asigna una clave única para referenciar ecuaciones, figuras, tablas o secciones."
+    },
+    "ref": {
+      "detail": "Referencia cruzada",
+      "documentation": "Inserta la referencia numerada de la etiqueta indicada."
+    },
+    "eqref": {
+      "detail": "Referencia de ecuación entre paréntesis",
+      "documentation": "Inserta la referencia de ecuación encerrada entre paréntesis, p. ej. (1)."
+    },
+    "cite": {
+      "detail": "Cita bibliográfica",
+      "documentation": "Inserta una cita correspondiente a una entrada de bibliografía BibTeX."
+    },
+    "bibliographystyle": {
+      "detail": "Estilo de bibliografía",
+      "documentation": "Establece el estilo de formato para las referencias (plain, unsrt, alpha, abbrv, ieeetr)."
+    },
+    "bibliography": {
+      "detail": "Incluir archivo BibTeX",
+      "documentation": "Carga los datos bibliográficos desde un archivo .bib."
+    },
+    "footnote": {
+      "detail": "Nota al pie numerada",
+      "documentation": "Inserta una nota al pie numerada automáticamente al final de la página."
+    },
+    "url": {
+      "detail": "Enlace URL clicable",
+      "documentation": "Compone una URL sin formato como enlace clicable (paquete hyperref)."
+    },
+    "href": {
+      "detail": "Hipervínculo con texto",
+      "documentation": "Crea un hipervínculo con texto de ancla personalizado (paquete hyperref)."
+    },
+    "makeheaders": {
+      "detail": "Renderizar bloque de encabezado de CV",
+      "documentation": "Compone los bloques de encabezado izquierdo y derecho del CV con opción de alineación (c, l, r)."
+    },
+    "makerubric": {
+      "detail": "Incluir sección de rúbrica de CV",
+      "documentation": "Incluye y compone un archivo modular de sección/rúbrica del CV (clase CurVe)."
+    },
+    "photo": {
+      "detail": "Foto de retrato del CV",
+      "documentation": "Inserta una foto de retrato con opción de posición (l, r) en encabezados CurVe."
+    },
+    "photoscale": {
+      "detail": "Factor de escala para foto de CV",
+      "documentation": "Establece el multiplicador de escala para la fotografía de retrato del CV."
+    },
+    "entry_star": {
+      "detail": "Elemento de línea temporal del CV",
+      "documentation": "Añade un elemento de entrada alineado por clave en entornos rubric de CurVe."
+    },
+    "justifying": {
+      "detail": "Texto totalmente justificado",
+      "documentation": "Fuerza la justificación completa de párrafo con separación silábica (paquete ragged2e)."
+    },
+    "faEnvelope": {
+      "detail": "Ícono de sobre FontAwesome",
+      "documentation": "Muestra un ícono de sobre de correo (fontawesome5)."
+    },
+    "faLinkedin": {
+      "detail": "Ícono de LinkedIn FontAwesome",
+      "documentation": "Muestra un ícono de marca de LinkedIn (fontawesome5)."
+    },
+    "faPhone": {
+      "detail": "Ícono de teléfono FontAwesome",
+      "documentation": "Muestra un ícono de auricular telefónico (fontawesome5)."
+    },
+    "faGithub": {
+      "detail": "Ícono de GitHub FontAwesome",
+      "documentation": "Muestra un ícono de marca de GitHub (fontawesome5)."
+    },
+    "faGlobe": {
+      "detail": "Ícono de globo FontAwesome",
+      "documentation": "Muestra un ícono de globo / URL web (fontawesome5)."
+    },
+    "faFilePdf": {
+      "detail": "Ícono de archivo PDF FontAwesome",
+      "documentation": "Muestra un ícono de documento PDF (fontawesome5)."
+    },
+    "simpleicon": {
+      "detail": "Logotipo de marca SimpleIcons",
+      "documentation": "Muestra un ícono de marca por nombre desde la suite integrada SimpleIcons (p. ej. \\simpleicon{x}, \\simpleicon{python})."
+    },
+    "setmainfont": {
+      "detail": "Definir fuente serif principal (fontspec)",
+      "documentation": "Configura la fuente serif principal del documento para XeLaTeX/LuaLaTeX (paquete fontspec)."
+    },
+    "setsansfont": {
+      "detail": "Definir fuente sans-serif (fontspec)",
+      "documentation": "Configura la fuente sans-serif del documento para XeLaTeX/LuaLaTeX (paquete fontspec)."
+    },
+    "setmonofont": {
+      "detail": "Definir fuente monoespaciada (fontspec)",
+      "documentation": "Configura la fuente monoespaciada del documento para XeLaTeX/LuaLaTeX (paquete fontspec)."
+    },
+    "newfontfamily": {
+      "detail": "Definir familia de fuente personalizada (fontspec)",
+      "documentation": "Define un nuevo comando de cambio de fuente para una tipografía específica (paquete fontspec)."
+    },
+    "defaultfontfeatures": {
+      "detail": "Definir atributos de fuente predeterminados (fontspec)",
+      "documentation": "Aplica opciones OpenType/AAT predeterminadas a las declaraciones de fuente siguientes (paquete fontspec)."
+    },
+    "addfontfeatures": {
+      "detail": "Añadir atributos de fuente (fontspec)",
+      "documentation": "Modifica opciones OpenType/AAT para la fuente actualmente activa (paquete fontspec)."
+    },
+    "pagestyle": {
+      "detail": "Definir estilo de encabezado/pie de página",
+      "documentation": "Establece el estilo de página activo (plain, empty, headings, myheadings o fancy)."
+    },
+    "fancyhf": {
+      "detail": "Limpiar o definir encabezados y pies",
+      "documentation": "Limpia o establece campos de encabezado y pie de página simultáneamente (paquete fancyhdr)."
+    },
+    "fancyhead": {
+      "detail": "Definir campo de encabezado",
+      "documentation": "Configura contenido de encabezado para posiciones y páginas pares/impares especificadas (fancyhdr)."
+    },
+    "fancyfoot": {
+      "detail": "Definir campo de pie de página",
+      "documentation": "Configura contenido de pie de página para posiciones y páginas pares/impares especificadas (fancyhdr)."
+    },
+    "lhead": {
+      "detail": "Campo de encabezado izquierdo",
+      "documentation": "Establece el texto de encabezado alineado a la izquierda (paquete fancyhdr)."
+    },
+    "chead": {
+      "detail": "Campo de encabezado centrado",
+      "documentation": "Establece el texto de encabezado centrado (paquete fancyhdr)."
+    },
+    "rhead": {
+      "detail": "Campo de encabezado derecho",
+      "documentation": "Establece el texto de encabezado alineado a la derecha (paquete fancyhdr)."
+    },
+    "lfoot": {
+      "detail": "Campo de pie izquierdo",
+      "documentation": "Establece el texto de pie de página alineado a la izquierda (paquete fancyhdr)."
+    },
+    "cfoot": {
+      "detail": "Campo de pie centrado",
+      "documentation": "Establece el texto de pie de página centrado (paquete fancyhdr)."
+    },
+    "rfoot": {
+      "detail": "Campo de pie derecho",
+      "documentation": "Establece el texto de pie de página alineado a la derecha (paquete fancyhdr)."
+    },
+    "headrulewidth": {
+      "detail": "Grosor de línea de encabezado",
+      "documentation": "Macro de longitud que controla el grosor de la línea horizontal bajo el encabezado (fancyhdr)."
+    },
+    "footrulewidth": {
+      "detail": "Grosor de línea de pie de página",
+      "documentation": "Macro de longitud que controla el grosor de la línea horizontal sobre el pie de página (fancyhdr)."
+    },
+    "fancypagestyle": {
+      "detail": "Definir estilo de página personalizado",
+      "documentation": "Define o redefine un estilo de página con nombre y ajustes personalizados de fancyhdr."
+    },
+    "titleformat": {
+      "detail": "Personalizar formato de encabezado de sección",
+      "documentation": "Personaliza la tipografía, numeración y diseño de comandos de sección (paquete titlesec)."
+    },
+    "titlespacing": {
+      "detail": "Personalizar espaciado de encabezado de sección",
+      "documentation": "Ajusta el margen izquierdo y el espaciado anterior y posterior de encabezados de sección (titlesec)."
+    },
+    "titlerule": {
+      "detail": "Línea horizontal en encabezado",
+      "documentation": "Dibuja una línea horizontal a lo ancho del texto dentro de un título de sección (paquete titlesec)."
+    },
+    "titlelabel": {
+      "detail": "Personalizar formato de etiqueta de sección",
+      "documentation": "Redefine el formato de los números de sección en los encabezados (paquete titlesec)."
+    },
+    "urlstyle": {
+      "detail": "Definir estilo de fuente de URL",
+      "documentation": "Establece el estilo de fuente usado por \\url y \\href (tt, rm, sf o same; url/hyperref)."
+    },
+    "newcolumntype": {
+      "detail": "Definir tipo de columna de tabla personalizado",
+      "documentation": "Registra un especificador de columna personalizado para entornos tabular y tabularx (paquete array)."
+    },
+    "arraybackslash": {
+      "detail": "Restaurar salto de fila \\\\ en tablas",
+      "documentation": "Restaura el significado de \\\\ como separador de filas de tabla tras \\raggedright o \\centering (array)."
+    },
+    "tabcolsep": {
+      "detail": "Relleno horizontal entre columnas de tabla",
+      "documentation": "Mitad del espaciado horizontal insertado entre columnas en entornos tabular."
+    },
+    "raisebox": {
+      "detail": "Elevar o bajar caja en línea",
+      "documentation": "Desplaza el contenido verticalmente respecto a la línea base (acepta \\height, \\width, \\depth, \\totalheight)."
+    },
+    "height": {
+      "detail": "Dimensión de altura natural de caja",
+      "documentation": "Altura natural sobre la línea base de la caja medida dentro de \\raisebox o \\makebox."
+    },
+    "width": {
+      "detail": "Dimensión de ancho natural de caja",
+      "documentation": "Ancho horizontal natural de la caja medida dentro de \\raisebox, \\makebox o \\parbox."
+    },
+    "depth": {
+      "detail": "Dimensión de profundidad natural de caja",
+      "documentation": "Profundidad natural bajo la línea base de la caja medida dentro de \\raisebox o \\makebox."
+    },
+    "totalheight": {
+      "detail": "Altura total de caja (altura + profundidad)",
+      "documentation": "Suma de la altura y profundidad naturales de la caja medida dentro de \\raisebox o \\makebox."
+    },
+    "thepage": {
+      "detail": "Contador de número de página actual",
+      "documentation": "Se expande a la representación formateada del contador de página actual."
+    },
+    "labelitemi": {
+      "detail": "Símbolo de viñeta de primer nivel en itemize",
+      "documentation": "Macro que controla el símbolo de viñeta usado en listas itemize de primer nivel."
+    },
+    "color": {
+      "detail": "Cambiar color de texto activo",
+      "documentation": "Cambia el color de primer plano del texto para el ámbito activo (paquete xcolor)."
+    },
+    "bfseries": {
+      "detail": "Cambio a peso de fuente negrita",
+      "documentation": "Cambia la serie de fuente activa a negrita dentro del grupo actual."
+    },
+    "textbullet": {
+      "detail": "Símbolo de viñeta (•)",
+      "documentation": "Produce un símbolo de viñeta sólido en modo texto."
+    }
+  },
+  "latexEnvironments": {
+    "equation": {
+      "detail": "Ecuación numerada",
+      "documentation": "Ecuación matemática centrada en bloque con numeración automática."
+    },
+    "equation_star": {
+      "detail": "Ecuación sin numerar",
+      "documentation": "Ecuación matemática centrada en bloque sin número (amsmath)."
+    },
+    "align": {
+      "detail": "Ecuaciones alineadas (numeradas)",
+      "documentation": "Ecuaciones multilínea alineadas por ampersands (&) con numeración automática en cada línea."
+    },
+    "align_star": {
+      "detail": "Ecuaciones alineadas (sin numerar)",
+      "documentation": "Ecuaciones multilínea alineadas por ampersands sin numeración."
+    },
+    "figure": {
+      "detail": "Figura flotante",
+      "documentation": "Contenedor flotante para figuras y gráficos con leyenda y etiqueta."
+    },
+    "table": {
+      "detail": "Tabla flotante",
+      "documentation": "Contenedor flotante para datos tabulares con leyenda y etiqueta."
+    },
+    "tabular": {
+      "detail": "Cuadrícula de alineación tabular",
+      "documentation": "Alineación de cuadrícula de tabla con columnas (l=izquierda, c=centro, r=derecha)."
+    },
+    "tabularx": {
+      "detail": "Cuadrícula tabular flexible de ancho fijo",
+      "documentation": "Entorno de tabla que abarca un ancho objetivo con columnas X autoexpandibles (paquete tabularx)."
+    },
+    "longtable": {
+      "detail": "Tabla multipágina",
+      "documentation": "Entorno de tabla que se divide automáticamente entre múltiples páginas (paquete longtable)."
+    },
+    "itemize": {
+      "detail": "Lista con viñetas sin ordenar",
+      "documentation": "Crea una lista sin ordenar con viñetas."
+    },
+    "enumerate": {
+      "detail": "Lista numerada ordenada",
+      "documentation": "Crea una lista secuencial con numeración automática (1, 2, 3...)."
+    },
+    "description": {
+      "detail": "Lista descriptiva de términos",
+      "documentation": "Lista donde cada elemento comienza con un término definido en negrita [término]."
+    },
+    "pmatrix": {
+      "detail": "Matriz con paréntesis ()",
+      "documentation": "Matriz de amsmath encerrada entre paréntesis redondos."
+    },
+    "bmatrix": {
+      "detail": "Matriz con corchetes []",
+      "documentation": "Matriz de amsmath encerrada entre corchetes cuadrados."
+    },
+    "matrix": {
+      "detail": "Matriz sin delimitadores",
+      "documentation": "Matriz de amsmath sin delimitadores alrededor."
+    },
+    "Bmatrix": {
+      "detail": "Matriz con llaves {}",
+      "documentation": "Matriz de amsmath encerrada entre llaves."
+    },
+    "vmatrix": {
+      "detail": "Matriz con barras verticales",
+      "documentation": "Matriz de amsmath encerrada entre barras verticales simples."
+    },
+    "Vmatrix": {
+      "detail": "Matriz con barras verticales dobles",
+      "documentation": "Matriz de amsmath encerrada entre barras verticales dobles."
+    },
+    "theorem": {
+      "detail": "Entorno de teorema",
+      "documentation": "Entorno formal de enunciado de teorema (amsthm)."
+    },
+    "proof": {
+      "detail": "Demostración matemática",
+      "documentation": "Entorno de demostración con símbolo QED cuadrado al final (amsthm)."
+    },
+    "abstract": {
+      "detail": "Sección de resumen del artículo",
+      "documentation": "Sección de sinopsis o resumen para artículos académicos."
+    }
+  },
+  "typstCompletions": {
+    "set_page": {
+      "detail": "Configurar dimensiones y márgenes de página",
+      "documentation": "Configura el tamaño, la orientación y los márgenes de la página.\n\nEjemplo:\n`#set page(paper: \"a4\", margin: (x: 2.5cm, y: 2.5cm))`"
+    },
+    "set_text": {
+      "detail": "Configurar tipografía e idioma predeterminados",
+      "documentation": "Configura la familia tipográfica, el tamaño e idioma de separación silábica predeterminados del documento."
+    },
+    "set_par": {
+      "detail": "Configurar justificación e interlineado de párrafos",
+      "documentation": "Establece la justificación del alineado de párrafos y el interlineado (leading)."
+    },
+    "set_math_equation": {
+      "detail": "Activar numeración automática de ecuaciones",
+      "documentation": "Numera las ecuaciones matemáticas automáticamente para referencias cruzadas (@label)."
+    },
+    "set": {
+      "detail": "Regla de estilo: propiedades de elemento",
+      "documentation": "Aplica estilos o configuraciones predeterminadas a un tipo de elemento en todo el documento."
+    },
+    "show": {
+      "detail": "Regla de transformación o estilo",
+      "documentation": "Personaliza cómo se muestran o renderizan los elementos de un determinado tipo."
+    },
+    "let": {
+      "detail": "Declaración de variable o función",
+      "documentation": "Asocia un valor o define una función reutilizable en Typst."
+    },
+    "import": {
+      "detail": "Importar módulo o elementos",
+      "documentation": "Importa definiciones, variables o funciones desde otro módulo o paquete de Typst."
+    },
+    "include": {
+      "detail": "Incluir contenido de subarchivo",
+      "documentation": "Incluye otro archivo Typst directamente dentro de la estructura del documento."
+    },
+    "for": {
+      "detail": "Iteración con bucle for",
+      "documentation": "Itera sobre un arreglo, diccionario o rango para generar contenido dinámicamente."
+    },
+    "if": {
+      "detail": "Expresión condicional",
+      "documentation": "Renderiza contenido o evalúa expresiones de forma condicional según una condición booleana."
+    },
+    "align": {
+      "detail": "Alinear contenido en bloque o en línea",
+      "documentation": "Alinea el contenido a lo largo de los ejes horizontal y vertical (p. ej. center, left, right)."
+    },
+    "table": {
+      "detail": "Datos tabulares estructurados",
+      "documentation": "Crea tablas listas para publicación con anchos de columna, rellenos y trazos personalizables."
+    },
+    "table_header": {
+      "detail": "Fila de encabezado semántica de tabla",
+      "documentation": "Marca celdas de tabla como fila de encabezado semántica, incluido el comportamiento de encabezado repetido en Typst."
+    },
+    "table_hline": {
+      "detail": "Línea horizontal de tabla",
+      "documentation": "Añade una línea horizontal de tabla en el límite de fila seleccionado."
+    },
+    "grid": {
+      "detail": "Contenedor de cuadrícula multicolumna",
+      "documentation": "Organiza el contenido en una cuadrícula adaptable multicolumna con espaciado configurable (gutter)."
+    },
+    "figure": {
+      "detail": "Figura numerada con leyenda y etiqueta",
+      "documentation": "Crea una figura numerada con leyenda (imagen, tabla, código) y etiqueta de referencia automática."
+    },
+    "image": {
+      "detail": "Insertar recurso de imagen",
+      "documentation": "Inserta un archivo de imagen (PNG, JPEG, SVG) en el flujo del documento."
+    },
+    "text": {
+      "detail": "Texto en línea con estilo",
+      "documentation": "Aplica formato de fuente en línea, grosor, color (fill), espaciado o estilo al texto."
+    },
+    "strong": {
+      "detail": "Énfasis fuerte de texto",
+      "documentation": "Aplica énfasis fuerte (negrita) a un bloque de contenido Typst."
+    },
+    "rect": {
+      "detail": "Caja rectangular con relleno y borde opcionales",
+      "documentation": "Dibuja un rectángulo con dimensiones, color de relleno y radio de borde personalizables."
+    },
+    "circle": {
+      "detail": "Forma circular",
+      "documentation": "Dibuja un círculo con el radio y color de relleno especificados."
+    },
+    "line": {
+      "detail": "Separador de línea horizontal o inclinada",
+      "documentation": "Dibuja una línea con longitud, ángulo y estilo de trazo especificados."
+    },
+    "block": {
+      "detail": "Contenedor de bloque con estilo",
+      "documentation": "Crea un contenedor de nivel de bloque con márgenes, relleno interior (inset), fondo y bordes."
+    },
+    "box": {
+      "detail": "Contenedor de caja en línea",
+      "documentation": "Crea un contenedor en línea que fluye junto al texto sin producir saltos de línea."
+    },
+    "v": {
+      "detail": "Espaciado vertical",
+      "documentation": "Inserta espacio en blanco vertical de una longitud dada (pt, em, cm, etc.)."
+    },
+    "h": {
+      "detail": "Espaciado horizontal",
+      "documentation": "Inserta espacio en blanco horizontal de una longitud dada."
+    },
+    "pad": {
+      "detail": "Añadir relleno interior al contenido",
+      "documentation": "Rellena alrededor del contenido con las distancias horizontales (x) y verticales (y) especificadas."
+    },
+    "stack": {
+      "detail": "Apilar múltiples elementos con espaciado",
+      "documentation": "Organiza múltiples elementos horizontal o verticalmente con un espaciado uniforme."
+    },
+    "colbreak": {
+      "detail": "Salto de columna",
+      "documentation": "Fuerza un salto a la siguiente columna en un documento multicolumna."
+    },
+    "pagebreak": {
+      "detail": "Salto de página",
+      "documentation": "Fuerza un salto de página hacia una página nueva."
+    },
+    "heading": {
+      "detail": "Encabezado de sección con nivel",
+      "documentation": "Crea un encabezado estructural del nivel especificado con ancla de referencia opcional."
+    },
+    "list": {
+      "detail": "Lista con viñetas",
+      "documentation": "Crea una lista sin ordenar con viñetas."
+    },
+    "enum": {
+      "detail": "Lista numerada (enumeración)",
+      "documentation": "Crea una lista ordenada numerada."
+    },
+    "terms": {
+      "detail": "Lista de definiciones / términos",
+      "documentation": "Crea una lista de definiciones que empareja términos con descripciones."
+    },
+    "link": {
+      "detail": "Hipervínculo a URL externa",
+      "documentation": "Crea un hipervínculo clicable con texto de visualización personalizado."
+    },
+    "quote": {
+      "detail": "Cita en bloque con atribución",
+      "documentation": "Inserta una cita en bloque con atribución opcional de autor."
+    },
+    "footnote": {
+      "detail": "Referencia de nota al pie",
+      "documentation": "Adjunta una referencia de nota al pie en la posición actual."
+    },
+    "bibliography": {
+      "detail": "Incluir bibliografía desde archivo .bib",
+      "documentation": "Renderiza la sección de bibliografía usando citas BibTeX."
+    },
+    "cite": {
+      "detail": "Referencia de cita a la bibliografía",
+      "documentation": "Cita una entrada definida en la fuente bibliográfica."
+    },
+    "highlight": {
+      "detail": "Resaltar texto con color de fondo",
+      "documentation": "Resalta texto con un fondo de color."
+    },
+    "calc": {
+      "detail": "Biblioteca matemática y de cálculo",
+      "documentation": "Cálculos matemáticos integrados y funciones numéricas."
+    },
+    "rgb": {
+      "detail": "Definir color RGB",
+      "documentation": "Crea un color a partir de una cadena hexadecimal o valores rojo, verde y azul."
+    },
+    "luma": {
+      "detail": "Definir color en escala de grises (0-255)",
+      "documentation": "Crea un color de luminancia en escala de grises."
+    },
+    "lorem": {
+      "detail": "Generar texto de relleno lorem ipsum",
+      "documentation": "Genera texto simulado en latín con el número de palabras especificado."
+    }
+  }
+}

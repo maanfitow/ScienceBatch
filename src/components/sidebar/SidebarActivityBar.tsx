@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { 
   FolderTree, 
   Search, 
@@ -15,7 +16,6 @@ import { ContextMenu, ContextMenuAction } from '../ContextMenu';
 
 interface ToolMeta {
   id: SidebarToolId;
-  label: string;
   icon: LucideIcon;
   shortcut?: string;
 }
@@ -23,30 +23,25 @@ interface ToolMeta {
 const TOOLS_CONFIG: Record<SidebarToolId, ToolMeta> = {
   files: {
     id: 'files',
-    label: 'Project Files',
     icon: FolderTree,
     shortcut: 'Alt+1',
   },
   search: {
     id: 'search',
-    label: 'Search in Files',
     icon: Search,
     shortcut: 'Ctrl+Shift+F',
   },
   git: {
     id: 'git',
-    label: 'Source Control (Git)',
     icon: GitBranch,
     shortcut: 'Ctrl+Shift+G',
   },
   dependencies: {
     id: 'dependencies',
-    label: 'Dependencies',
     icon: PackageSearch,
   },
   outline: {
     id: 'outline',
-    label: 'Outline & Structure',
     icon: ListTree,
     shortcut: 'Alt+7',
   },
@@ -73,6 +68,7 @@ export const SidebarActivityBar: React.FC<SidebarActivityBarProps> = ({
   onResetToDefaults,
   isOpen,
 }) => {
+  const { t } = useTranslation(['sidebar', 'common']);
   const [draggedTool, setDraggedTool] = useState<SidebarToolId | null>(null);
   const [dropTarget, setDropTarget] = useState<{
     group: 'top' | 'bottom';
@@ -140,6 +136,10 @@ export const SidebarActivityBar: React.FC<SidebarActivityBarProps> = ({
     const meta = TOOLS_CONFIG[toolId];
     if (!meta) return null;
     const Icon = meta.icon;
+    const label = t(`sidebar:activityBar.tools.${toolId}`);
+    const tooltip = meta.shortcut
+      ? t('sidebar:activityBar.toolTooltipWithShortcut', { label, shortcut: meta.shortcut })
+      : t('sidebar:activityBar.toolTooltip', { label });
     const isActive = isOpen && (
       (group === 'top' && activeTopTool === toolId) ||
       (group === 'bottom' && activeBottomTool === toolId)
@@ -161,8 +161,8 @@ export const SidebarActivityBar: React.FC<SidebarActivityBarProps> = ({
           draggable
           onDragStart={(e) => handleDragStart(e, toolId)}
           onDragEnd={handleDragEnd}
-          title={`${meta.label}${meta.shortcut ? ` (${meta.shortcut})` : ''} - Drag to move`}
-          aria-label={meta.label}
+          title={tooltip}
+          aria-label={label}
         >
           <Icon size={19} className="activity-bar-icon" />
           {isActive && <div className="activity-bar-active-indicator" />}
@@ -174,17 +174,17 @@ export const SidebarActivityBar: React.FC<SidebarActivityBarProps> = ({
   const contextMenuActions: ContextMenuAction[] = contextMenu ? [
     contextMenu.currentGroup === 'top'
       ? {
-          label: 'Move to Bottom Group',
+          label: t('sidebar:activityBar.contextMenu.moveToBottom'),
           icon: <MoveDown size={14} />,
           onSelect: () => onMoveTool(contextMenu.toolId, 'bottom'),
         }
       : {
-          label: 'Move to Top Group',
+          label: t('sidebar:activityBar.contextMenu.moveToTop'),
           icon: <MoveUp size={14} />,
           onSelect: () => onMoveTool(contextMenu.toolId, 'top'),
         },
     {
-      label: 'Reset to Default Layout',
+      label: t('sidebar:activityBar.contextMenu.resetLayout'),
       icon: <RotateCcw size={14} />,
       separatorBefore: true,
       onSelect: onResetToDefaults,
@@ -192,7 +192,7 @@ export const SidebarActivityBar: React.FC<SidebarActivityBarProps> = ({
   ] : [];
 
   return (
-    <aside className="activity-bar-container" aria-label="Workspace Activity Bar">
+    <aside className="activity-bar-container" aria-label={t('sidebar:activityBar.ariaLabel')}>
       {/* Top Icons Group */}
       <div 
         className={`activity-bar-group activity-bar-top ${dropTarget?.group === 'top' && dropTarget.index === undefined ? 'group-drop-target' : ''}`}
@@ -207,7 +207,7 @@ export const SidebarActivityBar: React.FC<SidebarActivityBarProps> = ({
         className={`activity-bar-separator-container ${dropTarget?.isSeparator ? 'separator-drop-target' : ''}`}
         onDragOver={handleSeparatorDragOver}
         onDrop={(e) => handleDrop(e, 'bottom', 0)}
-        title="Tool group separator (Drag an icon here to move between groups)"
+        title={t('sidebar:activityBar.separatorTooltip')}
       >
         <div className="activity-bar-separator-line" />
         <div className="activity-bar-separator-handle" />

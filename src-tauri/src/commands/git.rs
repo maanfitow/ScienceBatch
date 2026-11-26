@@ -144,20 +144,20 @@ async fn repository_lock_key(
 ) -> Result<(std::path::PathBuf, std::path::PathBuf), String> {
     let root_output = safe_git_output(project, &["rev-parse", "--show-toplevel"])
         .await
-        .map_err(|error| format!("Failed to locate the Git repository: {error}"))?;
+        .map_err(|error| format!("git.repo_unavailable: Failed to locate the Git repository: {error}"))?;
     if !root_output.status.success() {
-        return Err("Project is not a Git repository.".to_string());
+        return Err("git.not_a_repo: Project is not a Git repository.".to_string());
     }
     let root = canonicalize_clean(Path::new(
         String::from_utf8_lossy(&root_output.stdout).trim(),
     ))
-    .map_err(|error| format!("Failed to resolve the Git repository root: {error}"))?;
+    .map_err(|error| format!("git.repo_unavailable: Failed to resolve the Git repository root: {error}"))?;
     let common_output = safe_git_output(
         project,
         &["rev-parse", "--path-format=absolute", "--git-common-dir"],
     )
     .await
-    .map_err(|error| format!("Failed to locate Git metadata: {error}"))?;
+    .map_err(|error| format!("git.repo_unavailable: Failed to locate Git metadata: {error}"))?;
     let common = if common_output.status.success() {
         canonicalize_clean(Path::new(
             String::from_utf8_lossy(&common_output.stdout).trim(),
@@ -184,7 +184,7 @@ pub(crate) async fn workspace_repository_guard(
 ) -> Result<Option<OwnedMutexGuard<()>>, GitOperationError> {
     match repository_lock_key(project).await {
         Ok((_, key)) => try_lock_key(&key).map(Some),
-        Err(message) if message == "Project is not a Git repository." => Ok(None),
+        Err(message) if message == "git.not_a_repo: Project is not a Git repository." => Ok(None),
         Err(message) => Err(operation_error(
             "RepositoryUnavailable",
             message,
@@ -223,21 +223,21 @@ async fn detect_git_version() -> Result<Option<String>, String> {
     let output = match bounded_command_output(command, GIT_OPERATION_TIMEOUT).await {
         Ok(output) => output,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(format!("Failed to check Git availability: {error}")),
+        Err(error) => return Err(format!("git.unavailable: Failed to check Git availability: {error}")),
     };
 
     if !output.status.success() {
         let details = sanitize_git_output(String::from_utf8_lossy(&output.stderr).trim());
         return Err(if details.is_empty() {
-            "Git is installed but did not report its version.".to_string()
+            "git.unavailable: Git is installed but did not report its version.".to_string()
         } else {
-            format!("Git availability check failed: {details}")
+            format!("git.unavailable: Git availability check failed: {details}")
         });
     }
 
     let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
     if !version.starts_with("git version ") || version.len() <= "git version ".len() {
-        return Err("Git is installed but returned an unrecognized version string.".to_string());
+        return Err("git.unavailable: Git is installed but returned an unrecognized version string.".to_string());
     }
     Ok(Some(version))
 }
@@ -475,7 +475,7 @@ async fn run_git_diff_capped(
     clear_git_location_overrides(&mut cmd);
     let mut child = cmd
         .spawn()
-        .map_err(|e| format!("Failed to spawn git diff: {e}"))?;
+        .map_err(|e| format!("git.diff_failed: Failed to spawn git diff: {e}"))?;
     let process_id = child.id();
 
     let mut stdout = child.stdout.take().expect("piped Git diff stdout");
@@ -506,7 +506,7 @@ async fn run_git_diff_capped(
     .await;
     let (status, stdout_buf, oversized) = match result {
         Ok(Ok(result)) => result,
-        Ok(Err(error)) => return Err(format!("Git diff process error: {error}")),
+        Ok(Err(error)) => return Err(format!("git.diff_failed: Git diff process error: {error}")),
         Err(_) => {
             #[cfg(unix)]
             if let Some(pid) = process_id {
@@ -520,12 +520,12 @@ async fn run_git_diff_capped(
             }
             let _ = child.kill().await;
             let _ = child.wait().await;
-            return Err("Git diff command timed out after five minutes.".to_string());
+            return Err("git.diff_timeout: Git diff command timed out after five minutes.".to_string());
         }
     };
 
     if !status.success() && !oversized && stdout_buf.is_empty() {
-        return Err("Git diff command failed".to_string());
+        return Err("git.diff_failed: Git diff command failed".to_string());
     }
 
     let is_binary = is_binary_buffer(&stdout_buf);
@@ -533,7 +533,7 @@ async fn run_git_diff_capped(
 
     if is_binary || (stdout_str.contains("Binary files ") && stdout_str.contains(" differ")) {
         return Ok((
-            "Binary file not shown in diff viewer.".to_string(),
+            "git.binary_diff: Binary file not shown in diff viewer.".to_string(),
             true,
             oversized,
         ));
@@ -541,7 +541,7 @@ async fn run_git_diff_capped(
 
     if oversized {
         return Ok((
-            format!("Diff output exceeds {} KB display limit.", max_bytes / 1024),
+            format!("git.oversized_diff: Diff output exceeds {} KB display limit.", max_bytes / 1024),
             false,
             true,
         ));
@@ -589,7 +589,7 @@ pub async fn get_git_status_internal(path: &Path) -> Result<GitStatusResult, Str
         Ok(out) => out,
         Err(e) => {
             return Err(format!(
-                "Git is available, but its status command could not start: {e}"
+                "git.status_failed: Git is available, but its status command could not start: {e}"
             ));
         }
     };
@@ -642,11 +642,11 @@ pub async fn initialize_git_repository(project_path: String) -> Result<GitStatus
     let requested_path = Path::new(&project_path);
     if !requested_path.exists() || !requested_path.is_dir() {
         return Err(
-            "The selected project folder does not exist or is not a directory.".to_string(),
+            "git.dir_not_found: The selected project folder does not exist or is not a directory.".to_string(),
         );
     }
     let project_path = canonicalize_clean(requested_path)
-        .map_err(|error| format!("Failed to resolve the selected project folder: {error}"))?;
+        .map_err(|error| format!("git.dir_resolve_failed: Failed to resolve the selected project folder: {error}"))?;
 
     let status = get_git_status_internal(&project_path).await?;
     if !status.git_available {
@@ -657,15 +657,16 @@ pub async fn initialize_git_repository(project_path: String) -> Result<GitStatus
     }
     if let Some(error) = status.error {
         return Err(format!(
-            "Cannot initialize Git because repository status failed: {error}"
+            "git.init_failed: Cannot initialize Git because repository status failed: {error}"
         ));
     }
 
     if std::fs::symlink_metadata(project_path.join(".git")).is_ok() {
-        return Err("The selected folder already contains Git metadata that is not usable as a repository. Git was not initialized.".to_string());
+        return Err("git.invalid_metadata: The selected folder already contains Git metadata that is not usable as a repository. Git was not initialized.".to_string());
     }
 
-    let _repository_guard = try_lock_key(&project_path).map_err(|error| error.message)?;
+    let _repository_guard = try_lock_key(&project_path)
+        .map_err(|error| format!("git.locked: {}", error.message))?;
 
     let mut init_command = Command::new("git");
     init_command
@@ -682,22 +683,25 @@ pub async fn initialize_git_repository(project_path: String) -> Result<GitStatus
     clear_git_location_overrides(&mut init_command);
     let output = bounded_command_output(init_command, GIT_OPERATION_TIMEOUT)
         .await
-        .map_err(|error| format!("Failed to start Git initialization: {error}"))?;
+        .map_err(|error| format!("git.init_failed: Failed to start Git initialization: {error}"))?;
 
     if !output.status.success() {
         let details = sanitize_git_output(String::from_utf8_lossy(&output.stderr).trim());
         return Err(if details.is_empty() {
-            "Git could not initialize the selected project folder.".to_string()
+            "git.init_failed: Git could not initialize the selected project folder.".to_string()
         } else {
-            format!("Git could not initialize the selected project folder: {details}")
+            format!("git.init_failed: Git could not initialize the selected project folder: {details}")
         });
     }
 
     let status = get_git_status_internal(&project_path).await?;
     if !status.is_git_repo {
-        return Err(status.error.unwrap_or_else(|| {
-            "Git initialization completed, but the selected folder is still not recognized as a repository.".to_string()
-        }));
+        return Err(format!(
+            "git.init_failed: {}",
+            status.error.unwrap_or_else(|| {
+                "Git initialization completed, but the selected folder is still not recognized as a repository.".to_string()
+            })
+        ));
     }
     Ok(status)
 }
@@ -710,16 +714,16 @@ pub async fn get_git_status(project_path: String) -> Result<GitStatusResult, Str
 fn canonical_project(project_path: &str) -> Result<std::path::PathBuf, String> {
     let path = Path::new(project_path);
     if !path.exists() || !path.is_dir() {
-        return Err("Project directory does not exist or is not a directory.".to_string());
+        return Err("git.dir_not_found: Project directory does not exist or is not a directory.".to_string());
     }
-    canonicalize_clean(path).map_err(|error| format!("Cannot resolve project directory: {error}"))
+    canonicalize_clean(path).map_err(|error| format!("git.dir_resolve_failed: Cannot resolve project directory: {error}"))
 }
 
 async fn require_git_project(project_path: &str) -> Result<std::path::PathBuf, String> {
     let project = canonical_project(project_path)?;
     let status = get_git_status_internal(&project).await?;
     if !status.is_git_repo {
-        return Err("Project is not a Git repository.".to_string());
+        return Err("git.not_a_repo: Project is not a Git repository.".to_string());
     }
     Ok(project)
 }
@@ -727,21 +731,21 @@ async fn require_git_project(project_path: &str) -> Result<std::path::PathBuf, S
 /// Check explicitly supplied paths lexically and through their nearest existing ancestor.
 fn validate_git_paths(project: &Path, paths: &[String]) -> Result<(), String> {
     if paths.is_empty() {
-        return Err("At least one file path is required.".to_string());
+        return Err("git.invalid_path: At least one file path is required.".to_string());
     }
     for value in paths {
         if value.is_empty() || value.contains('\0') {
-            return Err("File paths must be non-empty and cannot contain NUL bytes.".to_string());
+            return Err("git.invalid_path: File paths must be non-empty and cannot contain NUL bytes.".to_string());
         }
         let relative = Path::new(value);
         if relative.is_absolute() || value.starts_with('/') || value.starts_with('\\') {
-            return Err("Absolute paths are not allowed.".to_string());
+            return Err("git.invalid_path: Absolute paths are not allowed.".to_string());
         }
         for component in relative.components() {
             match component {
                 Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
                     return Err(
-                        "File paths must stay inside the selected project directory.".to_string(),
+                        "git.invalid_path: File paths must stay inside the selected project directory.".to_string(),
                     );
                 }
                 _ => {}
@@ -749,20 +753,20 @@ fn validate_git_paths(project: &Path, paths: &[String]) -> Result<(), String> {
         }
         if relative.as_os_str().is_empty() || relative == Path::new(".") {
             return Err(
-                "The project directory itself cannot be staged as a file path.".to_string(),
+                "git.invalid_path: The project directory itself cannot be staged as a file path.".to_string(),
             );
         }
 
         let mut probe = project.join(relative);
         while !probe.exists() && !std::fs::symlink_metadata(&probe).is_ok() {
             if !probe.pop() || !probe.starts_with(project) {
-                return Err("File path escapes the selected project directory.".to_string());
+                return Err("git.invalid_path: File path escapes the selected project directory.".to_string());
             }
         }
         if let Ok(resolved) = canonicalize_clean(&probe) {
             if !resolved.starts_with(project) {
                 return Err(
-                    "File path escapes the selected project directory through a symlink."
+                    "git.invalid_path: File path escapes the selected project directory through a symlink."
                         .to_string(),
                 );
             }
@@ -791,7 +795,7 @@ fn git_command(project: &Path, args: &[&str]) -> Command {
 async fn safe_git_output(project: &Path, args: &[&str]) -> Result<std::process::Output, String> {
     bounded_command_output(git_command(project, args), GIT_OPERATION_TIMEOUT)
         .await
-        .map_err(|error| format!("Failed to start Git: {error}"))
+        .map_err(|error| format!("git.command_failed: Failed to start Git: {error}"))
 }
 
 async fn safe_git_action(
@@ -826,6 +830,7 @@ fn emit_git_progress(
     operation: &str,
     status: &str,
     message: &str,
+    code: Option<&str>,
 ) {
     if let Some(app) = app {
         let _ = app.emit(
@@ -836,6 +841,7 @@ fn emit_git_progress(
                 operation: operation.to_string(),
                 status: status.to_string(),
                 message: sanitize_git_output(message),
+                code: code.map(str::to_string),
             },
         );
     }
@@ -999,6 +1005,7 @@ async fn run_git_operation_with_timeout(
         operation,
         "started",
         "Starting Git operation.",
+        Some("git.operation_starting"),
     );
     let mut command = Command::new("git");
     command.arg("-c").arg("core.fsmonitor=false");
@@ -1086,6 +1093,7 @@ async fn run_git_operation_with_timeout(
                         &operation_name,
                         "progress",
                         &line,
+                        None,
                     );
                     pending.clear();
                 } else if pending.len() < 4096 {
@@ -1108,6 +1116,7 @@ async fn run_git_operation_with_timeout(
                 &operation_name,
                 "progress",
                 &line,
+                None,
             );
         }
         saved
@@ -1205,6 +1214,7 @@ async fn run_git_operation_with_timeout(
             operation,
             "completed",
             "Git operation completed.",
+            Some("git.operation_completed"),
         );
         return Ok(sanitize_git_output(&stdout));
     }
@@ -1219,6 +1229,7 @@ async fn run_git_operation_with_timeout(
         operation,
         "failed",
         &details,
+        None,
     );
     let lower_details = details.to_ascii_lowercase();
     if operation == "pull"
@@ -1330,15 +1341,15 @@ async fn terminate_git_process_tree(pid: u32) {
 async fn run_git_action(project: &Path, args: &[&str], action: &str) -> Result<(), String> {
     let output = bounded_command_output(git_command(project, args), GIT_OPERATION_TIMEOUT)
         .await
-        .map_err(|error| format!("Failed to start Git {action}: {error}"))?;
+        .map_err(|error| format!("git.command_failed: Failed to start Git {action}: {error}"))?;
     if output.status.success() {
         return Ok(());
     }
     let details = sanitize_git_output(String::from_utf8_lossy(&output.stderr).trim());
     Err(if details.is_empty() {
-        format!("Git {action} failed.")
+        format!("git.command_failed: Git {action} failed.")
     } else {
-        format!("Git {action} failed: {details}")
+        format!("git.command_failed: Git {action} failed: {details}")
     })
 }
 
@@ -1351,9 +1362,9 @@ pub async fn list_git_branches(project_path: String) -> Result<GitBranchListResu
         &["for-each-ref", "--format=%(refname:short)", "refs/heads"],
     ), GIT_OPERATION_TIMEOUT)
     .await
-    .map_err(|error| format!("Failed to list Git branches: {error}"))?;
+    .map_err(|error| format!("git.branch_list_failed: Failed to list Git branches: {error}"))?;
     if !output.status.success() {
-        return Err("Git could not list local branches.".to_string());
+        return Err("git.branch_list_failed: Git could not list local branches.".to_string());
     }
     let mut branches: Vec<String> = String::from_utf8_lossy(&output.stdout)
         .lines()
@@ -1384,19 +1395,19 @@ pub async fn switch_git_branch(
     let project = require_git_project(&project_path).await?;
     let _repository_guard = try_repository_lock(&project)
         .await
-        .map_err(|error| error.message)?;
+        .map_err(|error| format!("git.locked: {}", error.message))?;
     if branch.is_empty() || branch.contains('\0') || branch.contains('\n') || branch.contains('\r')
     {
-        return Err("Branch name is invalid.".to_string());
+        return Err("git.invalid_branch: Branch name is invalid.".to_string());
     }
     let check = bounded_command_output(
         git_command(&project, &["check-ref-format", "--branch", &branch]),
         GIT_OPERATION_TIMEOUT,
     )
         .await
-        .map_err(|error| format!("Failed to validate Git branch name: {error}"))?;
+        .map_err(|error| format!("git.invalid_branch: Failed to validate Git branch name: {error}"))?;
     if !check.status.success() {
-        return Err("Branch name is invalid.".to_string());
+        return Err("git.invalid_branch: Branch name is invalid.".to_string());
     }
     if create {
         run_git_action(&project, &["switch", "-c", &branch], "branch switch").await?;
@@ -1417,7 +1428,7 @@ async fn change_git_index(
     let project = require_git_project(&project_path).await?;
     let _repository_guard = try_repository_lock(&project)
         .await
-        .map_err(|error| error.message)?;
+        .map_err(|error| format!("git.locked: {}", error.message))?;
     validate_git_paths(&project, &paths)?;
     let mut command = Command::new("git");
     command
@@ -1453,7 +1464,7 @@ async fn change_git_index(
     }
     let output = bounded_command_output(command, GIT_OPERATION_TIMEOUT).await.map_err(|error| {
         format!(
-            "Failed to start Git {}: {error}",
+            "git.index_failed: Failed to start Git {}: {error}",
             if stage { "stage" } else { "unstage" }
         )
     })?;
@@ -1462,9 +1473,9 @@ async fn change_git_index(
     }
     let detail = sanitize_git_output(String::from_utf8_lossy(&output.stderr).trim());
     Err(if detail.is_empty() {
-        format!("Git {} failed.", if stage { "stage" } else { "unstage" })
+        format!("git.index_failed: Git {} failed.", if stage { "stage" } else { "unstage" })
     } else {
-        detail
+        format!("git.index_failed: {detail}")
     })
 }
 
@@ -2500,27 +2511,27 @@ pub async fn get_git_diff(
     file_path: String,
 ) -> Result<GitDiffResult, String> {
     if file_path.is_empty() {
-        return Err("File path cannot be empty".to_string());
+        return Err("git.invalid_path: File path cannot be empty".to_string());
     }
 
     // Reject absolute paths and leading slashes
     if file_path.starts_with('/') || file_path.starts_with('\\') {
-        return Err("Absolute paths are not allowed".to_string());
+        return Err("git.invalid_path: Absolute paths are not allowed".to_string());
     }
 
     let rel_path = Path::new(&file_path);
     if rel_path.is_absolute() {
-        return Err("Absolute paths are not allowed".to_string());
+        return Err("git.invalid_path: Absolute paths are not allowed".to_string());
     }
 
     // Reject parent directory traversal components or prefix/root indicators
     for comp in rel_path.components() {
         match comp {
             Component::ParentDir => {
-                return Err("Parent directory traversal ('..') is not allowed".to_string());
+                return Err("git.invalid_path: Parent directory traversal ('..') is not allowed".to_string());
             }
             Component::RootDir | Component::Prefix(_) => {
-                return Err("Absolute paths are not allowed".to_string());
+                return Err("git.invalid_path: Absolute paths are not allowed".to_string());
             }
             _ => {}
         }
@@ -2529,12 +2540,12 @@ pub async fn get_git_diff(
     // Validate project directory
     let proj = Path::new(&project_path);
     if !proj.exists() || !proj.is_dir() {
-        return Err("Project directory does not exist or is not a directory".to_string());
+        return Err("git.dir_not_found: Project directory does not exist or is not a directory".to_string());
     }
 
     let proj_canonical = canonicalize_clean_async(proj)
         .await
-        .map_err(|e| format!("Cannot resolve project directory: {e}"))?;
+        .map_err(|e| format!("git.dir_resolve_failed: Cannot resolve project directory: {e}"))?;
 
     // Check symlink safety: the target file cannot escape the project directory
     let target_path = proj_canonical.join(rel_path);
@@ -2542,16 +2553,16 @@ pub async fn get_git_diff(
         if symlink_meta.file_type().is_symlink() {
             let target_canonical = canonicalize_clean_async(&target_path)
                 .await
-                .map_err(|e| format!("Cannot resolve symlink target: {e}"))?;
+                .map_err(|e| format!("git.invalid_path: Cannot resolve symlink target: {e}"))?;
             if !target_canonical.starts_with(&proj_canonical) {
-                return Err("Path escapes project directory via symlink".to_string());
+                return Err("git.invalid_path: Path escapes project directory via symlink".to_string());
             }
         } else if target_path.exists() {
             let target_canonical = canonicalize_clean_async(&target_path)
                 .await
-                .map_err(|e| format!("Cannot resolve file path: {e}"))?;
+                .map_err(|e| format!("git.invalid_path: Cannot resolve file path: {e}"))?;
             if !target_canonical.starts_with(&proj_canonical) {
-                return Err("Path escapes project directory".to_string());
+                return Err("git.invalid_path: Path escapes project directory".to_string());
             }
         }
     }
@@ -2559,11 +2570,11 @@ pub async fn get_git_diff(
     // Query current Git status
     let status = get_git_status_internal(&proj_canonical).await?;
     if !status.is_git_repo {
-        return Err("Project is not a Git repository".to_string());
+        return Err("git.not_a_repo: Project is not a Git repository".to_string());
     }
 
     if let Some(err) = status.error {
-        return Err(format!("Git error: {err}"));
+        return Err(format!("git.status_failed: Git error: {err}"));
     }
 
     // Match file in current Git status
@@ -2576,7 +2587,7 @@ pub async fn get_git_diff(
                 if !target_path.exists() || !target_path.is_file() {
                     return Ok(GitDiffResult {
                         path: file_path,
-                        diff: "Untracked file does not exist on disk.".to_string(),
+                        diff: "git.untracked_missing: Untracked file does not exist on disk.".to_string(),
                         is_binary: false,
                         oversized: false,
                     });
@@ -2584,13 +2595,13 @@ pub async fn get_git_diff(
 
                 let meta = tokio::fs::metadata(&target_path)
                     .await
-                    .map_err(|e| format!("Failed to read file metadata: {e}"))?;
+                    .map_err(|e| format!("git.io_failed: Failed to read file metadata: {e}"))?;
 
                 if meta.len() > MAX_DIFF_FILE_BYTES {
                     return Ok(GitDiffResult {
                         path: file_path,
                         diff: format!(
-                            "File is too large to display diff ({} KB, exceeds {} KB limit).",
+                            "git.oversized_diff: File is too large to display diff ({} KB, exceeds {} KB limit).",
                             meta.len() / 1024,
                             MAX_DIFF_FILE_BYTES / 1024
                         ),
@@ -2601,12 +2612,12 @@ pub async fn get_git_diff(
 
                 let bytes = tokio::fs::read(&target_path)
                     .await
-                    .map_err(|e| format!("Failed to read file: {e}"))?;
+                    .map_err(|e| format!("git.io_failed: Failed to read file: {e}"))?;
 
                 if is_binary_buffer(&bytes) {
                     return Ok(GitDiffResult {
                         path: file_path,
-                        diff: "Binary file not shown in diff viewer.".to_string(),
+                        diff: "git.binary_diff: Binary file not shown in diff viewer.".to_string(),
                         is_binary: true,
                         oversized: false,
                     });
@@ -2758,7 +2769,7 @@ pub async fn get_git_diff(
             }
 
             Err(format!(
-                "Path '{file_path}' is not a valid change or tracked file in the Git repository"
+                "git.path_not_tracked: Path '{file_path}' is not a valid change or tracked file in the Git repository"
             ))
         }
     }

@@ -1,5 +1,12 @@
 import type { MathContext } from '../../types/writing';
 
+type WritingTranslator = (key: string, fallback: string, params?: Record<string, string | number>) => string;
+const wt = (key: string, fallback: string, params?: Record<string, string | number>): string => {
+  const fn = (globalThis as { __sciencebatchTranslate?: WritingTranslator }).__sciencebatchTranslate;
+  if (fn) return fn(`writing:${key}`, fallback, params);
+  return params ? fallback.replace(/\{\{(\w+)\}\}/g, (_m, k) => String(params[k] ?? '')) : fallback;
+};
+
 const MATH_ENVS = new Set(['math', 'displaymath', 'equation', 'equation*', 'align', 'align*', 'aligned', 'alignedat', 'gather', 'gather*', 'gathered', 'multline', 'multline*', 'flalign', 'flalign*', 'alignat', 'alignat*', 'split', 'cases', 'array', 'matrix', 'pmatrix', 'bmatrix', 'Bmatrix', 'vmatrix', 'Vmatrix']);
 const SUBORDINATE_ENVS = new Set(['aligned', 'alignedat', 'gathered', 'split', 'cases', 'array', 'matrix', 'pmatrix', 'bmatrix', 'Bmatrix', 'vmatrix', 'Vmatrix']);
 const VERBATIM_ENVS = new Set(['verbatim', 'verbatim*', 'Verbatim', 'BVerbatim', 'LVerbatim', 'SaveVerbatim', 'lstlisting', 'minted', 'alltt', 'comment', 'filecontents', 'filecontents*']);
@@ -47,35 +54,35 @@ function scan(source: string, offset: number): ScanResult {
     }
     // A doubled backslash is one control symbol, so a following percent/dollar is not escaped by it.
     if (c === '\\' && source[i + 1] === '\\') {
-      if (stop > i && stop < i + 2) return { context: 'blocked', reason: 'The cursor is inside a two-character control symbol.', inPreamble: !documentStarted };
+      if (stop > i && stop < i + 2) return { context: 'blocked', reason: wt('context.insideControlSymbol', 'The cursor is inside a two-character control symbol.'), inPreamble: !documentStarted };
       i += 2; continue;
     }
     // Math delimiters are recognized before ordinary commands.
     if (source.startsWith('\\(', i) || source.startsWith('\\[', i)) {
       const token = source.slice(i, i + 2);
-      if (stop > i && stop < i + token.length) return { context: 'blocked', reason: 'The cursor is inside a LaTeX delimiter token.', inPreamble: !documentStarted };
+      if (stop > i && stop < i + token.length) return { context: 'blocked', reason: wt('context.insideLatexDelimiter', 'The cursor is inside a LaTeX delimiter token.'), inPreamble: !documentStarted };
       const next = source[i + 1] === '(' ? 'math-inline' : 'math-display';
-      if (!delimiter && current() !== 'text') return { context: 'blocked', reason: 'Nested math delimiters make this context ambiguous.', inPreamble: !documentStarted };
-      if (delimiter && ((delimiter.token === '$' && token === '\\)') || (delimiter.token === '$$' && token === '\\]'))) return { context: 'blocked', reason: 'Mismatched math delimiters make this context ambiguous.', inPreamble: !documentStarted };
-      if (delimiter && (delimiter.token === '\\(' && token !== '\\)' || delimiter.token === '\\[' && token !== '\\]')) return { context: 'blocked', reason: 'Mismatched math delimiters make this context ambiguous.', inPreamble: !documentStarted };
+      if (!delimiter && current() !== 'text') return { context: 'blocked', reason: wt('context.nestedMathDelimiters', 'Nested math delimiters make this context ambiguous.'), inPreamble: !documentStarted };
+      if (delimiter && ((delimiter.token === '$' && token === '\\)') || (delimiter.token === '$$' && token === '\\]'))) return { context: 'blocked', reason: wt('context.mismatchedMathDelimiters', 'Mismatched math delimiters make this context ambiguous.'), inPreamble: !documentStarted };
+      if (delimiter && (delimiter.token === '\\(' && token !== '\\)' || delimiter.token === '\\[' && token !== '\\]')) return { context: 'blocked', reason: wt('context.mismatchedMathDelimiters', 'Mismatched math delimiters make this context ambiguous.'), inPreamble: !documentStarted };
       delimiter = delimiter ? null : { context: next, token: token === '\\(' ? '\\(' : '\\[' };
       i += 2; continue;
     }
     if (source.startsWith('\\)', i) || source.startsWith('\\]', i)) {
       const token = source.slice(i, i + 2);
-      if (stop > i && stop < i + token.length) return { context: 'blocked', reason: 'The cursor is inside a LaTeX delimiter token.', inPreamble: !documentStarted };
-      if (!delimiter || delimiter.token !== (token === '\\)' ? '\\(' : '\\[')) return { context: 'blocked', reason: 'Mismatched math delimiters make this context ambiguous.', inPreamble: !documentStarted };
+      if (stop > i && stop < i + token.length) return { context: 'blocked', reason: wt('context.insideLatexDelimiter', 'The cursor is inside a LaTeX delimiter token.'), inPreamble: !documentStarted };
+      if (!delimiter || delimiter.token !== (token === '\\)' ? '\\(' : '\\[')) return { context: 'blocked', reason: wt('context.mismatchedMathDelimiters', 'Mismatched math delimiters make this context ambiguous.'), inPreamble: !documentStarted };
       delimiter = null; i += 2; continue;
     }
     if (c === '$' && !isEscaped(source, i)) {
       const next: MathContext = source[i + 1] === '$' ? 'math-display' : 'math-inline';
       const token = next === 'math-display' ? '$$' : '$';
-      if (token.length === 2 && stop > i && stop < i + token.length) return { context: 'blocked', reason: 'The cursor is inside a two-character math delimiter.', inPreamble: !documentStarted };
+      if (token.length === 2 && stop > i && stop < i + token.length) return { context: 'blocked', reason: wt('context.insideMathDelimiter', 'The cursor is inside a two-character math delimiter.'), inPreamble: !documentStarted };
       if (delimiter && (delimiter.token === '$' || delimiter.token === '$$')) {
-        if (delimiter.token !== token) return { context: 'blocked', reason: 'Mismatched math delimiters make this context ambiguous.', inPreamble: !documentStarted };
+        if (delimiter.token !== token) return { context: 'blocked', reason: wt('context.mismatchedMathDelimiters', 'Mismatched math delimiters make this context ambiguous.'), inPreamble: !documentStarted };
         delimiter = null;
-      } else if (delimiter) return { context: 'blocked', reason: 'Mismatched math delimiters make this context ambiguous.', inPreamble: !documentStarted };
-      else if (current() !== 'text') return { context: 'blocked', reason: 'Nested math delimiters make this context ambiguous.', inPreamble: !documentStarted };
+      } else if (delimiter) return { context: 'blocked', reason: wt('context.mismatchedMathDelimiters', 'Mismatched math delimiters make this context ambiguous.'), inPreamble: !documentStarted };
+      else if (current() !== 'text') return { context: 'blocked', reason: wt('context.nestedMathDelimiters', 'Nested math delimiters make this context ambiguous.'), inPreamble: !documentStarted };
       else delimiter = { context: next, token };
       i += token.length; continue;
     }
@@ -84,34 +91,34 @@ function scan(source: string, offset: number): ScanResult {
     if (c === '\\') {
       // Escaped punctuation is atomic: \$, \%, \{, and \} never act as syntax.
       if (source[i + 1] && !/[a-zA-Z]/.test(source[i + 1])) {
-        if (stop > i && stop < i + 2) return { context: 'blocked', reason: 'The cursor is inside a two-character control symbol.', inPreamble: !documentStarted };
+        if (stop > i && stop < i + 2) return { context: 'blocked', reason: wt('context.insideControlSymbol', 'The cursor is inside a two-character control symbol.'), inPreamble: !documentStarted };
         i += 2; continue;
       }
       const env = source.slice(i).match(ENV_TOKEN);
       if (env) {
-        if (stop > i && stop < i + env[0].length) return { context: 'blocked', reason: 'The cursor is inside an environment token.', inPreamble: !documentStarted };
+        if (stop > i && stop < i + env[0].length) return { context: 'blocked', reason: wt('context.insideEnvironmentToken', 'The cursor is inside an environment token.'), inPreamble: !documentStarted };
         if (env[1] === 'begin') {
           const name = env[2];
           if (name === 'document') documentStarted = true;
-          if (MATH_ENVS.has(name) && current() !== 'text' && !SUBORDINATE_ENVS.has(name)) return { context: 'blocked', reason: 'Nested math environments make this context ambiguous.', inPreamble: !documentStarted };
+          if (MATH_ENVS.has(name) && current() !== 'text' && !SUBORDINATE_ENVS.has(name)) return { context: 'blocked', reason: wt('context.nestedMathEnvironments', 'Nested math environments make this context ambiguous.'), inPreamble: !documentStarted };
           envStack.push({ env: name, context: VERBATIM_ENVS.has(name) ? 'blocked' : MATH_ENVS.has(name) ? 'math-environment' : current() });
           i += env[0].length; continue;
         }
-        if (envStack.length && envStack[envStack.length - 1].env !== env[2]) return { context: 'blocked', reason: 'Mismatched LaTeX environments make this context ambiguous.', inPreamble: !documentStarted };
+        if (envStack.length && envStack[envStack.length - 1].env !== env[2]) return { context: 'blocked', reason: wt('context.mismatchedEnvironments', 'Mismatched LaTeX environments make this context ambiguous.'), inPreamble: !documentStarted };
         if (envStack.length) envStack.pop();
-        else return { context: 'blocked', reason: 'An unmatched LaTeX environment ending makes this context ambiguous.', inPreamble: !documentStarted };
+        else return { context: 'blocked', reason: wt('context.unmatchedEnvironmentEnd', 'An unmatched LaTeX environment ending makes this context ambiguous.'), inPreamble: !documentStarted };
         if (env[2] === 'document') documentStarted = false;
         i += env[0].length; continue;
       }
       const command = source.slice(i).match(COMMAND_TOKEN);
-      if (command && stop > i && stop < i + command[0].length) return { context: 'blocked', reason: 'The cursor is inside a LaTeX command token.', inPreamble: !documentStarted };
+      if (command && stop > i && stop < i + command[0].length) return { context: 'blocked', reason: wt('context.insideCommandToken', 'The cursor is inside a LaTeX command token.'), inPreamble: !documentStarted };
       if (command?.[1] === 'verb') {
         let content = i + command[0].length;
         if (source[content] === '*') content++;
         const delimiterChar = source[content];
-        if (!delimiterChar || delimiterChar === '\n') return { context: 'blocked', reason: 'The inline verbatim command is incomplete.', inPreamble: !documentStarted };
+        if (!delimiterChar || delimiterChar === '\n') return { context: 'blocked', reason: wt('context.incompleteInlineVerbatim', 'The inline verbatim command is incomplete.'), inPreamble: !documentStarted };
         const close = source.indexOf(delimiterChar, content + 1);
-        if (close < 0 || stop <= close) return { context: 'blocked', reason: 'Writing tools are unavailable inside inline verbatim content.', inPreamble: !documentStarted };
+        if (close < 0 || stop <= close) return { context: 'blocked', reason: wt('context.insideInlineVerbatim', 'Writing tools are unavailable inside inline verbatim content.'), inPreamble: !documentStarted };
         i = close + 1; continue;
       }
       if (command && TEXT_ARGUMENT_COMMANDS.has(command[1])) {
@@ -135,21 +142,21 @@ function scan(source: string, offset: number): ScanResult {
     i++;
   }
   const active = envStack[envStack.length - 1]?.context === 'blocked' ? 'blocked' : current();
-  if (active === 'blocked') return { context: 'blocked', reason: 'Writing tools are unavailable inside verbatim content.', inPreamble: !documentStarted };
+  if (active === 'blocked') return { context: 'blocked', reason: wt('context.insideVerbatim', 'Writing tools are unavailable inside verbatim content.'), inPreamble: !documentStarted };
   const activeText = source.split('\n').map((line) => {
     for (let i = 0; i < line.length; i++) if (line[i] === '%' && !isEscaped(line, i)) return line.slice(0, i) + ' '.repeat(line.length - i);
     return line;
   }).join('\n');
   const documentStart = activeText.search(/\\begin\s*\{document\}/);
   const hasDocumentClass = /\\documentclass\b/.test(activeText.slice(0, documentStart < 0 ? activeText.length : documentStart));
-  if (hasDocumentClass && (documentStart < 0 || stop < documentStart)) return { context: 'blocked', reason: 'The cursor is in the document preamble.', inPreamble: true };
+  if (hasDocumentClass && (documentStart < 0 || stop < documentStart)) return { context: 'blocked', reason: wt('context.inPreamble', 'The cursor is in the document preamble.'), inPreamble: true };
   const documentEndMatch = [...activeText.matchAll(/\\end\s*\{document\}/g)].pop();
-  if (documentEndMatch?.index !== undefined && stop >= documentEndMatch.index + documentEndMatch[0].length) return { context: 'blocked', reason: 'Writing tools are unavailable outside the document body.', inPreamble: false };
+  if (documentEndMatch?.index !== undefined && stop >= documentEndMatch.index + documentEndMatch[0].length) return { context: 'blocked', reason: wt('context.outsideDocumentBody', 'Writing tools are unavailable outside the document body.'), inPreamble: false };
   const lineStart = source.lastIndexOf('\n', Math.max(0, stop - 1)) + 1;
   let comments = false;
   for (let i = lineStart; i < stop; i++) if (source[i] === '%' && !isEscaped(source, i)) { comments = true; break; }
-  if (comments) return { context: 'blocked', reason: 'Writing tools are unavailable in comments.', inPreamble: !documentStarted };
-  if (groupStack[groupStack.length - 1]?.context === 'blocked') return { context: 'blocked', reason: 'Writing tools are unavailable inside text command arguments.', inPreamble: !documentStarted };
+  if (comments) return { context: 'blocked', reason: wt('context.inComments', 'Writing tools are unavailable in comments.'), inPreamble: !documentStarted };
+  if (groupStack[groupStack.length - 1]?.context === 'blocked') return { context: 'blocked', reason: wt('context.insideTextCommandArgs', 'Writing tools are unavailable inside text command arguments.'), inPreamble: !documentStarted };
   return { context: active, reason, inPreamble: !documentStarted };
 }
 
@@ -162,7 +169,7 @@ export function classifyLatexContext(source: string, offset: number): ContextRes
 }
 
 export function classifyLatexRange(source: string, start: number, end: number): ContextResult {
-  if (start < 0 || end < start || end > source.length) return { context: 'blocked', reason: 'The selection is outside the current document.' };
+  if (start < 0 || end < start || end > source.length) return { context: 'blocked', reason: wt('context.selectionOutsideDocument', 'The selection is outside the current document.') };
   const first = scan(source, start);
   if (first.context === 'blocked') return { context: 'blocked', reason: first.reason };
   if (start !== end) {
@@ -171,28 +178,28 @@ export function classifyLatexRange(source: string, start: number, end: number): 
     let braceDepth = 0;
     for (let i = 0; i < selected.length; i++) {
       const c = selected[i];
-      if (c === '%' && slashes % 2 === 0) return { context: 'blocked', reason: 'Selections containing comments are not supported.' };
-      if (c === '$' && slashes % 2 === 0) return { context: 'blocked', reason: 'The selection crosses a text or math boundary.' };
+      if (c === '%' && slashes % 2 === 0) return { context: 'blocked', reason: wt('context.selectionContainsComments', 'Selections containing comments are not supported.') };
+      if (c === '$' && slashes % 2 === 0) return { context: 'blocked', reason: wt('context.selectionCrossesTextMathBoundary', 'The selection crosses a text or math boundary.') };
       if (c === '\\' && slashes % 2 === 0) {
         const token = selected.slice(i, i + 2);
         if (['\\(', '\\)', '\\[', '\\]'].includes(token) || /^\\(?:begin|end)\s*\{(?:math|displaymath|equation\*?|align\*?|aligned|alignedat|gather\*?|gathered|multline\*?|flalign\*?|alignat\*?|split|matrix|pmatrix|bmatrix|Bmatrix|vmatrix|Vmatrix|cases|array)\}/.test(selected.slice(i)) || /^\\(?:text|textrm|texttt|textbf|textit|mbox|url|path|detokenize|caption|section|subsection|title|author)\*?(?:\s*\{)/.test(selected.slice(i))) {
-          return { context: 'blocked', reason: 'The selection crosses a text or math boundary.' };
+          return { context: 'blocked', reason: wt('context.selectionCrossesTextMathBoundary', 'The selection crosses a text or math boundary.') };
         }
       }
       if (c === '{' && slashes % 2 === 0) braceDepth++;
-      if (c === '}' && slashes % 2 === 0 && --braceDepth < 0) return { context: 'blocked', reason: 'The selection crosses a brace-group boundary.' };
+      if (c === '}' && slashes % 2 === 0 && --braceDepth < 0) return { context: 'blocked', reason: wt('context.selectionCrossesBraceBoundary', 'The selection crosses a brace-group boundary.') };
       if (c === '\\') slashes++; else slashes = 0;
     }
-    if (braceDepth !== 0) return { context: 'blocked', reason: 'The selection crosses a brace-group boundary.' };
+    if (braceDepth !== 0) return { context: 'blocked', reason: wt('context.selectionCrossesBraceBoundary', 'The selection crosses a brace-group boundary.') };
   }
   const last = scan(source, end);
   if (last.context === 'blocked') return { context: 'blocked', reason: last.reason };
-  if (last.context !== first.context) return { context: 'blocked', reason: 'The selection crosses a text or math boundary.' };
+  if (last.context !== first.context) return { context: 'blocked', reason: wt('context.selectionCrossesTextMathBoundary', 'The selection crosses a text or math boundary.') };
   return { context: first.context };
 }
 
 export function symbolInsertion(command: string, context: MathContext, source: string, _start: number, end: number): { text: string; reason?: string } {
-  if (context === 'blocked') return { text: '', reason: 'This LaTeX context does not support symbol insertion.' };
+  if (context === 'blocked') return { text: '', reason: wt('context.symbolInsertionUnsupported', 'This LaTeX context does not support symbol insertion.') };
   if (context !== 'text') return { text: `${command}${/^[a-zA-Z]/.test(source.slice(end)) ? '{}' : ''}` };
   return { text: `\\(${command}\\)` };
 }

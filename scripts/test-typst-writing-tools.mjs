@@ -81,7 +81,7 @@ for (const [query, expected] of [
 ]) assert.ok(searchTypstSymbols(query).some((item) => item.nativeIdentifier === expected), `search ${query}`);
 assert.equal(searchTypstSymbols('not-a-symbol').length, 0);
 assert.ok(searchTypstSymbols('\\alpha').some((item) => item.nativeIdentifier === 'alpha'));
-assert.ok(searchTypstSymbols('', 'Arrows').every((item) => item.category === 'Arrows'));
+assert.ok(searchTypstSymbols('', 'arrows').every((item) => item.category === 'arrows'));
 
 const typst = getWritingSymbolAdapter('typst');
 assert.equal(typst.language, 'typst');

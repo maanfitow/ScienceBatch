@@ -1,5 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 import { ArrowDownToLine, Bold, Braces, Check, ChevronDown, CircleHelp, Grid2X2, Italic, ListFilter, Search, Sigma, Table2, X } from 'lucide-react';
 import { WritingSelect } from './WritingSelect';
 import katex from 'katex';
@@ -28,13 +30,21 @@ interface WritingRibbonProps {
 type DialogKind = 'symbols' | 'table' | 'matrix';
 type PreviewState = { html: string; error: string | null };
 const MATRIX_ENVS: NonNullable<MatrixOptions['environment']>[] = ['matrix', 'pmatrix', 'bmatrix', 'Bmatrix', 'vmatrix', 'Vmatrix'];
-const CATEGORIES: SymbolEntry['category'][] = ['Greek letters', 'Operators', 'Relations', 'Arrows', 'Sets and logic', 'Miscellaneous'];
+const CATEGORIES: SymbolEntry['category'][] = ['greek', 'operators', 'relations', 'arrows', 'logic', 'misc'];
+
+const CONTEXT_KEY_BY_VALUE: Record<MathContext, 'text' | 'mathInline' | 'mathDisplay' | 'mathEnvironment' | 'blocked'> = {
+  text: 'text',
+  'math-inline': 'mathInline',
+  'math-display': 'mathDisplay',
+  'math-environment': 'mathEnvironment',
+  blocked: 'blocked',
+};
 
 function renderMath(source: string): PreviewState {
   try {
     return { html: katex.renderToString(source || String.raw`\,`, { throwOnError: true, output: 'htmlAndMathml', trust: false, maxExpand: 100, maxSize: 10, displayMode: true }), error: null };
   } catch (error) {
-    return { html: '', error: error instanceof Error ? error.message : 'Preview is unavailable for this expression.' };
+    return { html: '', error: error instanceof Error ? error.message : i18n.t('editor:writing.previewUnavailableExpression') };
   }
 }
 
@@ -58,6 +68,7 @@ function seedOptions<T>(parsed: ParsedStructure<T> | null, fallback: T): T {
 }
 
 export const WritingRibbon: React.FC<WritingRibbonProps> = ({ bridge, editorState, onOpenMainFile }) => {
+  const { t } = useTranslation(['editor', 'common']);
   const adapter = getWritingSymbolAdapter(editorState.language);
   const [dialog, setDialog] = useState<DialogKind | null>(null);
   const [session, setSession] = useState<WritingSession | null>(null);
@@ -117,18 +128,18 @@ export const WritingRibbon: React.FC<WritingRibbonProps> = ({ bridge, editorStat
   const italicPlan = formattingSession ? planTextFormatting(formattingSession.language, formattingSession.source, formattingSession, 'italic') : null;
   const formattingDisabled = !editorState.editable || !bridge || !formattingSession || dialog !== null || Boolean(formattingSession && bridge && !bridge.isCurrent(formattingSession));
   const formattingDisabledReason = dialog !== null
-    ? 'Close the writing panel before formatting text.'
+    ? t('editor:writing.closePanelBeforeFormatting')
     : !editorState.editable
-      ? editorState.reason || 'Select an editable source before formatting text.'
+      ? editorState.reason || t('editor:writing.selectEditableSource')
       : !bridge
-        ? 'Formatting is unavailable because the editor session is not ready.'
+        ? t('editor:writing.sessionNotReady')
         : !formattingSession
-          ? 'Select an active source editor before formatting text.'
+          ? t('editor:writing.selectActiveSourceEditor')
           : formattingSession && !bridge.isCurrent(formattingSession)
-            ? 'The editor session changed. Retry after it refreshes.'
+            ? t('editor:writing.sessionChangedRefresh')
             : undefined;
   const manualEditHint = editorState.editable && parsedStructureAtCursor && !parsedStructureAtCursor.compatible
-    ? parsedStructureAtCursor.reason ?? 'This structure requires manual editing in the source.'
+    ? parsedStructureAtCursor.reason ?? t('editor:writing.manualEditRequired')
     : '';
   const formattingHint = status || formattingDisabledReason || (!boldPlan?.enabled ? boldPlan?.reason : undefined) || (!italicPlan?.enabled ? italicPlan?.reason : undefined) || (!available ? editorState.reason : '');
   const ribbonHint = manualEditHint || formattingHint;
@@ -237,17 +248,20 @@ export const WritingRibbon: React.FC<WritingRibbonProps> = ({ bridge, editorStat
   };
 
   const applyTextFormatting = (kind: 'bold' | 'italic') => {
-    if (dialog !== null) { setStatus('Close the writing panel before formatting text.'); return; }
-    if (!editorState.editable) { setStatus(editorState.reason || 'Select an editable source before formatting text.'); return; }
-    if (!bridge) { setStatus('Formatting is unavailable because the editor session is not ready.'); return; }
+    if (dialog !== null) { setStatus(t('editor:writing.closePanelBeforeFormatting')); return; }
+    if (!editorState.editable) { setStatus(editorState.reason || t('editor:writing.selectEditableSource')); return; }
+    if (!bridge) { setStatus(t('editor:writing.sessionNotReady')); return; }
     const captured = bridge.capture();
-    if (!captured) { setStatus(editorState.reason || 'Select an editable source before formatting text.'); return; }
+    if (!captured) { setStatus(editorState.reason || t('editor:writing.selectEditableSource')); return; }
     const plan = planTextFormatting(captured.language, captured.source, captured, kind);
-    if (!plan.enabled || !plan.change) { setStatus(plan.reason ?? 'This selection cannot be formatted here.'); return; }
-    if (!bridge.isCurrent(captured)) { setStatus('The editor changed. Retry the formatting action.'); return; }
-    if (!bridge.apply(captured, plan.change)) { setStatus('The editor changed before formatting could be applied. Retry the action.'); return; }
-    const label = kind === 'bold' ? 'Bold' : 'Italic';
-    setStatus(`${label} formatting ${plan.active ? 'removed' : 'applied'}.`);
+    if (!plan.enabled || !plan.change) { setStatus(plan.reason ?? t('editor:writing.selectionCannotBeFormatted')); return; }
+    if (!bridge.isCurrent(captured)) { setStatus(t('editor:writing.editorChangedRetry')); return; }
+    if (!bridge.apply(captured, plan.change)) { setStatus(t('editor:writing.editorChangedBeforeApply')); return; }
+    setStatus(
+      kind === 'bold'
+        ? (plan.active ? t('editor:writing.boldRemoved') : t('editor:writing.boldApplied'))
+        : (plan.active ? t('editor:writing.italicRemoved') : t('editor:writing.italicApplied')),
+    );
   };
 
   const open = (kind: DialogKind) => {
@@ -269,7 +283,7 @@ export const WritingRibbon: React.FC<WritingRibbonProps> = ({ bridge, editorStat
     if (adapter.language === 'typst') {
       const parsed = parseTypstStructureAt(captured.source, captured.active);
       if (!parsed || parsed.kind !== kind || !parsed.compatible) {
-        setStatus((parsed && 'reason' in parsed ? parsed.reason : undefined) ?? `No compatible ${kind} was found at the cursor.`);
+        setStatus((parsed && 'reason' in parsed ? parsed.reason : undefined) ?? t(kind === 'table' ? 'editor:writing.noCompatibleTable' : 'editor:writing.noCompatibleMatrix'));
         return;
       }
       setSession({ ...captured, start: parsed.start, end: parsed.end });
@@ -282,7 +296,7 @@ export const WritingRibbon: React.FC<WritingRibbonProps> = ({ bridge, editorStat
     }
     const parsed = parseWritingStructureAt(captured.source, captured.active);
     if (!parsed || parsed.kind !== kind || !parsed.compatible) {
-      setStatus(parsed?.reason ?? `No compatible ${kind} was found at the cursor.`);
+      setStatus(parsed?.reason ?? t(kind === 'table' ? 'editor:writing.noCompatibleTable' : 'editor:writing.noCompatibleMatrix'));
       return;
     }
     setSession({ ...captured, start: parsed.start, end: parsed.end }); setEditing(parsed as ParsedStructure<TableOptions | MatrixOptions>); setTypstEditing(null); setMoreOptions(kind === 'table'); setSourceTab(false); setValidation(''); setStatus(''); setConfirmShrink(false); setPendingDimensions(null); setCompactOpen(false);
@@ -292,22 +306,22 @@ export const WritingRibbon: React.FC<WritingRibbonProps> = ({ bridge, editorStat
   };
 
   const apply = (text: string, selectedSession = session, replacement?: { start: number; end: number }) => {
-    if (!selectedSession || !bridge || !bridge.isCurrent(selectedSession)) { setValidation('The editor changed while this tool was open. Close it and try again.'); return null; }
+    if (!selectedSession || !bridge || !bridge.isCurrent(selectedSession)) { setValidation(t('editor:writing.editorChangedWhileOpen')); return null; }
     const start = replacement?.start ?? selectedSession.start;
     const end = replacement?.end ?? selectedSession.end;
     const caret = start + text.length;
     const result = bridge.apply(selectedSession, { start, end, text, selection: { anchor: caret, active: caret } });
-    if (!result) { setValidation('The edit could not be applied because the editor session changed.'); return null; }
+    if (!result) { setValidation(t('editor:writing.editCouldNotBeApplied')); return null; }
     return result;
   };
 
   const insertSymbol = (entry: SymbolEntry | null) => {
     if (!entry || !session || !bridge) return;
     const insertion = adapter.symbolInsertion(entry.command, rangeContext, session.source, session.start, session.end);
-    if (insertion.reason || !bridge.isCurrent(session)) { setValidation(insertion.reason ?? 'This symbol cannot be inserted at the current selection.'); return; }
+    if (insertion.reason || !bridge.isCurrent(session)) { setValidation(insertion.reason ?? t('editor:writing.symbolCannotBeInserted')); return; }
     const caret = session.start + insertion.text.length;
     const result = bridge.apply(session, { start: session.start, end: session.end, text: insertion.text, selection: { anchor: caret, active: caret } });
-    if (!result) { setValidation('The editor changed before the symbol could be inserted.'); return; }
+    if (!result) { setValidation(t('editor:writing.editorChangedBeforeSymbol')); return; }
     restoreAndClose(false);
   };
 
@@ -335,7 +349,7 @@ export const WritingRibbon: React.FC<WritingRibbonProps> = ({ bridge, editorStat
   let generationError = '';
   const matrixContext: MathContext = editing?.kind === 'matrix' ? 'math-environment' : context;
   try { generated = adapter.language === 'latex' ? (dialog === 'matrix' ? generateMatrix(matrix, matrixContext) : dialog === 'table' ? generateTable(table, 'text') : null) : null; }
-  catch (error) { generationError = error instanceof Error ? error.message : 'Unable to generate this structure.'; }
+  catch (error) { generationError = error instanceof Error ? error.message : t('editor:writing.unableToGenerateStructure'); }
   let matrixPreviewSource = '';
   if (dialog === 'matrix') {
     if (adapter.language === 'latex') { try { matrixPreviewSource = generateMatrix(matrix, 'math-environment'); } catch { matrixPreviewSource = ''; } }
@@ -349,9 +363,9 @@ export const WritingRibbon: React.FC<WritingRibbonProps> = ({ bridge, editorStat
 
   const insertStructure = () => {
     if (!session || !generated) return;
-    if (!editing && rangeContext === 'blocked') { setValidation(rangeResult.reason ?? 'The current selection crosses a LaTeX boundary.'); return; }
-    if (dialog === 'table' && !editing && rangeContext !== 'text') { setValidation('Tables can only be inserted in text mode.'); return; }
-    if (generationError || !generated) { setValidation(generationError || 'Unable to generate this structure.'); return; }
+    if (!editing && rangeContext === 'blocked') { setValidation(rangeResult.reason ?? t('editor:writing.selectionCrossesLatexBoundary')); return; }
+    if (dialog === 'table' && !editing && rangeContext !== 'text') { setValidation(t('editor:writing.tablesOnlyInTextMode')); return; }
+    if (generationError || !generated) { setValidation(generationError || t('editor:writing.unableToGenerateStructure')); return; }
     const result = apply(generated);
     if (result) restoreAndClose(false, false, result);
   };
@@ -359,28 +373,28 @@ export const WritingRibbon: React.FC<WritingRibbonProps> = ({ bridge, editorStat
   const addPackages = () => {
     if (!session || !bridge || !editorState.canAddPackages || requiredPackages.length === 0) return;
     const plan = planPackageAddition(session.source, requiredPackages, { start: session.start, end: session.end, anchor: session.anchor, active: session.active });
-    if (!plan?.verified) { setValidation(plan?.message ?? 'Package requirements could not be verified automatically.'); return; }
-    if (plan.packagesToAdd.length === 0) { setStatus('All required packages are already declared.'); return; }
+    if (!plan?.verified) { setValidation(plan?.message ?? t('editor:writing.packagesUnverified')); return; }
+    if (plan.packagesToAdd.length === 0) { setStatus(t('editor:writing.packagesAlreadyDeclared')); return; }
     const result = bridge.apply(session, plan.change);
-    if (!result) { setValidation('The editor changed before packages could be added.'); return; }
+    if (!result) { setValidation(t('editor:writing.editorChangedBeforePackages')); return; }
     const shift = plan.change.text.length - (plan.change.end - plan.change.start);
     const rebase = (offset: number) => offset >= plan.change.end ? offset + shift : offset;
     setSession({ ...result, start: rebase(session.start), end: rebase(session.end) });
     setEditing((old) => old ? { ...old, start: rebase(old.start), end: rebase(old.end) } : old);
-    setStatus('Packages added. Review the generated source, then insert when ready.');
+    setStatus(t('editor:writing.packagesAddedForStructure'));
   };
 
   const addSymbolPackages = () => {
     if (!session || !bridge || !activeSymbol || !editorState.canAddPackages) return;
     const plan = planPackageAddition(session.source, activeSymbol.packages, { start: session.start, end: session.end, anchor: session.anchor, active: session.active });
-    if (!plan?.verified) { setValidation(plan?.message ?? 'Package requirements could not be verified automatically.'); return; }
-    if (plan.packagesToAdd.length === 0) { setStatus('All required packages are already declared.'); return; }
+    if (!plan?.verified) { setValidation(plan?.message ?? t('editor:writing.packagesUnverified')); return; }
+    if (plan.packagesToAdd.length === 0) { setStatus(t('editor:writing.packagesAlreadyDeclared')); return; }
     const result = bridge.apply(session, plan.change);
-    if (!result) { setValidation('The editor changed before packages could be added.'); return; }
+    if (!result) { setValidation(t('editor:writing.editorChangedBeforePackages')); return; }
     const shift = plan.change.text.length - (plan.change.end - plan.change.start);
     const rebase = (offset: number) => offset >= plan.change.end ? offset + shift : offset;
     setSession({ ...result, start: rebase(session.start), end: rebase(session.end) });
-    setStatus('Packages added. The symbol insertion target has been preserved.');
+    setStatus(t('editor:writing.packagesAddedForSymbol'));
   };
 
   const keyDown = (event: React.KeyboardEvent<HTMLElement>) => {
@@ -414,68 +428,71 @@ export const WritingRibbon: React.FC<WritingRibbonProps> = ({ bridge, editorStat
     if (dialog !== 'symbols') trapDialogFocus(event);
   };
 
+  const languageLabel = adapter.language === 'typst' ? t('common:engines.typst') : t('common:engines.latex');
+  const contextLabel = t(`editor:writing.contexts.${CONTEXT_KEY_BY_VALUE[context]}`);
+
   return (
-    <div className="writing-ribbon" aria-label="Writing tools" ref={ribbonRef}>
+    <div className="writing-ribbon" aria-label={t('editor:writing.toolbarLabel')} ref={ribbonRef}>
       <div className="writing-ribbon-main">
-        <button type="button" className="writing-ribbon-button" onClick={() => open('symbols')} disabled={!available} title={available ? 'Browse and insert math symbols' : editorState.reason}>
-          <Sigma size={15} aria-hidden="true" /><span>Symbols</span>
+        <button type="button" className="writing-ribbon-button" onClick={() => open('symbols')} disabled={!available} title={available ? t('editor:writing.symbolsTooltip') : editorState.reason}>
+          <Sigma size={15} aria-hidden="true" /><span>{t('editor:writing.symbols')}</span>
         </button>
-        <button type="button" className="writing-ribbon-button" onClick={() => open('table')} disabled={!available || !adapter.supportsStructures} title={!adapter.supportsStructures ? 'Table creation is unavailable for this language.' : available ? 'Create a table' : editorState.reason}>
-          <Table2 size={15} aria-hidden="true" /><span>Table</span>
+        <button type="button" className="writing-ribbon-button" onClick={() => open('table')} disabled={!available || !adapter.supportsStructures} title={!adapter.supportsStructures ? t('editor:writing.tableUnavailable') : available ? t('editor:writing.tableTooltip') : editorState.reason}>
+          <Table2 size={15} aria-hidden="true" /><span>{t('editor:writing.table')}</span>
         </button>
-        <button type="button" className="writing-ribbon-button" onClick={() => open('matrix')} disabled={!available || !adapter.supportsStructures} title={!adapter.supportsStructures ? 'Matrix creation is unavailable for this language.' : available ? 'Create a matrix' : editorState.reason}>
-          <Grid2X2 size={15} aria-hidden="true" /><span>Matrix</span>
+        <button type="button" className="writing-ribbon-button" onClick={() => open('matrix')} disabled={!available || !adapter.supportsStructures} title={!adapter.supportsStructures ? t('editor:writing.matrixUnavailable') : available ? t('editor:writing.matrixTooltip') : editorState.reason}>
+          <Grid2X2 size={15} aria-hidden="true" /><span>{t('editor:writing.matrix')}</span>
         </button>
-        {editorState.editable && parsedStructureAtCursor?.compatible && <button type="button" className="writing-ribbon-edit" onClick={() => openExisting(parsedStructureAtCursor.kind)} title={`Edit compatible ${parsedStructureAtCursor.kind} at the cursor`}>Edit {parsedStructureAtCursor.kind}</button>}
+        {editorState.editable && parsedStructureAtCursor?.compatible && <button type="button" className="writing-ribbon-edit" onClick={() => openExisting(parsedStructureAtCursor.kind)} title={t(parsedStructureAtCursor.kind === 'table' ? 'editor:writing.editTableTooltip' : 'editor:writing.editMatrixTooltip')}>{t(parsedStructureAtCursor.kind === 'table' ? 'editor:writing.editTable' : 'editor:writing.editMatrix')}</button>}
       </div>
-      <div className="writing-ribbon-formatting" role="group" aria-label="Text formatting">
-        <button type="button" className={`writing-ribbon-format-button${boldPlan?.active ? ' is-active' : ''}`} aria-label="Bold" title={formattingDisabledReason ?? boldPlan?.reason ?? (!boldPlan?.enabled ? 'This selection cannot be formatted here.' : 'Bold')} aria-pressed={Boolean(boldPlan?.active)} disabled={formattingDisabled || !boldPlan?.enabled} onPointerDown={(event) => { if (event.button === 0) event.preventDefault(); }} onClick={() => applyTextFormatting('bold')}>
+      <div className="writing-ribbon-formatting" role="group" aria-label={t('editor:writing.formattingGroupLabel')}>
+        <button type="button" className={`writing-ribbon-format-button${boldPlan?.active ? ' is-active' : ''}`} aria-label={t('editor:writing.bold')} title={formattingDisabledReason ?? boldPlan?.reason ?? (!boldPlan?.enabled ? t('editor:writing.selectionCannotBeFormatted') : t('editor:writing.bold'))} aria-pressed={Boolean(boldPlan?.active)} disabled={formattingDisabled || !boldPlan?.enabled} onPointerDown={(event) => { if (event.button === 0) event.preventDefault(); }} onClick={() => applyTextFormatting('bold')}>
           <Bold size={15} aria-hidden="true" />
         </button>
-        <button type="button" className={`writing-ribbon-format-button${italicPlan?.active ? ' is-active' : ''}`} aria-label="Italic" title={formattingDisabledReason ?? italicPlan?.reason ?? (!italicPlan?.enabled ? 'This selection cannot be formatted here.' : 'Italic')} aria-pressed={Boolean(italicPlan?.active)} disabled={formattingDisabled || !italicPlan?.enabled} onPointerDown={(event) => { if (event.button === 0) event.preventDefault(); }} onClick={() => applyTextFormatting('italic')}>
+        <button type="button" className={`writing-ribbon-format-button${italicPlan?.active ? ' is-active' : ''}`} aria-label={t('editor:writing.italic')} title={formattingDisabledReason ?? italicPlan?.reason ?? (!italicPlan?.enabled ? t('editor:writing.selectionCannotBeFormatted') : t('editor:writing.italic'))} aria-pressed={Boolean(italicPlan?.active)} disabled={formattingDisabled || !italicPlan?.enabled} onPointerDown={(event) => { if (event.button === 0) event.preventDefault(); }} onClick={() => applyTextFormatting('italic')}>
           <Italic size={15} aria-hidden="true" />
         </button>
       </div>
       <span className="writing-ribbon-hint" aria-live="polite" title={manualEditHint || undefined}>{ribbonHint}</span>
       <div className="writing-ribbon-compact">
-        <button ref={compactTrigger} type="button" className="writing-ribbon-button" onClick={() => setCompactOpen((open) => !open)} disabled={!available && !(adapter.supportsStructures && editorState.editable && parsedStructureAtCursor?.compatible)} aria-expanded={compactOpen} aria-haspopup="menu"><Sigma size={15} aria-hidden="true" />Insert<ChevronDown size={13} aria-hidden="true" /></button>
+        <button ref={compactTrigger} type="button" className="writing-ribbon-button" onClick={() => setCompactOpen((open) => !open)} disabled={!available && !(adapter.supportsStructures && editorState.editable && parsedStructureAtCursor?.compatible)} aria-expanded={compactOpen} aria-haspopup="menu"><Sigma size={15} aria-hidden="true" />{t('editor:writing.insert')}<ChevronDown size={13} aria-hidden="true" /></button>
         {compactOpen && <div className="writing-compact-menu" role="menu" onKeyDown={(event) => { if (event.key === 'Escape') { event.preventDefault(); setCompactOpen(false); compactTrigger.current?.focus(); } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')); const index = items.indexOf(document.activeElement as HTMLButtonElement); items[(index + (event.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length]?.focus(); } }}>
-          <button role="menuitem" type="button" disabled={!available} onClick={() => open('symbols')}>Symbols</button><button role="menuitem" type="button" disabled={!available || !adapter.supportsStructures} title={!adapter.supportsStructures ? 'Table creation is unavailable for this language.' : undefined} onClick={() => open('table')}>Table</button><button role="menuitem" type="button" disabled={!available || !adapter.supportsStructures} title={!adapter.supportsStructures ? 'Matrix creation is unavailable for this language.' : undefined} onClick={() => open('matrix')}>Matrix</button>
-          {editorState.editable && parsedStructureAtCursor?.compatible && <button role="menuitem" type="button" onClick={() => openExisting(parsedStructureAtCursor.kind)}>Edit {parsedStructureAtCursor.kind}</button>}
+          <button role="menuitem" type="button" disabled={!available} onClick={() => open('symbols')}>{t('editor:writing.symbols')}</button><button role="menuitem" type="button" disabled={!available || !adapter.supportsStructures} title={!adapter.supportsStructures ? t('editor:writing.tableUnavailable') : undefined} onClick={() => open('table')}>{t('editor:writing.table')}</button><button role="menuitem" type="button" disabled={!available || !adapter.supportsStructures} title={!adapter.supportsStructures ? t('editor:writing.matrixUnavailable') : undefined} onClick={() => open('matrix')}>{t('editor:writing.matrix')}</button>
+          {editorState.editable && parsedStructureAtCursor?.compatible && <button role="menuitem" type="button" onClick={() => openExisting(parsedStructureAtCursor.kind)}>{t(parsedStructureAtCursor.kind === 'table' ? 'editor:writing.editTable' : 'editor:writing.editMatrix')}</button>}
         </div>}
       </div>
       {dialog === 'symbols' && <section className="writing-dialog writing-dialog-symbols writing-symbol-popover" style={{ maxHeight: symbolPopoverMaxHeight }} role="dialog" aria-modal="false" aria-labelledby="writing-title" ref={dialogRef} onKeyDown={keyDown}>
         <header className="writing-dialog-header">
-          <div className="writing-dialog-heading"><Sigma size={18} aria-hidden="true" /><div><h2 id="writing-title">Insert a symbol</h2><p>{sessionCurrent ? `${adapter.language === 'typst' ? 'Typst' : 'LaTeX'} · ${context.replace('-', ' ')}` : 'The editor session is no longer current.'}</p></div></div>
-          <button type="button" className="writing-icon-button" aria-label="Close writing tools" onClick={() => restoreAndClose()}><X size={17} /></button>
+          <div className="writing-dialog-heading"><Sigma size={18} aria-hidden="true" /><div><h2 id="writing-title">{t('editor:dialogs.insertSymbolTitle')}</h2><p>{sessionCurrent ? `${languageLabel} · ${contextLabel}` : t('editor:writing.sessionNoLongerCurrent')}</p></div></div>
+          <button type="button" className="writing-icon-button" aria-label={t('editor:writing.closeWritingTools')} onClick={() => restoreAndClose()}><X size={17} /></button>
         </header>
-        {!sessionCurrent && <p className="writing-alert" role="alert">The editor changed while this panel was open. Close it and retry.</p>}
+        {!sessionCurrent && <p className="writing-alert" role="alert">{t('editor:writing.panelChangedRetry')}</p>}
         <div className="writing-symbols-body">
           <div className="writing-symbol-layout">
             <div className="writing-symbol-list-column">
-              <label className="writing-search"><Search size={15} aria-hidden="true" /><span className="sr-only">Search symbols</span><input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={adapter.language === 'typst' ? 'Search by name, identifier, or alias' : 'Search by name, command, or alias'} aria-activedescendant={activeSymbol ? `symbol-${safeSymbolIndex}` : undefined} /></label>
-              <div ref={symbolResultsRef} className="writing-symbol-results" role="listbox" aria-label="Math symbols" aria-activedescendant={activeSymbol ? `symbol-${safeSymbolIndex}` : undefined}>
+              <label className="writing-search"><Search size={15} aria-hidden="true" /><span className="sr-only">{t('editor:dialogs.searchSymbolsLabel')}</span><input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={adapter.language === 'typst' ? t('editor:dialogs.searchTypstPlaceholder') : t('editor:dialogs.searchLatexPlaceholder')} aria-activedescendant={activeSymbol ? `symbol-${safeSymbolIndex}` : undefined} /></label>
+              <div ref={symbolResultsRef} className="writing-symbol-results" role="listbox" aria-label={t('editor:dialogs.mathSymbolsLabel')} aria-activedescendant={activeSymbol ? `symbol-${safeSymbolIndex}` : undefined}>
               {symbols.map((entry, index) => <button type="button" role="option" aria-selected={index === safeSymbolIndex} tabIndex={index === safeSymbolIndex ? 0 : -1} id={`symbol-${index}`} className={`writing-symbol-option ${index === safeSymbolIndex ? 'is-selected' : ''}`} key={entry.command} onFocus={() => setSymbolIndex(index)} onClick={() => setSymbolIndex(index)}>
                 <span className="writing-symbol-glyph">{entry.glyph}</span><span className="writing-symbol-name">{entry.name}</span><code>{entry.command}</code>{index === safeSymbolIndex && <Check className="writing-symbol-check" size={14} aria-hidden="true" />}
               </button>)}
-              {symbols.length === 0 && <p className="writing-empty">No symbols match this search.</p>}
+              {symbols.length === 0 && <p className="writing-empty">{t('editor:dialogs.noMatchingSymbols')}</p>}
               </div>
             </div>
             <aside className="writing-symbol-preview" aria-live="polite">
-              <div className="writing-category"><ListFilter size={14} aria-hidden="true" /><WritingSelect label="Category" value={category} options={[{ value: 'All', label: 'All categories' }, ...CATEGORIES.map((item) => ({ value: item, label: item }))]} onValueChange={(value) => setCategory(value as typeof category)} /></div>
+              <div className="writing-category"><ListFilter size={14} aria-hidden="true" /><WritingSelect label={t('editor:dialogs.categoryLabel')} value={category} options={[{ value: 'All', label: t('editor:writing.categories.all') }, ...CATEGORIES.map((item) => ({ value: item, label: t(`editor:writing.categories.${item}`) }))]} onValueChange={(value) => setCategory(value as typeof category)} /></div>
               {activeSymbol ? <>
                 {adapter.previewKind === 'glyph'
-                  ? <div className="writing-glyph-preview" role="img" aria-label={`${activeSymbol.name} symbol illustration`} title="Glyph illustration only; it is not compiled Typst output and may not match the document font.">{activeSymbol.glyph}</div>
-                  : symbolPreview?.html ? <div className="writing-preview-math" dangerouslySetInnerHTML={{ __html: symbolPreview.html }} /> : <div className="writing-preview-fallback" role="img" aria-label={`${activeSymbol.name} symbol illustration`}>{activeSymbol.glyph}</div>}
+                  ? <div className="writing-glyph-preview" role="img" aria-label={t('editor:dialogs.symbolIllustrationLabel', { name: activeSymbol.name })} title={t('editor:dialogs.glyphIllustrationTitle')}>{activeSymbol.glyph}</div>
+                  : symbolPreview?.html ? <div className="writing-preview-math" dangerouslySetInnerHTML={{ __html: symbolPreview.html }} /> : <div className="writing-preview-fallback" role="img" aria-label={t('editor:dialogs.symbolIllustrationLabel', { name: activeSymbol.name })}>{activeSymbol.glyph}</div>}
                 <h3>{activeSymbol.name}</h3><code>{activeSymbol.command}</code>
-                <p className="writing-final-syntax">{finalSymbolSyntax || (symbolInsertionResult?.reason ? 'Unavailable in this context' : activeSymbol.command)}</p>
-                {adapter.previewKind === 'glyph' && <p className="writing-note">Glyph illustration only. This is not compiled Typst output and may not match the document font.</p>}
-                {symbolPreview?.error && <p className="writing-note">Preview unavailable. The LaTeX command will still be inserted.</p>}
-                {!!symbolPackages.length && <><p className="writing-note">Requires {symbolPackages.map((name) => `\`${name}\``).join(', ')}{symbolPackageState.missing.length === 0 && !symbolPackageState.uncertain ? ' · loaded' : ''}{symbolPackageState.uncertain ? ' · loading could not be verified' : ''}</p>{symbolPackageState.missing.length > 0 && (editorState.canAddPackages && symbolPackageEligibility.eligible && !symbolPackageState.uncertain ? <button type="button" className="writing-link-button" onClick={addSymbolPackages}>Add packages</button> : <><code className="writing-package-source">\usepackage{'{' + symbolPackageState.missing.join(',') + '}'}</code>{onOpenMainFile && <button type="button" className="writing-link-button" onClick={() => restoreAndClose(true, true)}>Open main file</button>}</>)}</>}
-              </> : <><CircleHelp size={20} aria-hidden="true" /><p>Select a symbol to preview its syntax.</p></>}
+                <p className="writing-final-syntax">{finalSymbolSyntax || (symbolInsertionResult?.reason ? t('editor:dialogs.unavailableInContext') : activeSymbol.command)}</p>
+                {adapter.previewKind === 'glyph' && <p className="writing-note">{t('editor:dialogs.glyphIllustrationNote')}</p>}
+                {symbolPreview?.error && <p className="writing-note">{t('editor:dialogs.symbolPreviewUnavailable')}</p>}
+                {!!symbolPackages.length && <><p className="writing-note">{t('editor:dialogs.requiresPackages', { packages: symbolPackages.map((name) => `\`${name}\``).join(', ') })}{symbolPackageState.missing.length === 0 && !symbolPackageState.uncertain ? t('editor:dialogs.packagesLoadedSuffix') : ''}{symbolPackageState.uncertain ? t('editor:dialogs.packagesUncertainSuffix') : ''}</p>{symbolPackageState.missing.length > 0 && (editorState.canAddPackages && symbolPackageEligibility.eligible && !symbolPackageState.uncertain ? <button type="button" className="writing-link-button" onClick={addSymbolPackages}>{t('editor:dialogs.addPackages')}</button> : <><code className="writing-package-source">\usepackage{'{' + symbolPackageState.missing.join(',') + '}'}</code>{onOpenMainFile && <button type="button" className="writing-link-button" onClick={() => restoreAndClose(true, true)}>{t('editor:dialogs.openMainFile')}</button>}</>)}</>}
+              </> : <><CircleHelp size={20} aria-hidden="true" /><p>{t('editor:dialogs.selectSymbolHint')}</p></>}
             </aside>
           </div>
-          <div className="writing-dialog-footer"><span className="writing-inline-status" role="status">{validation || symbolInsertionResult?.reason || rangeResult.reason}</span><button type="button" className="writing-secondary-button" onClick={() => restoreAndClose()}>Cancel</button><button type="button" className="writing-primary-button" aria-label={activeSymbol ? `Insert ${activeSymbol.name} (${activeSymbol.command})` : 'Insert symbol'} onClick={() => insertSymbol(activeSymbol)} disabled={!activeSymbol || !sessionCurrent || rangeContext === 'blocked' || Boolean(symbolInsertionResult?.reason)}><ArrowDownToLine size={15} />Insert</button></div>
+          <div className="writing-dialog-footer"><span className="writing-inline-status" role="status">{validation || symbolInsertionResult?.reason || rangeResult.reason}</span><button type="button" className="writing-secondary-button" onClick={() => restoreAndClose()}>{t('common:actions.cancel')}</button><button type="button" className="writing-primary-button" aria-label={activeSymbol ? t('editor:dialogs.insertSymbolAria', { name: activeSymbol.name, command: activeSymbol.command }) : t('editor:dialogs.insertSymbolFallbackAria')} onClick={() => insertSymbol(activeSymbol)} disabled={!activeSymbol || !sessionCurrent || rangeContext === 'blocked' || Boolean(symbolInsertionResult?.reason)}><ArrowDownToLine size={15} />{t('editor:writing.insert')}</button></div>
         </div>
       </section>}
       {dialog && dialog !== 'symbols' && createPortal(<div className="writing-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) restoreAndClose(); }}>
@@ -494,46 +511,46 @@ export const WritingRibbon: React.FC<WritingRibbonProps> = ({ bridge, editorStat
           <header className="writing-dialog-header">
             <div className="writing-dialog-heading">
               {dialog === 'table' ? <Table2 size={18} aria-hidden="true" /> : <Grid2X2 size={18} aria-hidden="true" />}
-              <div><h2 id="writing-title">{dialog === 'table' ? (editing ? 'Edit table' : 'Create a table') : (editing ? 'Edit matrix' : 'Create a matrix')}</h2>
-                <p>{sessionCurrent ? `LaTeX · ${context.replace('-', ' ')}` : 'The editor session is no longer current.'}</p></div>
+              <div><h2 id="writing-title">{dialog === 'table' ? (editing ? t('editor:dialogs.editTable') : t('editor:dialogs.createTable')) : (editing ? t('editor:dialogs.editMatrix') : t('editor:dialogs.createMatrix'))}</h2>
+                <p>{sessionCurrent ? `${t('common:engines.latex')} · ${contextLabel}` : t('editor:writing.sessionNoLongerCurrent')}</p></div>
             </div>
-            <button type="button" className="writing-icon-button" aria-label="Close writing tools" onClick={() => restoreAndClose()}><X size={17} /></button>
+            <button type="button" className="writing-icon-button" aria-label={t('editor:writing.closeWritingTools')} onClick={() => restoreAndClose()}><X size={17} /></button>
           </header>
-          {!sessionCurrent && <p className="writing-alert" role="alert">The editor changed while this panel was open. Close it and retry.</p>}
+          {!sessionCurrent && <p className="writing-alert" role="alert">{t('editor:writing.panelChangedRetry')}</p>}
           <div className="writing-builder-body">
-            <div className="writing-builder-tabs" role="tablist" aria-label="Builder view"><button role="tab" aria-selected={!sourceTab} className={!sourceTab ? 'is-active' : ''} onClick={() => setSourceTab(false)}>Build</button><button role="tab" aria-selected={sourceTab} className={sourceTab ? 'is-active' : ''} onClick={() => setSourceTab(true)}>Source</button></div>
+            <div className="writing-builder-tabs" role="tablist" aria-label={t('editor:dialogs.builderViewLabel')}><button role="tab" aria-selected={!sourceTab} className={!sourceTab ? 'is-active' : ''} onClick={() => setSourceTab(false)}>{t('editor:dialogs.buildTab')}</button><button role="tab" aria-selected={sourceTab} className={sourceTab ? 'is-active' : ''} onClick={() => setSourceTab(true)}>{t('editor:dialogs.sourceTab')}</button></div>
             {!sourceTab ? <div className="writing-builder-grid">
               <div className="writing-builder-controls">
-                <fieldset className="writing-dimensions"><legend>Dimensions</legend>
-                  <label>Rows<input ref={rowsInputRef} type="number" min="1" max={dialog === 'table' ? 20 : 12} value={pendingDimensions?.rows ?? (dialog === 'table' ? table.rows : matrix.rows)} onChange={(event) => changeDimensions(dialog, Number(event.target.value), pendingDimensions?.columns ?? (dialog === 'table' ? table.columns : matrix.columns))} /></label>
-                  <label>Columns<input type="number" min="1" max={dialog === 'table' ? 10 : 12} value={pendingDimensions?.columns ?? (dialog === 'table' ? table.columns : matrix.columns)} onChange={(event) => changeDimensions(dialog, pendingDimensions?.rows ?? (dialog === 'table' ? table.rows : matrix.rows), Number(event.target.value))} /></label>
+                <fieldset className="writing-dimensions"><legend>{t('editor:dialogs.dimensions')}</legend>
+                  <label>{t('editor:dialogs.rows')}<input ref={rowsInputRef} type="number" min="1" max={dialog === 'table' ? 20 : 12} value={pendingDimensions?.rows ?? (dialog === 'table' ? table.rows : matrix.rows)} onChange={(event) => changeDimensions(dialog, Number(event.target.value), pendingDimensions?.columns ?? (dialog === 'table' ? table.columns : matrix.columns))} /></label>
+                  <label>{t('editor:dialogs.columns')}<input type="number" min="1" max={dialog === 'table' ? 10 : 12} value={pendingDimensions?.columns ?? (dialog === 'table' ? table.columns : matrix.columns)} onChange={(event) => changeDimensions(dialog, pendingDimensions?.rows ?? (dialog === 'table' ? table.rows : matrix.rows), Number(event.target.value))} /></label>
                 </fieldset>
-                {confirmShrink && <div className="writing-confirm-shrink" role="alert"><span>Reducing dimensions will remove populated cells.</span><button type="button" onClick={() => { setConfirmShrink(false); setPendingDimensions(null); window.requestAnimationFrame(() => rowsInputRef.current?.focus()); }}>Keep cells</button><button type="button" onClick={confirmDimensions}>Confirm reduction</button></div>}
+                {confirmShrink && <div className="writing-confirm-shrink" role="alert"><span>{t('editor:dialogs.shrinkWarning')}</span><button type="button" onClick={() => { setConfirmShrink(false); setPendingDimensions(null); window.requestAnimationFrame(() => rowsInputRef.current?.focus()); }}>{t('editor:dialogs.keepCells')}</button><button type="button" onClick={confirmDimensions}>{t('editor:dialogs.confirmReduction')}</button></div>}
                 {dialog === 'table' ? <>
-                  <fieldset className="writing-dimensions"><legend>Column alignment</legend><div className="writing-alignment-row">{Array.from({ length: table.columns }, (_, column) => <div className="writing-alignment-field" key={column}><span>Column {column + 1}</span><WritingSelect label={`Column ${column + 1} alignment`} value={table.alignment?.[column] ?? 'l'} options={[{ value: 'l', label: 'Left' }, { value: 'c', label: 'Center' }, { value: 'r', label: 'Right' }]} onValueChange={(value) => setTable((old) => ({ ...old, alignment: old.alignment?.map((current, index) => index === column ? value as 'l' | 'c' | 'r' : current) }))} /></div>)}</div></fieldset>
-                  <button type="button" className="writing-more-toggle" aria-expanded={moreOptions} onClick={() => setMoreOptions((value) => !value)}>More options <ChevronDown size={14} className={moreOptions ? 'is-open' : ''} /></button>
+                  <fieldset className="writing-dimensions"><legend>{t('editor:dialogs.columnAlignment')}</legend><div className="writing-alignment-row">{Array.from({ length: table.columns }, (_, column) => <div className="writing-alignment-field" key={column}><span>{t('editor:dialogs.columnLabel', { index: column + 1 })}</span><WritingSelect label={t('editor:dialogs.columnAlignmentLabel', { index: column + 1 })} value={table.alignment?.[column] ?? 'l'} options={[{ value: 'l', label: t('editor:dialogs.alignLeft') }, { value: 'c', label: t('editor:dialogs.alignCenter') }, { value: 'r', label: t('editor:dialogs.alignRight') }]} onValueChange={(value) => setTable((old) => ({ ...old, alignment: old.alignment?.map((current, index) => index === column ? value as 'l' | 'c' | 'r' : current) }))} /></div>)}</div></fieldset>
+                  <button type="button" className="writing-more-toggle" aria-expanded={moreOptions} onClick={() => setMoreOptions((value) => !value)}>{t('editor:dialogs.moreOptions')} <ChevronDown size={14} className={moreOptions ? 'is-open' : ''} /></button>
                   {moreOptions && <div className="writing-more-options">
-                    <div className="writing-select-field"><span>Format</span><WritingSelect label="Format" value={table.format ?? 'plain'} options={[{ value: 'plain', label: 'Plain' }, { value: 'grid', label: 'Grid' }, { value: 'booktabs', label: 'Booktabs' }]} onValueChange={(value) => setTable((old) => ({ ...old, format: value as TableOptions['format'] }))} /></div>
-                    <label className="writing-check"><input type="checkbox" checked={table.header ?? false} onChange={(event) => setTable((old) => ({ ...old, header: event.target.checked }))} />Bold header row</label>
-                    <label className="writing-check"><input type="checkbox" checked={table.wrapInTable ?? false} onChange={(event) => setTable((old) => ({ ...old, wrapInTable: event.target.checked }))} />Wrap in table environment</label>
-                    {table.wrapInTable && <><label>Caption<input value={table.caption ?? ''} onChange={(event) => setTable((old) => ({ ...old, caption: event.target.value }))} placeholder="Optional caption" /></label><label className="writing-check"><input type="checkbox" checked={table.captionLatex ?? false} onChange={(event) => setTable((old) => ({ ...old, captionLatex: event.target.checked }))} />Caption is LaTeX</label><label>Label<input value={table.label ?? ''} onChange={(event) => setTable((old) => ({ ...old, label: event.target.value }))} placeholder="Optional label" /></label></>}
+                    <div className="writing-select-field"><span>{t('editor:dialogs.format')}</span><WritingSelect label={t('editor:dialogs.format')} value={table.format ?? 'plain'} options={[{ value: 'plain', label: t('editor:dialogs.formatPlain') }, { value: 'grid', label: t('editor:dialogs.formatGrid') }, { value: 'booktabs', label: t('editor:dialogs.formatBooktabs') }]} onValueChange={(value) => setTable((old) => ({ ...old, format: value as TableOptions['format'] }))} /></div>
+                    <label className="writing-check"><input type="checkbox" checked={table.header ?? false} onChange={(event) => setTable((old) => ({ ...old, header: event.target.checked }))} />{t('editor:dialogs.boldHeaderRow')}</label>
+                    <label className="writing-check"><input type="checkbox" checked={table.wrapInTable ?? false} onChange={(event) => setTable((old) => ({ ...old, wrapInTable: event.target.checked }))} />{t('editor:dialogs.wrapInTable')}</label>
+                    {table.wrapInTable && <><label>{t('editor:dialogs.caption')}<input value={table.caption ?? ''} onChange={(event) => setTable((old) => ({ ...old, caption: event.target.value }))} placeholder={t('editor:dialogs.optionalCaption')} /></label><label className="writing-check"><input type="checkbox" checked={table.captionLatex ?? false} onChange={(event) => setTable((old) => ({ ...old, captionLatex: event.target.checked }))} />{t('editor:dialogs.captionIsLatex')}</label><label>{t('editor:dialogs.label')}<input value={table.label ?? ''} onChange={(event) => setTable((old) => ({ ...old, label: event.target.value }))} placeholder={t('editor:dialogs.optionalLabel')} /></label></>}
                   </div>}
-                </> : <div className="writing-select-field"><span>Matrix delimiters</span><WritingSelect label="Matrix delimiters" value={matrix.environment ?? 'pmatrix'} options={MATRIX_ENVS.map((env) => ({ value: env, label: env }))} onValueChange={(value) => setMatrix((old) => ({ ...old, environment: value as MatrixOptions['environment'] }))} /></div>}
+                </> : <div className="writing-select-field"><span>{t('editor:dialogs.matrixDelimiters')}</span><WritingSelect label={t('editor:dialogs.matrixDelimiters')} value={matrix.environment ?? 'pmatrix'} options={MATRIX_ENVS.map((env) => ({ value: env, label: env }))} onValueChange={(value) => setMatrix((old) => ({ ...old, environment: value as MatrixOptions['environment'] }))} /></div>}
               </div>
-              <div className="writing-cell-editor" aria-label="Structure cells">
+              <div className="writing-cell-editor" aria-label={t('editor:dialogs.structureCellsLabel')}>
                 {Array.from({ length: dialog === 'table' ? table.rows : matrix.rows }, (_, row) => <div className="writing-cell-row" key={row}>{Array.from({ length: dialog === 'table' ? table.columns : matrix.columns }, (_, column) => {
                   const value = dialog === 'table' ? table.cells[row]?.[column] ?? '' : matrix.cells[row]?.[column] ?? '';
                   const isLatex = dialog === 'matrix' || (table.cellLatex?.[row]?.[column] ?? table.latexCells ?? false);
                   const setCell = (next: string) => dialog === 'table' ? setTable((old) => ({ ...old, cells: old.cells.map((cells, r) => r === row ? cells.map((cell, c) => c === column ? next : cell) : cells) })) : setMatrix((old) => ({ ...old, cells: old.cells.map((cells, r) => r === row ? cells.map((cell, c) => c === column ? next : cell) : cells) }));
-                  return <label className={`writing-cell ${dialog === 'table' && table.header && row === 0 ? 'is-header' : ''}`} key={column}><span className="sr-only">Row {row + 1}, column {column + 1}{dialog === 'table' && table.header && row === 0 ? ', header' : ''}</span><input aria-label={`Row ${row + 1}, column ${column + 1}`} value={value} onChange={(event) => setCell(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); (event.currentTarget.closest('.writing-cell')?.nextElementSibling?.querySelector('input') as HTMLInputElement | null)?.focus(); } }} />{dialog === 'table' && <button type="button" className="writing-cell-mode" title={isLatex ? 'Cell source is LaTeX' : 'Cell content is escaped text'} aria-label={`Toggle LaTeX input for row ${row + 1}, column ${column + 1}`} aria-pressed={Boolean(isLatex)} onClick={() => setTable((old) => ({ ...old, cellLatex: old.cells.map((cells, r) => cells.map((_, c) => r === row && c === column ? !(old.cellLatex?.[r]?.[c] ?? old.latexCells ?? false) : (old.cellLatex?.[r]?.[c] ?? old.latexCells ?? false))) }))}><Braces size={12} /></button>}</label>;
+                  return <label className={`writing-cell ${dialog === 'table' && table.header && row === 0 ? 'is-header' : ''}`} key={column}><span className="sr-only">{dialog === 'table' && table.header && row === 0 ? t('editor:dialogs.cellHeaderAria', { row: row + 1, column: column + 1 }) : t('editor:dialogs.cellAria', { row: row + 1, column: column + 1 })}</span><input aria-label={t('editor:dialogs.cellAria', { row: row + 1, column: column + 1 })} value={value} onChange={(event) => setCell(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); (event.currentTarget.closest('.writing-cell')?.nextElementSibling?.querySelector('input') as HTMLInputElement | null)?.focus(); } }} />{dialog === 'table' && <button type="button" className="writing-cell-mode" title={isLatex ? t('editor:dialogs.cellIsLatexTooltip') : t('editor:dialogs.cellIsEscapedTooltip')} aria-label={t('editor:dialogs.toggleLatexInputAria', { row: row + 1, column: column + 1 })} aria-pressed={Boolean(isLatex)} onClick={() => setTable((old) => ({ ...old, cellLatex: old.cells.map((cells, r) => cells.map((_, c) => r === row && c === column ? !(old.cellLatex?.[r]?.[c] ?? old.latexCells ?? false) : (old.cellLatex?.[r]?.[c] ?? old.latexCells ?? false))) }))}><Braces size={12} /></button>}</label>;
                 })}</div>)}
                 {dialog === 'table' ? <TablePreview options={table} /> : preview?.html ? <div className="writing-preview-math writing-matrix-preview" dangerouslySetInnerHTML={{ __html: preview.html }} /> : <div className="writing-preview-fallback"><code>{matrix.environment}</code></div>}
-                {preview?.error && <p className="writing-note" role="status">Preview unavailable: {preview.error}</p>}
+                {preview?.error && <p className="writing-note" role="status">{t('editor:dialogs.previewUnavailableWithError', { error: preview.error })}</p>}
               </div>
             </div> : <div className="writing-source-pane"><pre>{generated ?? ''}</pre></div>}
-            {requiredPackages.length > 0 && <div className="writing-package-row"><span>Requires {requiredPackages.map((name) => `\`${name}\``).join(', ')}{requiredPackageState.missing.length === 0 && !requiredPackageState.uncertain ? ' · loaded' : ''}{requiredPackageState.uncertain ? ' · loading could not be verified' : ''}</span>{requiredPackageState.missing.length > 0 && packagePlanEligible ? <button type="button" className="writing-link-button" onClick={addPackages}>Add packages</button> : requiredPackageState.missing.length > 0 ? <span className="writing-subfile-note">{packageEligibility.reason ?? 'Open the main file to add packages.'}</span> : null}</div>}
-            {requiredPackages.length > 0 && requiredPackageState.missing.length > 0 && !packagePlanEligible && <div className="writing-package-row"><code className="writing-package-source">\usepackage{'{' + requiredPackageState.missing.join(',') + '}'}</code>{onOpenMainFile && <button type="button" className="writing-link-button" onClick={() => restoreAndClose(true, true)}>Open main file</button>}</div>}
-            <div className="writing-dialog-footer"><span className="writing-inline-status" role="status">{validation || status || generationError}</span><button type="button" className="writing-secondary-button" onClick={() => restoreAndClose()}>Cancel</button><button type="button" className="writing-primary-button" onClick={insertStructure} disabled={!sessionCurrent || Boolean(generationError) || (!editing && (dialog === 'table' ? rangeContext !== 'text' : rangeContext === 'blocked'))}><ArrowDownToLine size={15} />{editing ? 'Update' : 'Insert'}</button></div>
+            {requiredPackages.length > 0 && <div className="writing-package-row"><span>{t('editor:dialogs.requiresPackages', { packages: requiredPackages.map((name) => `\`${name}\``).join(', ') })}{requiredPackageState.missing.length === 0 && !requiredPackageState.uncertain ? t('editor:dialogs.packagesLoadedSuffix') : ''}{requiredPackageState.uncertain ? t('editor:dialogs.packagesUncertainSuffix') : ''}</span>{requiredPackageState.missing.length > 0 && packagePlanEligible ? <button type="button" className="writing-link-button" onClick={addPackages}>{t('editor:dialogs.addPackages')}</button> : requiredPackageState.missing.length > 0 ? <span className="writing-subfile-note">{packageEligibility.reason ?? t('editor:dialogs.openMainFileToAddPackages')}</span> : null}</div>}
+            {requiredPackages.length > 0 && requiredPackageState.missing.length > 0 && !packagePlanEligible && <div className="writing-package-row"><code className="writing-package-source">\usepackage{'{' + requiredPackageState.missing.join(',') + '}'}</code>{onOpenMainFile && <button type="button" className="writing-link-button" onClick={() => restoreAndClose(true, true)}>{t('editor:dialogs.openMainFile')}</button>}</div>}
+            <div className="writing-dialog-footer"><span className="writing-inline-status" role="status">{validation || status || generationError}</span><button type="button" className="writing-secondary-button" onClick={() => restoreAndClose()}>{t('common:actions.cancel')}</button><button type="button" className="writing-primary-button" onClick={insertStructure} disabled={!sessionCurrent || Boolean(generationError) || (!editing && (dialog === 'table' ? rangeContext !== 'text' : rangeContext === 'blocked'))}><ArrowDownToLine size={15} />{editing ? t('editor:dialogs.update') : t('editor:writing.insert')}</button></div>
           </div>
         </section>}
       </div>, document.body)}
@@ -542,16 +559,17 @@ export const WritingRibbon: React.FC<WritingRibbonProps> = ({ bridge, editorStat
 };
 
 const TablePreview: React.FC<{ options: TableOptions }> = ({ options }) => {
+  const { t } = useTranslation(['editor']);
   const format = options.format ?? 'plain';
   const hasHeader = Boolean(options.header);
   const hasRawLatex = options.cells.some((row, rowIndex) => row.some((_, columnIndex) => options.cellLatex?.[rowIndex]?.[columnIndex] ?? options.latexCells ?? false));
   const alignment: Record<'l' | 'c' | 'r', React.CSSProperties['textAlign']> = { l: 'left', c: 'center', r: 'right' };
 
-  return <div className={`writing-table-preview format-${format}${hasHeader && format === 'booktabs' ? ' has-header' : ''}`} aria-label="Table preview">
-    <div className="writing-table-preview-scroll" role="region" tabIndex={0} aria-label="Table layout preview">
+  return <div className={`writing-table-preview format-${format}${hasHeader && format === 'booktabs' ? ' has-header' : ''}`} aria-label={t('editor:dialogs.tablePreviewLabel')}>
+    <div className="writing-table-preview-scroll" role="region" tabIndex={0} aria-label={t('editor:dialogs.tableLayoutPreviewLabel')}>
       <table><tbody>{Array.from({ length: options.rows }, (_, row) => <tr key={row}>{Array.from({ length: options.columns }, (_, column) => <td className={hasHeader && row === 0 ? 'is-header' : undefined} style={{ textAlign: alignment[options.alignment?.[column] ?? 'l'] }} key={column}>{options.cells[row]?.[column] ?? ''}</td>)}</tr>)}</tbody></table>
     </div>
-    <p className="writing-table-preview-note">Layout preview. Final size and font depend on the LaTeX document.{hasRawLatex ? ' LaTeX cells are shown as source.' : ''}</p>
+    <p className="writing-table-preview-note">{hasRawLatex ? t('editor:dialogs.tablePreviewLatexCellsNote') : t('editor:dialogs.tablePreviewNote')}</p>
   </div>;
 };
 

@@ -644,6 +644,8 @@ fn failure_response(message: &str, file: Option<String>) -> CompileResponse {
             line: None,
             file,
             suggestion: None,
+            suggestion_code: None,
+            suggestion_params: None,
         }],
         warnings: vec![],
         raw_log: message.to_owned(),
@@ -1130,6 +1132,8 @@ fn compile_latex(snapshot: &ProjectSnapshot) -> Result<CompileResponse, Automati
             line: None,
             file: None,
             suggestion: None,
+            suggestion_code: None,
+            suggestion_params: None,
         });
     }
     Ok(CompileResponse {
@@ -1238,6 +1242,8 @@ fn compile_typst(snapshot: &ProjectSnapshot) -> Result<CompileResponse, Automati
                     line: range.map(|r| r.start_line() + 1),
                     file,
                     suggestion: None,
+                    suggestion_code: None,
+                    suggestion_params: None,
                 });
                 if raw.len() > MAX_LOG_BYTES {
                     return Err(AutomationError::new(

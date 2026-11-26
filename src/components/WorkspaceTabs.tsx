@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/core';
 import { X, RotateCw, FileCode2, Image as ImageIcon, FileText, Pin } from 'lucide-react';
 import * as pdfjs from 'pdfjs-dist';
@@ -65,6 +66,7 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
   onChange, onActivate, onPromote, onClose, onPin, errors, warnings, jumpRequest, readOnly,
   isScratchpad, canAddPackages, onWritingBridgeChange, onAutomationBridgeChange, getDocumentRevision,
 }) => {
+  const { t } = useTranslation(['sidebar', 'common']);
   const activeTab = tabs.find(tab => tab.id === activeTabId) ?? null;
   const tabIds = tabs.map(tab => tab.id).join('\u0000');
   const openDocumentIds = useMemo(() => tabs.filter(tab => tab.kind === 'source').map(tab => tab.id), [tabIds]);
@@ -81,7 +83,7 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
         language: engine,
         editable: false,
         available: false,
-        reason: engine === 'typst' ? 'Select an editable Typst source file.' : 'Select an editable LaTeX source file.',
+        reason: t('sidebar:tabs.selectEditableSource', { engine: t(`common:engines.${engine}`) }),
         source: '',
         cursorOffset: 0,
         canAddPackages: false,
@@ -91,7 +93,7 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
       writingBridgeRef.current = bridge;
     }
     onWritingBridgeChange?.(writingBridgeRef.current, state);
-  }, [engine, onWritingBridgeChange]);
+  }, [engine, onWritingBridgeChange, t]);
   useLayoutEffect(() => {
     const strip = stripRef.current;
     if (!strip) return;
@@ -137,27 +139,27 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
     else if (tabRect.right > visibleRight) strip.scrollLeft += tabRect.right - visibleRight;
   }, [activeTabId, tabs.length]);
   const closeActions: ContextMenuAction[] = selectedTab ? [
-    { label: selectedTab.pinned ? 'Unpin' : 'Pin', onSelect: () => onPin(selectedTab.id) },
-    { label: 'Close', onSelect: () => onClose(false, selectedTab.id), separatorBefore: true },
-    { label: 'Close Others', onSelect: () => onClose(false, selectedTab.id, true) },
-    { label: 'Close All Unpinned', onSelect: () => onClose(true) },
+    { label: selectedTab.pinned ? t('sidebar:tabs.contextMenu.unpin') : t('sidebar:tabs.contextMenu.pin'), onSelect: () => onPin(selectedTab.id) },
+    { label: t('common:actions.close'), onSelect: () => onClose(false, selectedTab.id), separatorBefore: true },
+    { label: t('sidebar:tabs.contextMenu.closeOthers'), onSelect: () => onClose(false, selectedTab.id, true) },
+    { label: t('sidebar:tabs.contextMenu.closeAllUnpinned'), onSelect: () => onClose(true) },
   ] : [];
   return (
     <section className="workspace-tabs">
-      <div className={`workspace-tab-strip${hasHorizontalOverflow ? ' has-horizontal-overflow' : ''}`} ref={stripRef} role="tablist" aria-label="Open files">
+      <div className={`workspace-tab-strip${hasHorizontalOverflow ? ' has-horizontal-overflow' : ''}`} ref={stripRef} role="tablist" aria-label={t('sidebar:tabs.openFilesAriaLabel')}>
         {tabs.map(tab => (
           <div key={tab.id} className={`workspace-tab ${tab.id === activeTabId ? 'active' : ''} ${tab.content !== tab.savedContent && tab.kind === 'source' ? 'dirty' : ''}`} onContextMenu={event => { event.preventDefault(); setContextMenu({ x: event.clientX, y: event.clientY, tabId: tab.id }); }}>
-            <button role="tab" aria-selected={tab.id === activeTabId} className="workspace-tab-select" onClick={() => onActivate(tab.id)} onDoubleClick={() => onPromote(tab.id)} title={`${tab.path || tab.name}${tab.pinned ? '\nPinned tab' : ''}`}>
+            <button role="tab" aria-selected={tab.id === activeTabId} className="workspace-tab-select" onClick={() => onActivate(tab.id)} onDoubleClick={() => onPromote(tab.id)} title={tab.pinned ? t('sidebar:tabs.pinnedTabTooltip', { path: tab.path || tab.name }) : (tab.path || tab.name)}>
               {tab.kind === 'diff' ? <FileCode2 size={13} /> : tab.kind === 'asset' ? <ImageIcon size={13} /> : <FileText size={13} />}
-              <span>{tab.name}</span>{tab.content !== tab.savedContent && tab.kind === 'source' && <i aria-label="Unsaved changes" />}{tab.pinned && <Pin size={12} className="workspace-tab-pinned-indicator" aria-label="Pinned tab" />}
+              <span>{tab.name}</span>{tab.content !== tab.savedContent && tab.kind === 'source' && <i aria-label={t('sidebar:tabs.unsavedChanges')} />}{tab.pinned && <Pin size={12} className="workspace-tab-pinned-indicator" aria-label={t('sidebar:tabs.pinnedTab')} />}
             </button>
-            <button className="workspace-tab-close" aria-label={`Close ${tab.name}`} title={`Close ${tab.name} (Ctrl/Cmd+W)`} onClick={() => onClose(false, tab.id)}><X size={13} aria-hidden="true" focusable="false" /></button>
+            <button className="workspace-tab-close" aria-label={t('sidebar:tabs.closeTabAriaLabel', { name: tab.name })} title={t('sidebar:tabs.closeTabTitle', { name: tab.name })} onClick={() => onClose(false, tab.id)}><X size={13} aria-hidden="true" focusable="false" /></button>
           </div>
         ))}
       </div>
       {contextMenu && selectedTab && <ContextMenu x={contextMenu.x} y={contextMenu.y} actions={closeActions} onClose={() => setContextMenu(null)} />}
       <div className="workspace-tab-content">
-        {!activeTab ? <div className="workspace-empty">Open a source file or project asset to get started.</div> : activeTab.kind === 'source' ? (
+        {!activeTab ? <div className="workspace-empty">{t('sidebar:tabs.emptyState')}</div> : activeTab.kind === 'source' ? (
           <EditorView value={sourceCode} onChange={onChange} errors={errors} warnings={warnings} jumpRequest={jumpRequest} engine={engine} activeFilePath={activeFilePath} readOnly={readOnly} documentId={activeTab.id} openDocumentIds={openDocumentIds} openDocumentIdsKey={tabIds} isScratchpad={isScratchpad} canAddPackages={canAddPackages} onWritingBridgeChange={handleWritingBridgeChange} onAutomationBridgeChange={onAutomationBridgeChange} getDocumentRevision={getDocumentRevision} />
         ) : activeTab.kind === 'diff' ? (
           <DiffTab path={activeTab.path || ''} projectRoot={projectRoot} repositoryRoot={activeTab.repositoryRoot || projectRoot} />
@@ -170,6 +172,7 @@ export const WorkspaceTabs: React.FC<WorkspaceTabsProps> = ({
 };
 
 const DiffTab: React.FC<{ path: string; projectRoot: string | null; repositoryRoot: string | null }> = ({ path, projectRoot, repositoryRoot }) => {
+  const { t } = useTranslation(['sidebar', 'common']);
   const [result, setResult] = useState<GitDiffResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -182,19 +185,20 @@ const DiffTab: React.FC<{ path: string; projectRoot: string | null; repositoryRo
   useEffect(() => {
     let cancelled = false;
     const diffRoot = repositoryRoot || projectRoot;
-    if (!diffRoot) { setError('Open a project folder to view this diff.'); setLoading(false); return () => { cancelled = true; }; }
+    if (!diffRoot) { setError(t('sidebar:tabs.diff.openProjectError')); setLoading(false); return () => { cancelled = true; }; }
     setLoading(true); setError(null); setResult(null);
     invoke<GitDiffResult>('get_git_diff', { projectPath: diffRoot, filePath: path }).then(value => { if (!cancelled) setResult(value); }).catch(reason => { if (!cancelled) setError(String(reason)); }).finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [path, projectRoot, repositoryRoot, revision]);
+  }, [path, projectRoot, repositoryRoot, revision, t]);
   const lines = useMemo(() => result?.diff.split('\n') ?? [], [result]);
-  if (loading) return <div className="workspace-notice"><RotateCw className="spin" size={20} /> Loading diff…</div>;
+  if (loading) return <div className="workspace-notice"><RotateCw className="spin" size={20} /> {t('sidebar:tabs.diff.loading')}</div>;
   if (error) return <div className="workspace-notice">{error}</div>;
   if (result?.isBinary || result?.oversized) return <div className="workspace-notice">{result.diff}</div>;
-  return <div className="workspace-diff" aria-label={`Diff for ${path}`}><header>{path}</header><pre>{lines.map((line, i) => <span key={i} className={line.startsWith('+') ? 'added' : line.startsWith('-') ? 'removed' : line.startsWith('@@') ? 'hunk' : ''}>{line}{'\n'}</span>)}</pre></div>;
+  return <div className="workspace-diff" aria-label={t('sidebar:tabs.diff.ariaLabel', { path })}><header>{path}</header><pre>{lines.map((line, i) => <span key={i} className={line.startsWith('+') ? 'added' : line.startsWith('-') ? 'removed' : line.startsWith('@@') ? 'hunk' : ''}>{line}{'\n'}</span>)}</pre></div>;
 };
 
 const AssetTab: React.FC<{ path: string }> = ({ path }) => {
+  const { t } = useTranslation(['sidebar', 'common']);
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -231,29 +235,29 @@ const AssetTab: React.FC<{ path: string }> = ({ path }) => {
   const openExternalUrl = useCallback((externalUrl: string) => {
     void invoke('open_external_url', { url: externalUrl }).catch((err: unknown) => {
       const details = err instanceof Error ? err.message : String(err);
-      toast.error('Failed to open link', { description: details });
+      toast.error(t('sidebar:tabs.asset.toast.openLinkFailed'), { description: details });
     });
-  }, []);
+  }, [t]);
 
   const handleCopySelection = useCallback(async () => {
     try {
       await copySelectionInside(pdfPageRef.current);
     } catch (err: unknown) {
       const details = err instanceof Error ? err.message : String(err);
-      toast.error('Copy failed', { description: details });
+      toast.error(t('sidebar:tabs.asset.toast.copyFailed'), { description: details });
     }
-  }, []);
+  }, [t]);
 
   const handleCopyImageElement = useCallback(async () => {
     if (!imgRef.current) return;
     try {
       await imageElementToClipboardImage(imgRef.current);
-      toast.success('Image copied to clipboard');
+      toast.success(t('sidebar:tabs.asset.toast.imageCopied'));
     } catch (err: unknown) {
       const details = err instanceof Error ? err.message : String(err);
-      toast.error('Failed to copy image', { description: details });
+      toast.error(t('sidebar:tabs.asset.toast.copyImageFailed'), { description: details });
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     setPageNumber(1);
@@ -276,9 +280,9 @@ const AssetTab: React.FC<{ path: string }> = ({ path }) => {
       const blob = new Blob([new Uint8Array(bytes)], { type: isPdf ? 'application/pdf' : `image/${path.split('.').pop()?.toLowerCase() === 'svg' ? 'svg+xml' : path.split('.').pop()?.toLowerCase()}` });
       objectUrl = URL.createObjectURL(blob); setUrl(objectUrl);
       if (!isPdf) setLoading(false);
-    }).catch(reason => { if (!cancelled) { setError(/\.(png|jpe?g|svg|webp|gif|bmp)$/i.test(path) ? 'This image is deleted or unavailable in the current project.' : String(reason)); setLoading(false); } });
+    }).catch(reason => { if (!cancelled) { setError(/\.(png|jpe?g|svg|webp|gif|bmp)$/i.test(path) ? t('sidebar:tabs.asset.imageUnavailable') : String(reason)); setLoading(false); } });
     return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [path, isPdf, revision]);
+  }, [path, isPdf, revision, t]);
 
   useEffect(() => {
     if (!isPdf || !url || !canvasRef.current) return;
@@ -351,7 +355,9 @@ const AssetTab: React.FC<{ path: string }> = ({ path }) => {
 
         if (!cancelled && pdfPageRef.current && annotationLayerRef.current) {
           try {
-            const linkTitlePrefix = `${getPdfModifierLabel()}+Click to follow link`;
+            const linkTitlePrefix = t('sidebar:tabs.asset.pdfLinkTitlePrefix', {
+              modifier: getPdfModifierLabel(),
+            });
             const linkService = createPdfLinkService(document, {
               onExternalLink: openExternalUrl,
               onInternalDestination: (targetPage) => setPageNumber(targetPage),
@@ -392,7 +398,7 @@ const AssetTab: React.FC<{ path: string }> = ({ path }) => {
       textLayerTask?.cancel();
       void pdfDocument?.destroy();
     };
-  }, [isPdf, url, pageNumber, openExternalUrl]);
+  }, [isPdf, url, pageNumber, openExternalUrl, t]);
 
   useEffect(() => {
     const handleGlobalMouseDown = (e: MouseEvent) => {
@@ -524,7 +530,7 @@ const AssetTab: React.FC<{ path: string }> = ({ path }) => {
     ? contextMenu.kind === 'image'
       ? [
           {
-            label: 'Copy Image',
+            label: t('sidebar:tabs.asset.contextMenu.copyImage'),
             onSelect: () => {
               void handleCopyImageElement();
             },
@@ -532,7 +538,7 @@ const AssetTab: React.FC<{ path: string }> = ({ path }) => {
         ]
       : [
           {
-            label: 'Copy',
+            label: t('common:actions.copy'),
             disabled: !contextMenu.hasSelection,
             onSelect: () => {
               void handleCopySelection();
@@ -541,7 +547,7 @@ const AssetTab: React.FC<{ path: string }> = ({ path }) => {
           ...(contextMenu.imageHit
             ? [
                 {
-                  label: 'Copy Image',
+                  label: t('sidebar:tabs.asset.contextMenu.copyImage'),
                   onSelect: () => {
                     const imageHit = contextMenu.imageHit;
                     if (!imageHit) return;
@@ -552,18 +558,18 @@ const AssetTab: React.FC<{ path: string }> = ({ path }) => {
                       imageHit.pageHeightPt,
                     )
                       .then(() => {
-                        toast.success('Image copied to clipboard');
+                        toast.success(t('sidebar:tabs.asset.toast.imageCopied'));
                       })
                       .catch((err: unknown) => {
                         const details = err instanceof Error ? err.message : String(err);
-                        toast.error('Failed to copy image', { description: details });
+                        toast.error(t('sidebar:tabs.asset.toast.copyImageFailed'), { description: details });
                       });
                   },
                 },
               ]
             : []),
           {
-            label: 'Select All',
+            label: t('sidebar:tabs.asset.contextMenu.selectAll'),
             onSelect: () => {
               selectAllInside(textLayerRef.current);
             },
@@ -579,9 +585,9 @@ const AssetTab: React.FC<{ path: string }> = ({ path }) => {
     onCopy={handlePdfCopy}
     onContextMenu={!isPdf && url ? handleImageContextMenu : undefined}
   >
-    {loading && <div className="workspace-notice"><RotateCw className="spin" size={20} /> Loading preview…</div>}
-    {error && <div className="workspace-notice">Unable to preview this file: {error}</div>}
-    {url && !isPdf && <img ref={imgRef} src={url} alt={path.split('/').pop() || 'Project image'} />}
+    {loading && <div className="workspace-notice"><RotateCw className="spin" size={20} /> {t('sidebar:tabs.asset.loading')}</div>}
+    {error && <div className="workspace-notice">{t('sidebar:tabs.asset.previewError', { error })}</div>}
+    {url && !isPdf && <img ref={imgRef} src={url} alt={path.split('/').pop() || t('sidebar:tabs.asset.imageAltFallback')} />}
     {url && isPdf && <>
       <div
         ref={pdfPageRef}
@@ -598,11 +604,11 @@ const AssetTab: React.FC<{ path: string }> = ({ path }) => {
         onClickCapture={handlePdfClickCapture}
         onContextMenu={handlePdfContextMenu}
       >
-        <canvas ref={canvasRef} aria-label={`PDF page ${pageNumber}`} />
+        <canvas ref={canvasRef} aria-label={t('sidebar:tabs.asset.pdfPageAriaLabel', { page: pageNumber })} />
         <div ref={textLayerRef} className="textLayer" />
         <div ref={annotationLayerRef} className="annotationLayer" />
       </div>
-      {pdfPages && <div className="workspace-pdf-controls"><button disabled={pageNumber <= 1} onClick={() => setPageNumber(n => n - 1)}>Previous</button><span>Page {pageNumber} of {pdfPages}</span><button disabled={pageNumber >= pdfPages} onClick={() => setPageNumber(n => n + 1)}>Next</button></div>}
+      {pdfPages && <div className="workspace-pdf-controls"><button disabled={pageNumber <= 1} onClick={() => setPageNumber(n => n - 1)}>{t('sidebar:tabs.asset.previousPage')}</button><span>{t('sidebar:tabs.asset.pageIndicator', { current: pageNumber, total: pdfPages })}</span><button disabled={pageNumber >= pdfPages} onClick={() => setPageNumber(n => n + 1)}>{t('sidebar:tabs.asset.nextPage')}</button></div>}
     </>}
     {contextMenu && (
       <ContextMenu

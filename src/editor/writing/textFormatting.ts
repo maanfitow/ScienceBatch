@@ -2,6 +2,13 @@ import type { WritingChange, WritingLanguage } from '../../types/writing';
 import { classifyLatexContext, classifyLatexRange } from './context';
 import { classifyTypstContext, classifyTypstRange } from './typstContext';
 
+type WritingTranslator = (key: string, fallback: string, params?: Record<string, string | number>) => string;
+const wt = (key: string, fallback: string, params?: Record<string, string | number>): string => {
+  const fn = (globalThis as { __sciencebatchTranslate?: WritingTranslator }).__sciencebatchTranslate;
+  if (fn) return fn(`writing:${key}`, fallback, params);
+  return params ? fallback.replace(/\{\{(\w+)\}\}/g, (_m, k) => String(params[k] ?? '')) : fallback;
+};
+
 export type TextFormattingKind = 'bold' | 'italic';
 
 export interface TextFormattingSelection {
@@ -387,7 +394,7 @@ function validatedTargetWrappers(language: WritingLanguage, source: string, wrap
       continue;
     }
     const opener = classifyTypstContext(candidate, wrapper.start);
-    if (opener.reason !== 'The cursor is inside a code expression token.') continue;
+    if (opener.code !== 'code_expression') continue;
     const nested = wrappers.filter(child => child.start > wrapper.start && child.end < wrapper.end);
     let visibleProbe = wrapper.bodyStart;
     for (let index = wrapper.bodyStart; index < wrapper.bodyEnd; index++) {
@@ -449,16 +456,16 @@ export function planTextFormatting(
   kind: TextFormattingKind,
 ): TextFormattingPlan {
   const range = makeSelection(language, source, selection);
-  if (!range) return unavailable('The selection or cursor is outside a valid UTF-16 source boundary.');
+  if (!range) return unavailable(wt('textFormatting.invalidUtf16Boundary', 'The selection or cursor is outside a valid UTF-16 source boundary.'));
   const { start, end, anchor, active } = range;
   if (language === 'latex') {
     if (hasUnmatchedLatexBraceBefore(source, start) || hasUnmatchedLatexBraceBefore(source, end)) {
-      return unavailable('Writing tools are unavailable inside an unmatched LaTeX brace group.');
+      return unavailable(wt('textFormatting.unmatchedLatexBrace', 'Writing tools are unavailable inside an unmatched LaTeX brace group.'));
     }
     const definition = findLatexMacroDefinitionRanges(source).find(candidate =>
       start === end ? start >= candidate.start && start < candidate.end : start < candidate.end && end > candidate.start,
     );
-    if (definition) return unavailable('Writing tools are unavailable inside a LaTeX macro definition.');
+    if (definition) return unavailable(wt('textFormatting.insideLatexMacroDefinition', 'Writing tools are unavailable inside a LaTeX macro definition.'));
   }
   const wrappers = findWrappers(source, language);
   const enclosingCandidates = wrappers.filter(wrapper =>
@@ -471,17 +478,17 @@ export function planTextFormatting(
       || enclosingCandidates.some(parent => wrapper.start > parent.start && wrapper.end < parent.end)
       || (start === end ? start >= wrapper.start && start <= wrapper.end : start < wrapper.end && end > wrapper.start),
   );
-  if (involvedWrappers.length > 32) return unavailable('Formatting inside more than 32 nested or selected wrappers is not supported.');
+  if (involvedWrappers.length > 32) return unavailable(wt('textFormatting.tooManyNestedWrappers', 'Formatting inside more than 32 nested or selected wrappers is not supported.'));
   const trustedWrappers = validatedTargetWrappers(language, source, involvedWrappers);
   const untrustedOverlap = involvedWrappers.find(wrapper => !trustedWrappers.includes(wrapper) && containsOrTouches(start, end, wrapper));
-  if (untrustedOverlap) return unavailable('This canonical-looking wrapper is inside protected or ambiguous source; edit it directly.');
+  if (untrustedOverlap) return unavailable(wt('textFormatting.untrustedWrapper', 'This canonical-looking wrapper is inside protected or ambiguous source; edit it directly.'));
   const sameKind = trustedWrappers.filter(wrapper => wrapper.kind === kind);
   const crossedWrapper = end > start && trustedWrappers.find(wrapper =>
     start < wrapper.end && end > wrapper.start
       && !(start >= wrapper.bodyStart && end <= wrapper.bodyEnd)
       && !(start <= wrapper.start && end >= wrapper.end),
   );
-  if (crossedWrapper) return unavailable('Selections crossing a formatting wrapper boundary are not supported.');
+  if (crossedWrapper) return unavailable(wt('textFormatting.crossedWrapperBoundary', 'Selections crossing a formatting wrapper boundary are not supported.'));
   const supportedAncestors = trustedWrappers.filter(wrapper =>
     start === end
       ? start >= wrapper.bodyStart && start <= wrapper.bodyEnd
@@ -497,10 +504,10 @@ export function planTextFormatting(
 
   if (language === 'typst') {
     const shorthand = typstShorthandRanges(source).find(candidate => containsOrTouches(start, end, candidate));
-    if (shorthand) return unavailable('This Typst emphasis uses shorthand syntax; edit the source directly.');
-    if (isTypstUrlOffset(source, start, end)) return unavailable('Writing tools are unavailable inside URLs.');
+    if (shorthand) return unavailable(wt('textFormatting.typstShorthand', 'This Typst emphasis uses shorthand syntax; edit the source directly.'));
+    if (isTypstUrlOffset(source, start, end)) return unavailable(wt('textFormatting.insideUrls', 'Writing tools are unavailable inside URLs.'));
   } else if (unsupportedLatexFormatting(source, start, end)) {
-    return unavailable('This LaTeX paragraph uses a non-canonical font declaration; edit the source directly.', false);
+    return unavailable(wt('textFormatting.latexNonCanonicalFont', 'This LaTeX paragraph uses a non-canonical font declaration; edit the source directly.'), false);
   }
 
   const sameKindOverlap = sameKind.find(wrapper =>
@@ -509,11 +516,11 @@ export function planTextFormatting(
       : start < wrapper.bodyEnd && end > wrapper.bodyStart,
   );
   if (sameKindOverlap && !activeWrapper) {
-    return unavailable('Select the complete formatted text to remove this style.', true);
+    return unavailable(wt('textFormatting.selectCompleteFormattedText', 'Select the complete formatted text to remove this style.'), true);
   }
   if (activeWrapper) {
     if (activeWrapper.end - activeWrapper.start > 100_000 || hasParagraphBoundary(language, source.slice(activeWrapper.start, activeWrapper.end))) {
-      return unavailable('Multi-paragraph or oversized formatted ranges are not supported.', true);
+      return unavailable(wt('textFormatting.multiParagraphOrOversizedWrapper', 'Multi-paragraph or oversized formatted ranges are not supported.'), true);
     }
     let candidateSource = sanitizedSource(source, trustedWrappers);
     if (language === 'typst') candidateSource = maskTypstEscapes(candidateSource, {
@@ -523,10 +530,10 @@ export function planTextFormatting(
       active: activeWrapper.bodyEnd,
     });
     if (hasUnsafeFormattingContent(language, candidateSource, activeWrapper.bodyStart, activeWrapper.bodyEnd)) {
-      return unavailable('The complete formatted body contains protected syntax; edit the source directly.', true);
+      return unavailable(wt('textFormatting.formattedBodyProtectedSyntax', 'The complete formatted body contains protected syntax; edit the source directly.'), true);
     }
     const context = classifyTextRange(language, candidateSource, activeWrapper.bodyStart, activeWrapper.bodyEnd);
-    if (context.context !== 'text') return unavailable(context.reason || 'This formatted source is protected or ambiguous.', true);
+    if (context.context !== 'text') return unavailable(context.reason || wt('textFormatting.formattedSourceProtected', 'This formatted source is protected or ambiguous.'), true);
     const body = source.slice(activeWrapper.bodyStart, activeWrapper.bodyEnd);
     const nextAnchor = start === activeWrapper.start && end === activeWrapper.end
       ? anchor <= active ? activeWrapper.start : activeWrapper.start + body.length
@@ -541,27 +548,27 @@ export function planTextFormatting(
     };
   }
 
-  if (end > start && hasParagraphBoundary(language, source.slice(start, end))) return unavailable('Selections spanning multiple paragraphs are not supported.');
-  if (end > start && hasUnsafeStructure(language, source.slice(start, end))) return unavailable('Selections containing structural separators are not supported.');
+  if (end > start && hasParagraphBoundary(language, source.slice(start, end))) return unavailable(wt('textFormatting.selectionMultipleParagraphs', 'Selections spanning multiple paragraphs are not supported.'));
+  if (end > start && hasUnsafeStructure(language, source.slice(start, end))) return unavailable(wt('textFormatting.selectionStructuralSeparators', 'Selections containing structural separators are not supported.'));
 
   // Mask only canonical wrapper ancestors of this selection. Protected constructs remain intact,
   // so the shared classifiers continue to reject math, comments, URLs, raw content, and code.
   for (const wrapper of supportedAncestors) {
-    if (hasParagraphBoundary(language, source.slice(wrapper.start, wrapper.end))) return unavailable('Multi-paragraph formatting wrappers are not supported.');
+    if (hasParagraphBoundary(language, source.slice(wrapper.start, wrapper.end))) return unavailable(wt('textFormatting.multiParagraphWrappers', 'Multi-paragraph formatting wrappers are not supported.'));
   }
   let contextSource = sanitizedSource(source, trustedWrappers);
   if (language === 'typst' && end > start) contextSource = maskTypstEscapes(contextSource, range);
   const contextSelection = contextSource.slice(start, end);
   if (language === 'latex' && end > start && /\\[a-zA-Z]+|\\[()[\]$]/.test(contextSelection)) {
-    return unavailable('Selections containing LaTeX commands or delimiters are not supported.');
+    return unavailable(wt('textFormatting.selectionLatexCommands', 'Selections containing LaTeX commands or delimiters are not supported.'));
   }
   if (language === 'typst' && end > start && hasUnsafeTypstSelection(contextSelection)) {
-    return unavailable('Selections containing Typst code or markup delimiters are not supported.');
+    return unavailable(wt('textFormatting.selectionTypstDelimiters', 'Selections containing Typst code or markup delimiters are not supported.'));
   }
   const context = classifyTextRange(language, contextSource, start, end);
-  if (context.context !== 'text') return unavailable(context.reason || 'Text formatting is unavailable in this source context.');
-  if (end > start && source.slice(start, end).trim().length === 0) return unavailable('Select non-whitespace text to apply formatting.');
-  if (end > start && end - start > 100_000) return unavailable('Selections over 100,000 UTF-16 units are not supported.');
+  if (context.context !== 'text') return unavailable(context.reason || wt('textFormatting.unavailableInContext', 'Text formatting is unavailable in this source context.'));
+  if (end > start && source.slice(start, end).trim().length === 0) return unavailable(wt('textFormatting.selectNonWhitespace', 'Select non-whitespace text to apply formatting.'));
+  if (end > start && end - start > 100_000) return unavailable(wt('textFormatting.selectionTooLarge', 'Selections over 100,000 UTF-16 units are not supported.'));
 
   const prefix = prefixFor(language, kind);
   const suffix = closingFor(language);

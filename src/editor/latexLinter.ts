@@ -2,6 +2,7 @@ import type * as monacoType from 'monaco-editor';
 import type { Monaco } from '@monaco-editor/react';
 import { LATEX_COMMANDS } from './latexData';
 import { getProjectCustomCommands } from './projectContext';
+import i18n from '../i18n';
 
 const ALIGNMENT_ENVIRONMENTS = new Set([
   'align',
@@ -474,7 +475,8 @@ export function lintLatexDocument(
       if (envStack.length === 0) {
         markers.push({
           severity: monaco.MarkerSeverity.Error,
-          message: `Unexpected '\\end{${endName}}' without matching '\\begin{${endName}}'`,
+          message: i18n.t('editor:linter.unexpectedEnd', { lb: '{', rb: '}', env: endName }),
+          code: 'latex:unexpected-end',
           startLineNumber: lineNum,
           startColumn: eMatch.index + 1,
           endLineNumber: lineNum,
@@ -485,7 +487,13 @@ export function lintLatexDocument(
         if (lastEnv.name !== endName) {
           markers.push({
             severity: monaco.MarkerSeverity.Error,
-            message: `Mismatched environment: '\\begin{${lastEnv.name}}' closed by '\\end{${endName}}'`,
+            message: i18n.t('editor:linter.mismatchedEnv', {
+              lb: '{',
+              rb: '}',
+              beginEnv: lastEnv.name,
+              endEnv: endName,
+            }),
+            code: 'latex:mismatched-env',
             startLineNumber: lineNum,
             startColumn: eMatch.index + 1,
             endLineNumber: lineNum,
@@ -531,7 +539,7 @@ export function lintLatexDocument(
       if (!isInsideAlignEnv) {
         markers.push({
           severity: monaco.MarkerSeverity.Warning,
-          message: `Misplaced alignment tab character '&'. Use '\\&' for a literal ampersand or place inside an alignment environment ('align', 'tabular', 'pmatrix').`,
+          message: i18n.t('editor:linter.misplacedAmpersand'),
           code: 'latex:misplaced-ampersand',
           startLineNumber: lineNum,
           startColumn: ampMatch.index + 1,
@@ -549,7 +557,8 @@ export function lintLatexDocument(
       if (!definedLabels.has(refKey)) {
         markers.push({
           severity: monaco.MarkerSeverity.Warning,
-          message: `Undefined reference anchor: '\\ref{${refKey}}'. No matching '\\label{${refKey}}' found in document.`,
+          message: i18n.t('editor:linter.undefinedRef', { lb: '{', rb: '}', key: refKey }),
+          code: 'latex:undefined-ref',
           startLineNumber: lineNum,
           startColumn: rMatch.index + 1,
           endLineNumber: lineNum,
@@ -589,7 +598,7 @@ export function lintLatexDocument(
       while ((uMatch = underscoreRegex.exec(lineForUnderscores)) !== null) {
         markers.push({
           severity: monaco.MarkerSeverity.Warning,
-          message: `Unescaped underscore '_' in text mode. In LaTeX this triggers '! Missing $ inserted'. Use '\\_' for a literal underscore or wrap in math mode '$ ... $'.`,
+          message: i18n.t('editor:linter.unescapedUnderscore'),
           code: 'latex:unescaped-underscore',
           startLineNumber: lineNum,
           startColumn: uMatch.index + 1,
@@ -641,17 +650,21 @@ export function lintLatexDocument(
         const suggestions = findTopMatches(cmdName, allKnown, 3);
         let tip = '';
         if (suggestions.length === 1) {
-          tip = ` Did you mean '\\${suggestions[0]}'?`;
+          tip = i18n.t('editor:linter.didYouMeanOne', { first: suggestions[0] });
         } else if (suggestions.length === 2) {
-          tip = ` Did you mean '\\${suggestions[0]}' or '\\${suggestions[1]}'?`;
+          tip = i18n.t('editor:linter.didYouMeanTwo', { first: suggestions[0], second: suggestions[1] });
         } else if (suggestions.length >= 3) {
-          tip = ` Did you mean '\\${suggestions[0]}', '\\${suggestions[1]}', or '\\${suggestions[2]}'?`;
+          tip = i18n.t('editor:linter.didYouMeanThree', {
+            first: suggestions[0],
+            second: suggestions[1],
+            third: suggestions[2],
+          });
         }
 
         markers.push({
           severity: monaco.MarkerSeverity.Warning,
-          message: `Unknown or misspelled LaTeX command: '\\${cmdName}'.${tip}`,
-          code: suggestions.length > 0 ? `latex:typo:${suggestions.join(',')}` : undefined,
+          message: i18n.t('editor:linter.unknownCommand', { command: cmdName, tip }),
+          code: suggestions.length > 0 ? `latex:typo:${suggestions.join(',')}` : 'latex:unknown-command',
           startLineNumber: lineNum,
           startColumn: startCol,
           endLineNumber: lineNum,
@@ -665,7 +678,8 @@ export function lintLatexDocument(
   for (const unclosed of envStack) {
     markers.push({
       severity: monaco.MarkerSeverity.Error,
-      message: `Unclosed LaTeX environment: '\\begin{${unclosed.name}}' is missing a matching '\\end{${unclosed.name}}'.`,
+      message: i18n.t('editor:linter.unclosedEnv', { lb: '{', rb: '}', env: unclosed.name }),
+      code: 'latex:unclosed-env',
       startLineNumber: unclosed.line,
       startColumn: unclosed.column,
       endLineNumber: unclosed.line,

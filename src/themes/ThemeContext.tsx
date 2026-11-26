@@ -2,10 +2,19 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 
 export type AppTheme = 'obsidian-pastel' | 'coral-depths' | 'light' | 'dark' | 'monokai';
 
+export type ThemeTranslationKey =
+  | 'obsidianPastel'
+  | 'coralDepths'
+  | 'light'
+  | 'dark'
+  | 'monokai';
+
 export interface ThemeOption {
   id: AppTheme;
   label: string;
   description: string;
+  labelKey: `menu:themes.${ThemeTranslationKey}.label`;
+  descriptionKey: `menu:themes.${ThemeTranslationKey}.description`;
   swatches: [string, string, string];
 }
 
@@ -14,30 +23,40 @@ export const THEME_OPTIONS: ThemeOption[] = [
     id: 'obsidian-pastel',
     label: 'Obsidian Pastel (Default)',
     description: 'Obsidian canvas with mint, lilac & butter editorial pastels',
+    labelKey: 'menu:themes.obsidianPastel.label',
+    descriptionKey: 'menu:themes.obsidianPastel.description',
     swatches: ['#0b0c0d', '#74eec8', '#dec2ff'],
   },
   {
     id: 'coral-depths',
     label: 'Coral Depths',
     description: 'Deep abyssal indigo with seafoam teal & Swiss plum accents',
+    labelKey: 'menu:themes.coralDepths.label',
+    descriptionKey: 'menu:themes.coralDepths.description',
     swatches: ['#060511', '#2dd4bf', '#9f96f2'],
   },
   {
     id: 'light',
     label: 'Light Editorial',
     description: 'Warm paper canvas with high-contrast ink & pastel accents',
+    labelKey: 'menu:themes.light.label',
+    descriptionKey: 'menu:themes.light.description',
     swatches: ['#f6f5f1', '#111214', '#74eec8'],
   },
   {
     id: 'dark',
     label: 'Dark Slate',
     description: 'Crisp neutral graphite with clean teal & steel accents',
+    labelKey: 'menu:themes.dark.label',
+    descriptionKey: 'menu:themes.dark.description',
     swatches: ['#111316', '#14b8a6', '#6ba4e8'],
   },
   {
     id: 'monokai',
     label: 'Monokai Noir',
     description: 'Charcoal-black surfaces with warm gold, sage & rose syntax',
+    labelKey: 'menu:themes.monokai.label',
+    descriptionKey: 'menu:themes.monokai.description',
     swatches: ['#121211', '#e5c76b', '#e06c88'],
   },
 ];

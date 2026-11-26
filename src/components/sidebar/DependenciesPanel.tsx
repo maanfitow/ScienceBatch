@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   AlertCircle,
   AlertTriangle,
@@ -37,6 +38,7 @@ export const DependenciesPanel: React.FC<DependenciesPanelProps> = ({
   onSelectLine,
   engine,
 }) => {
+  const { t } = useTranslation(['resources', 'common']);
   const [filter, setFilter] = useState('');
 
   const plan = resources.plan;
@@ -109,18 +111,18 @@ export const DependenciesPanel: React.FC<DependenciesPanelProps> = ({
   const canRetry = resources.errorAction === 'prepare' && canDownload;
 
   const downloadLabel = blocked
-    ? 'Unavailable'
+    ? t('resources:common.unavailable')
     : resources.errorAction === 'check' && resources.error
-      ? 'Try again'
+      ? t('resources:common.tryAgain')
       : canRetry
-        ? 'Retry download'
+        ? t('resources:panel.downloadLabel.retry')
         : resources.progress?.status?.toLowerCase() === 'cancelled'
-          ? 'Resume download'
+          ? t('resources:common.resumeDownload')
           : plan?.bundleMetadataState === 'missing' && !summary?.missingResources && !summary?.invalidResources
-            ? 'Finish setup'
+            ? t('resources:common.finishSetup')
             : needsDownload
-              ? 'Download required files'
-              : 'Resources ready';
+              ? t('resources:common.downloadRequiredFiles')
+              : t('resources:panel.downloadLabel.ready');
 
   useEffect(() => {
     if (
@@ -142,33 +144,38 @@ export const DependenciesPanel: React.FC<DependenciesPanelProps> = ({
   const missingOrInvalidCount = (summary?.missingResources ?? 0) + (summary?.invalidResources ?? 0);
 
   const statusPill = (() => {
-    if (isTypst) return { label: 'Built-in', tone: 'ready' };
-    if (resources.errorAction === 'check' && resources.error) return { label: 'Error', tone: 'error' };
-    if (resources.isAnalyzing || !resources.isPlanFresh) return { label: 'Checking…', tone: 'neutral' };
-    if (blocked) return { label: 'Error', tone: 'error' };
+    if (isTypst) return { label: t('resources:availability.builtIn'), tone: 'ready' };
+    if (resources.errorAction === 'check' && resources.error) return { label: t('resources:panel.status.error'), tone: 'error' };
+    if (resources.isAnalyzing || !resources.isPlanFresh) return { label: t('resources:common.checking'), tone: 'neutral' };
+    if (blocked) return { label: t('resources:panel.status.error'), tone: 'error' };
     if (needsDownload) {
       return {
-        label: missingOrInvalidCount > 0 ? `${missingOrInvalidCount} missing` : 'Setup',
+        label: missingOrInvalidCount > 0
+          ? t('resources:panel.status.missing', { count: missingOrInvalidCount })
+          : t('resources:panel.status.setup'),
         tone: 'warning',
       };
     }
-    return { label: 'Ready', tone: 'ready' };
+    return { label: t('resources:availability.ready'), tone: 'ready' };
   })();
 
   const summaryLine = (() => {
     if (resources.errorAction === 'check' && resources.error) {
-      return 'Dependency information could not be checked.';
+      return t('resources:panel.summary.checkFailed');
     }
     if (resources.isAnalyzing || !resources.isPlanFresh) {
-      return 'Checking detected dependencies…';
+      return t('resources:panel.summary.checking');
     }
     if (blocked) {
-      return 'Resource information could not be verified.';
+      return t('resources:panel.summary.notVerified');
     }
     if (needsDownload) {
-      return `${missingOrInvalidCount || 1} required ${missingOrInvalidCount === 1 ? 'file needs' : 'files need'} downloading · ${formatBytes(summary?.estimatedTransferBytes)} estimated`;
+      return t('resources:panel.summary.needsDownload', {
+        count: missingOrInvalidCount || 1,
+        size: formatBytes(summary?.estimatedTransferBytes),
+      });
     }
-    return `${summary?.resolvedResources ?? 0} files ready`;
+    return t('resources:panel.summary.ready', { count: summary?.resolvedResources ?? 0 });
   })();
 
   const renderRequirementRow = (row: ResourceRequirement) => {
@@ -196,7 +203,7 @@ export const DependenciesPanel: React.FC<DependenciesPanelProps> = ({
             {displayName !== path && <span title={path}>{path}</span>}
           </div>
           <span className={`dependency-availability-pill is-${tone}`}>
-            {preparing ? 'Preparing in current batch' : availabilityLabel(row.availability, downloaded)}
+            {preparing ? t('resources:panel.preparingBatch') : availabilityLabel(row.availability, downloaded)}
           </span>
           <span className="dependency-size">{formatBytes(row.indexedBytes)}</span>
         </div>
@@ -207,7 +214,7 @@ export const DependenciesPanel: React.FC<DependenciesPanelProps> = ({
                 type="button"
                 className="dependency-location-btn"
                 onClick={() => onSelectLine(firstEvidence.line ?? 1, firstEvidence.file)}
-                title={`Jump to ${locationLabel}`}
+                title={t('resources:common.jumpTo', { location: locationLabel })}
               >
                 {locationLabel}
               </button>
@@ -217,8 +224,8 @@ export const DependenciesPanel: React.FC<DependenciesPanelProps> = ({
               </span>
             ) : null}
             {row.parents.length > 0 && (
-              <span className="dependency-parents" title={`Required by ${row.parents.join(', ')}`}>
-                via {row.parents.join(', ')}
+              <span className="dependency-parents" title={t('resources:panel.requiredBy', { parents: row.parents.join(', ') })}>
+                {t('resources:panel.viaParents', { parents: row.parents.join(', ') })}
               </span>
             )}
           </div>
@@ -246,7 +253,7 @@ export const DependenciesPanel: React.FC<DependenciesPanelProps> = ({
           <span className="dependency-state dependency-state-missing" aria-hidden="true" />
           <div className="dependency-name-group">
             <strong title={trimmedExpression || reasonLabel}>
-              {trimmedExpression ? <code>{trimmedExpression}</code> : <em>Dynamic expression</em>}
+              {trimmedExpression ? <code>{trimmedExpression}</code> : <em>{t('resources:common.dynamicExpression')}</em>}
             </strong>
             <span title={reasonLabel}>{reasonLabel}</span>
           </div>
@@ -255,7 +262,7 @@ export const DependenciesPanel: React.FC<DependenciesPanelProps> = ({
               type="button"
               className="dependency-location-btn"
               onClick={() => onSelectLine(item.line ?? 1, item.file)}
-              title={`Jump to ${locationLabel}`}
+              title={t('resources:common.jumpTo', { location: locationLabel })}
             >
               {locationLabel}
             </button>
@@ -274,10 +281,10 @@ export const DependenciesPanel: React.FC<DependenciesPanelProps> = ({
     filteredDirectRows.length > 0 || filteredProjectUnknowns.length > 0 || supportingCount > 0;
 
   return (
-    <section className="dependencies-panel" aria-label="Dependencies">
+    <section className="dependencies-panel" aria-label={t('resources:panel.ariaLabel')}>
       <header className="dependencies-panel-header">
         <div className="dependencies-header-left">
-          <span className="dependencies-panel-title">DEPENDENCIES</span>
+          <span className="dependencies-panel-title">{t('resources:panel.title')}</span>
           <span className={`dependencies-status-pill is-${statusPill.tone}`}>{statusPill.label}</span>
         </div>
         <div className="dependencies-header-actions">
@@ -286,8 +293,8 @@ export const DependenciesPanel: React.FC<DependenciesPanelProps> = ({
             className="btn-dependencies-header-action"
             onClick={() => void resources.analyze()}
             disabled={resources.isAnalyzing || Boolean(resources.activeJobId)}
-            aria-label="Refresh dependencies"
-            title="Refresh dependencies"
+            aria-label={t('resources:panel.refreshTitle')}
+            title={t('resources:panel.refreshTitle')}
           >
             <RotateCw size={13} className={resources.isAnalyzing ? 'dependency-spin' : undefined} />
           </button>
@@ -295,8 +302,8 @@ export const DependenciesPanel: React.FC<DependenciesPanelProps> = ({
             type="button"
             className="btn-dependencies-header-action"
             onClick={() => resources.open?.('cache')}
-            aria-label="Manage installed resources"
-            title="Open Project Resources & Shared Cache"
+            aria-label={t('resources:panel.manageResourcesAria')}
+            title={t('resources:panel.manageResourcesTitle')}
           >
             <HardDrive size={13} />
           </button>
@@ -304,8 +311,8 @@ export const DependenciesPanel: React.FC<DependenciesPanelProps> = ({
             type="button"
             className="btn-dependencies-header-action"
             onClick={onClose}
-            aria-label="Close Dependencies"
-            title="Close Dependencies"
+            aria-label={t('resources:panel.closeTitle')}
+            title={t('resources:panel.closeTitle')}
           >
             <X size={14} />
           </button>
@@ -315,7 +322,7 @@ export const DependenciesPanel: React.FC<DependenciesPanelProps> = ({
       {isTypst ? (
         <div className="dependency-ready-strip is-typst" role="status" aria-live="polite">
           <CheckCircle2 size={14} aria-hidden="true" />
-          <span>Typst engine is bundled with the app. No package downloads are required.</span>
+          <span>{t('resources:panel.typstNotice')}</span>
         </div>
       ) : (
         <>
@@ -323,12 +330,14 @@ export const DependenciesPanel: React.FC<DependenciesPanelProps> = ({
             <div className="dependency-job" role="status" aria-live="polite">
               <div>
                 <strong>
-                  {resources.progress?.status === 'Cancelling' ? 'Stopping download…' : 'Preparing required files'}
+                  {resources.progress?.status === 'Cancelling'
+                    ? t('resources:panel.stoppingDownload')
+                    : t('resources:phases.preparing')}
                 </strong>
                 <span>
                   {resources.progress?.downloadedBytes != null
-                    ? `${formatBytes(resources.progress.downloadedBytes)} downloaded`
-                    : 'Batch progress applies to all selected files'}
+                    ? t('resources:panel.downloadedBytes', { bytes: formatBytes(resources.progress.downloadedBytes) })
+                    : t('resources:panel.batchProgressNote')}
                 </span>
               </div>
               {resources.progress?.totalResources != null && resources.progress.totalResources > 0 && (
@@ -342,7 +351,7 @@ export const DependenciesPanel: React.FC<DependenciesPanelProps> = ({
                 onClick={() => void resources.cancel()}
                 disabled={resources.progress?.status === 'Cancelling'}
               >
-                Cancel
+                {t('common:actions.cancel')}
               </button>
             </div>
           )}
@@ -361,7 +370,7 @@ export const DependenciesPanel: React.FC<DependenciesPanelProps> = ({
                 )}
                 <span>
                   {resources.error && resources.errorAction === 'prepare'
-                    ? 'The download did not finish. Retry when ready.'
+                    ? t('resources:panel.downloadUnfinished')
                     : summaryLine}
                 </span>
               </div>
@@ -379,7 +388,7 @@ export const DependenciesPanel: React.FC<DependenciesPanelProps> = ({
                 ) : (
                   <Download size={14} aria-hidden="true" />
                 )}
-                <span>{resources.isAnalyzing ? 'Checking resources…' : downloadLabel}</span>
+                <span>{resources.isAnalyzing ? t('resources:panel.checkingResources') : downloadLabel}</span>
               </button>
               <div className="dependency-action-links">
                 <button
@@ -387,7 +396,7 @@ export const DependenciesPanel: React.FC<DependenciesPanelProps> = ({
                   className="dependency-link-btn"
                   onClick={() => resources.open?.('cache')}
                 >
-                  Manage cache…
+                  {t('resources:panel.manageCache')}
                 </button>
               </div>
             </div>
@@ -404,7 +413,7 @@ export const DependenciesPanel: React.FC<DependenciesPanelProps> = ({
                 className="dependency-link-btn"
                 onClick={() => resources.open?.('cache')}
               >
-                Manage cache…
+                {t('resources:panel.manageCache')}
               </button>
             </div>
           ) : null}
@@ -417,8 +426,8 @@ export const DependenciesPanel: React.FC<DependenciesPanelProps> = ({
           <input
             type="text"
             className="dependency-filter-input"
-            aria-label="Filter dependencies"
-            placeholder="Filter dependencies…"
+            aria-label={t('resources:panel.filterAria')}
+            placeholder={t('resources:panel.filterPlaceholder')}
             value={filter}
             onChange={event => setFilter(event.target.value)}
           />
@@ -427,8 +436,8 @@ export const DependenciesPanel: React.FC<DependenciesPanelProps> = ({
               type="button"
               className="dependency-filter-clear"
               onClick={() => setFilter('')}
-              aria-label="Clear dependency filter"
-              title="Clear filter"
+              aria-label={t('resources:panel.clearFilterAria')}
+              title={t('resources:panel.clearFilterTitle')}
             >
               <X size={12} />
             </button>
@@ -439,31 +448,33 @@ export const DependenciesPanel: React.FC<DependenciesPanelProps> = ({
       <div className="dependency-list-scroll">
         {resources.resourcePageError && (
           <p className="dependency-error" role="alert">
-            Detected resources could not be loaded.{' '}
+            {t('resources:panel.loadError')}{' '}
             <button type="button" onClick={() => void resources.loadResourcePage(null, true)}>
-              Retry
+              {t('common:actions.retry')}
             </button>
           </p>
         )}
 
         {resources.isAnalyzing || (resources.isResourcePageLoading && !resources.resourcePage) ? (
-          <p className="dependency-muted">Loading detected resources…</p>
+          <p className="dependency-muted">{t('resources:panel.loadingDetected')}</p>
         ) : !hasVisibleRows ? (
           <p className="dependency-muted">
-            {normalizedFilter ? `No dependencies match “${filter}”.` : 'No known resource files were detected.'}
+            {normalizedFilter
+              ? t('resources:panel.noMatchingDependencies', { filter })
+              : t('resources:panel.noDetectedResources')}
           </p>
         ) : (
           <>
             {filteredDirectRows.length > 0 && (
               <section className="dependency-group">
-                <h3>Packages, Classes &amp; Assets</h3>
+                <h3>{t('resources:panel.directHeading')}</h3>
                 <ul>{filteredDirectRows.map(renderRequirementRow)}</ul>
               </section>
             )}
 
             {filteredProjectUnknowns.length > 0 && (
               <section className="dependency-group">
-                <h3>Unresolved References</h3>
+                <h3>{t('resources:panel.unresolvedHeading')}</h3>
                 <ul>{filteredProjectUnknowns.map(renderUnknownRow)}</ul>
               </section>
             )}
@@ -471,7 +482,7 @@ export const DependenciesPanel: React.FC<DependenciesPanelProps> = ({
             {supportingCount > 0 && (
               <details className="dependency-group dependency-supporting">
                 <summary>
-                  Supporting resources <span>{supportingCount}</span>
+                  {t('resources:common.supportingResources')} <span>{supportingCount}</span>
                 </summary>
                 {filteredTransitiveRows.length > 0 && (
                   <ul>{filteredTransitiveRows.map(renderRequirementRow)}</ul>
@@ -479,7 +490,7 @@ export const DependenciesPanel: React.FC<DependenciesPanelProps> = ({
                 {filteredCatalogUnknowns.length > 0 && (
                   <details className="dependency-catalog-unknowns">
                     <summary>
-                      Package-internal dynamic hooks <span>{filteredCatalogUnknowns.length}</span>
+                      {t('resources:common.catalogHooksHeading')} <span>{filteredCatalogUnknowns.length}</span>
                     </summary>
                     <ul>{filteredCatalogUnknowns.map(renderUnknownRow)}</ul>
                   </details>
@@ -496,7 +507,7 @@ export const DependenciesPanel: React.FC<DependenciesPanelProps> = ({
             disabled={resources.isResourcePageLoading}
             onClick={() => void resources.loadResourcePage(resources.resourcePage?.nextCursor ?? null)}
           >
-            {resources.isResourcePageLoading ? 'Loading…' : 'Load more detected resources'}
+            {resources.isResourcePageLoading ? t('resources:common.loading') : t('resources:panel.loadMore')}
           </button>
         )}
       </div>

@@ -2,6 +2,13 @@ import type { MatrixOptions, ParsedStructure, TableOptions } from '../../types/w
 import { validateGroups } from './generate';
 import { classifyLatexContext } from './context';
 
+type WritingTranslator = (key: string, fallback: string, params?: Record<string, string | number>) => string;
+const wt = (key: string, fallback: string, params?: Record<string, string | number>): string => {
+  const fn = (globalThis as { __sciencebatchTranslate?: WritingTranslator }).__sciencebatchTranslate;
+  if (fn) return fn(`writing:${key}`, fallback, params);
+  return params ? fallback.replace(/\{\{(\w+)\}\}/g, (_m, k) => String(params[k] ?? '')) : fallback;
+};
+
 const TOKEN = /\\(begin|end)\s*\{([^}]+)\}/g;
 const UNSUPPORTED = /\\(?:multicolumn|multirow|cline|cmidrule|newcolumntype|noalign|addlinespace|specialrule|rowcolor|begin\s*\{(?:tabularx|longtable|array)\})\b/;
 
@@ -111,7 +118,7 @@ function parseAt(source: string, offset: number): ParsedStructure<TableOptions |
     const floatEnd = matchingEnd(source, floatStart, 'table');
     if (!floatEnd || offset < floatStart || offset > floatEnd.end) continue;
     const children = [...clean.slice(floatStart, floatEnd.end).matchAll(/\\begin\s*\{(tabular|tabularx|longtable|tabular\*)\}/g)];
-    if (children.length !== 1 || children[0].index === undefined) return failure('table', floatStart, floatEnd.end, 'The floating table must contain exactly one supported tabular structure. Edit this structure directly in the source.');
+    if (children.length !== 1 || children[0].index === undefined) return failure('table', floatStart, floatEnd.end, wt('parser.floatingTableMustContainOne', 'The floating table must contain exactly one supported tabular structure. Edit this structure directly in the source.'));
     parseOffset = floatStart + children[0].index;
     break;
   }
@@ -123,7 +130,7 @@ function parseAt(source: string, offset: number): ParsedStructure<TableOptions |
     if (!unsupportedNames.has(env) || parseOffset < start) continue;
     const closing = matchingEnd(source, start, env);
     if (closing && parseOffset > closing.end) continue;
-    return failure<TableOptions | MatrixOptions>(env.includes('tabular') || env === 'longtable' ? 'table' : 'matrix', start, closing?.end ?? source.length, closing ? 'This LaTeX environment is not supported by the writing tools. Edit this structure directly in the source.' : 'This LaTeX environment is not closed. Edit this structure directly in the source.');
+    return failure<TableOptions | MatrixOptions>(env.includes('tabular') || env === 'longtable' ? 'table' : 'matrix', start, closing?.end ?? source.length, closing ? wt('parser.unsupportedLatexEnvironment', 'This LaTeX environment is not supported by the writing tools. Edit this structure directly in the source.') : wt('parser.unclosedLatexEnvironment', 'This LaTeX environment is not closed. Edit this structure directly in the source.'));
   }
   const matches = [...clean.matchAll(/\\begin\s*\{(tabular|matrix|pmatrix|bmatrix|Bmatrix|vmatrix|Vmatrix)\}/g)];
   for (const match of matches) {
@@ -132,27 +139,27 @@ function parseAt(source: string, offset: number): ParsedStructure<TableOptions |
     const closing = matchingEnd(source, start, env);
     if (!closing || parseOffset < start || parseOffset > closing.end) continue;
     const sourceContext = classifyLatexContext(source, start);
-    if (sourceContext.context === 'blocked' || (env === 'tabular' && sourceContext.context !== 'text')) return failure(env === 'tabular' ? 'table' : 'matrix', start, closing.end, sourceContext.reason ?? 'This structure is not in a supported LaTeX context. Edit this structure directly in the source.');
+    if (sourceContext.context === 'blocked' || (env === 'tabular' && sourceContext.context !== 'text')) return failure(env === 'tabular' ? 'table' : 'matrix', start, closing.end, sourceContext.reason ?? wt('parser.unsupportedLatexContext', 'This structure is not in a supported LaTeX context. Edit this structure directly in the source.'));
     const beginEnd = start + match[0].length;
     const full = source.slice(start, closing.end);
     let hasComment = false;
     for (let i = 0; i < full.length; i++) if (full[i] === '%' && !escaped(full, i)) { hasComment = true; break; }
-    if (UNSUPPORTED.test(full) || hasComment) return failure(env === 'tabular' ? 'table' : 'matrix', start, closing.end, 'This structure uses unsupported commands or comments. Edit this structure directly in the source.');
+    if (UNSUPPORTED.test(full) || hasComment) return failure(env === 'tabular' ? 'table' : 'matrix', start, closing.end, wt('parser.unsupportedCommandsOrComments', 'This structure uses unsupported commands or comments. Edit this structure directly in the source.'));
     if (env === 'tabular') {
       const alignGroup = group(source, beginEnd);
-      if (!alignGroup || !/^[lcr|]+$/.test(alignGroup.value) || !/[lcr]/.test(alignGroup.value)) return failure('table', start, closing.end, 'Custom column specifications are not supported. Edit this structure directly in the source.');
+      if (!alignGroup || !/^[lcr|]+$/.test(alignGroup.value) || !/[lcr]/.test(alignGroup.value)) return failure('table', start, closing.end, wt('parser.customColumnSpecs', 'Custom column specifications are not supported. Edit this structure directly in the source.'));
       const rawBody = source.slice(alignGroup.end, closing.closeStart);
       const stripped = stripCanonicalRules(rawBody);
-      if (!stripped) return failure('table', start, closing.end, 'Table rules must use supported standalone positions. Edit this structure directly in the source.');
+      if (!stripped) return failure('table', start, closing.end, wt('parser.tableRulesPositions', 'Table rules must use supported standalone positions. Edit this structure directly in the source.'));
       const hasPipes = alignGroup.value.includes('|');
       const pipeLayout = `|${alignGroup.value.replace(/\|/g, '').split('').join('|')}|`;
-      if ((hasPipes && (alignGroup.value !== pipeLayout || stripped.format !== 'grid')) || (!hasPipes && !/^[lcr]+$/.test(alignGroup.value)) || (stripped.format === 'grid' && !hasPipes)) return failure('table', start, closing.end, 'Custom or partial border layouts are not supported. Edit this structure directly in the source.');
+      if ((hasPipes && (alignGroup.value !== pipeLayout || stripped.format !== 'grid')) || (!hasPipes && !/^[lcr]+$/.test(alignGroup.value)) || (stripped.format === 'grid' && !hasPipes)) return failure('table', start, closing.end, wt('parser.customBorderLayouts', 'Custom or partial border layouts are not supported. Edit this structure directly in the source.'));
       const format: TableOptions['format'] = hasPipes ? 'grid' : stripped.format;
       const cells = splitRowsAndCells(stripped.body);
-      if (!cells || cells.length === 0 || cells.some((row) => row.length !== cells[0].length)) return failure('table', start, closing.end, 'This table has unbalanced groups or inconsistent rows. Edit this structure directly in the source.');
+      if (!cells || cells.length === 0 || cells.some((row) => row.length !== cells[0].length)) return failure('table', start, closing.end, wt('parser.tableUnbalancedOrInconsistent', 'This table has unbalanced groups or inconsistent rows. Edit this structure directly in the source.'));
       const columns = cells[0].length;
       const alignment = alignGroup.value.replace(/\|/g, '').split('') as Array<'l' | 'c' | 'r'>;
-      if (!columns || columns > 10 || cells.length > 20 || alignment.length !== columns) return failure('table', start, closing.end, 'This table exceeds supported dimensions or has a custom column layout.');
+      if (!columns || columns > 10 || cells.length > 20 || alignment.length !== columns) return failure('table', start, closing.end, wt('parser.tableExceedsDimensions', 'This table exceeds supported dimensions or has a custom column layout.'));
       const firstRowHeader = cells[0].map((cell) => wholeCommandArgument(cell, 'textbf'));
       const header = firstRowHeader.every((cell) => cell !== null);
       const parsedCells = cells.map((row, ri) => row.map((cell, ci) => {
@@ -160,11 +167,11 @@ function parseAt(source: string, offset: number): ParsedStructure<TableOptions |
         return cell;
       }));
       const positions = stripped.rules.map((rule) => rule.afterRows);
-      if (format === 'grid' && (stripped.rules.length !== parsedCells.length + 1 || stripped.rules.some((rule) => rule.name !== 'hline') || positions.some((position, i) => position !== i))) return failure('table', start, closing.end, 'Grid rules are not in supported positions. Edit this structure directly in the source.');
+      if (format === 'grid' && (stripped.rules.length !== parsedCells.length + 1 || stripped.rules.some((rule) => rule.name !== 'hline') || positions.some((position, i) => position !== i))) return failure('table', start, closing.end, wt('parser.gridRulesPositions', 'Grid rules are not in supported positions. Edit this structure directly in the source.'));
       const lastRule = stripped.rules[stripped.rules.length - 1];
-      if (format === 'booktabs' && (stripped.rules[0]?.name !== 'toprule' || stripped.rules[0]?.afterRows !== 0 || lastRule?.name !== 'bottomrule' || lastRule.afterRows !== parsedCells.length || stripped.rules.slice(1, -1).some((rule) => rule.name !== 'midrule' || rule.afterRows !== 1) || stripped.rules.length > 3 || (stripped.rules.length === 3 && !header))) return failure('table', start, closing.end, 'Booktabs rules are not in supported positions. Edit this structure directly in the source.');
-      if (format === 'plain' && stripped.rules.length > 0) return failure('table', start, closing.end, 'Plain tables cannot contain rules. Edit this structure directly in the source.');
-      try { parsedCells.flat().forEach(validateGroups); } catch { return failure('table', start, closing.end, 'A table cell has an unbalanced group.'); }
+      if (format === 'booktabs' && (stripped.rules[0]?.name !== 'toprule' || stripped.rules[0]?.afterRows !== 0 || lastRule?.name !== 'bottomrule' || lastRule.afterRows !== parsedCells.length || stripped.rules.slice(1, -1).some((rule) => rule.name !== 'midrule' || rule.afterRows !== 1) || stripped.rules.length > 3 || (stripped.rules.length === 3 && !header))) return failure('table', start, closing.end, wt('parser.booktabsRulesPositions', 'Booktabs rules are not in supported positions. Edit this structure directly in the source.'));
+      if (format === 'plain' && stripped.rules.length > 0) return failure('table', start, closing.end, wt('parser.plainTablesNoRules', 'Plain tables cannot contain rules. Edit this structure directly in the source.'));
+      try { parsedCells.flat().forEach(validateGroups); } catch { return failure('table', start, closing.end, wt('parser.tableCellUnbalancedGroup', 'A table cell has an unbalanced group.')); }
       let structureStart = start;
       let structureEnd = closing.end;
       let caption: string | undefined;
@@ -177,37 +184,37 @@ function parseAt(source: string, offset: number): ParsedStructure<TableOptions |
         if (wrapperEnd && wrapperEnd.end >= closing.end) {
           structureStart = wrapper.index; structureEnd = wrapperEnd.end;
           const opener = clean.slice(structureStart, start).match(/^\\begin\s*\{table\}\[htbp\]\s*\\centering\s*/);
-          if (!opener) return failure('table', structureStart, structureEnd, 'The floating table wrapper uses unsupported placement or instructions. Edit this structure directly in the source.');
+          if (!opener) return failure('table', structureStart, structureEnd, wt('parser.floatingTableWrapperUnsupported', 'The floating table wrapper uses unsupported placement or instructions. Edit this structure directly in the source.'));
           let metadata = source.slice(structureStart + opener[0].length, start);
           if (metadata.startsWith('\\caption')) {
             const capGroup = group(metadata, '\\caption'.length);
-            if (!capGroup) return failure('table', structureStart, structureEnd, 'The table caption is unbalanced. Edit this structure directly in the source.');
+            if (!capGroup) return failure('table', structureStart, structureEnd, wt('parser.tableCaptionUnbalanced', 'The table caption is unbalanced. Edit this structure directly in the source.'));
             caption = capGroup.value; metadata = metadata.slice(capGroup.end);
           }
           if (metadata.trimStart().startsWith('\\label')) {
             const lead = metadata.length - metadata.trimStart().length;
             metadata = metadata.slice(lead);
             const labelGroup = group(metadata, '\\label'.length);
-            if (!metadata.startsWith('\\label') || !labelGroup) return failure('table', structureStart, structureEnd, 'The table label is unbalanced. Edit this structure directly in the source.');
+            if (!metadata.startsWith('\\label') || !labelGroup) return failure('table', structureStart, structureEnd, wt('parser.tableLabelUnbalanced', 'The table label is unbalanced. Edit this structure directly in the source.'));
             label = labelGroup.value; metadata = metadata.slice(labelGroup.end);
           }
-          if (metadata.trim()) return failure('table', structureStart, structureEnd, 'The floating table contains unsupported metadata. Edit this structure directly in the source.');
-          if (source.slice(closing.end, wrapperEnd.closeStart).trim()) return failure('table', structureStart, structureEnd, 'The floating table contains unsupported instructions. Edit this structure directly in the source.');
-          if (label !== undefined && caption === undefined) return failure('table', structureStart, structureEnd, 'A table label requires a caption. Edit this structure directly in the source.');
+          if (metadata.trim()) return failure('table', structureStart, structureEnd, wt('parser.floatingTableUnsupportedMetadata', 'The floating table contains unsupported metadata. Edit this structure directly in the source.'));
+          if (source.slice(closing.end, wrapperEnd.closeStart).trim()) return failure('table', structureStart, structureEnd, wt('parser.floatingTableUnsupportedInstructions', 'The floating table contains unsupported instructions. Edit this structure directly in the source.'));
+          if (label !== undefined && caption === undefined) return failure('table', structureStart, structureEnd, wt('parser.tableLabelRequiresCaption', 'A table label requires a caption. Edit this structure directly in the source.'));
         }
       }
       return { kind: 'table', start: structureStart, end: structureEnd, compatible: true, value: { rows: parsedCells.length, columns, cells: parsedCells, alignment, format, header, wrapInTable: structureStart !== start, caption, captionLatex: structureStart !== start, label, latexCells: true } };
     }
     const body = source.slice(beginEnd, closing.closeStart).replace(/^\s*\n/, '').replace(/\n\s*$/, '');
     const cells = splitRowsAndCells(body);
-    if (!cells || cells.length === 0 || cells.some((row) => row.length !== cells[0].length)) return failure('matrix', start, closing.end, 'This matrix has unbalanced groups or inconsistent rows. Edit this structure directly in the source.');
+    if (!cells || cells.length === 0 || cells.some((row) => row.length !== cells[0].length)) return failure('matrix', start, closing.end, wt('parser.matrixUnbalancedOrInconsistent', 'This matrix has unbalanced groups or inconsistent rows. Edit this structure directly in the source.'));
     const columns = cells[0].length;
-    if (!columns || columns > 12 || cells.length > 12) return failure('matrix', start, closing.end, 'This matrix exceeds supported dimensions.');
-    try { cells.flat().forEach(validateGroups); } catch { return failure('matrix', start, closing.end, 'A matrix cell has an unbalanced group.'); }
+    if (!columns || columns > 12 || cells.length > 12) return failure('matrix', start, closing.end, wt('parser.matrixExceedsDimensions', 'This matrix exceeds supported dimensions.'));
+    try { cells.flat().forEach(validateGroups); } catch { return failure('matrix', start, closing.end, wt('parser.matrixCellUnbalancedGroup', 'A matrix cell has an unbalanced group.')); }
     return { kind: 'matrix', start, end: closing.end, compatible: true, value: { rows: cells.length, columns, cells, environment: env as MatrixOptions['environment'] } };
   }
   const unclosed = [...clean.matchAll(/\\begin\s*\{(tabular|matrix|pmatrix|bmatrix|Bmatrix|vmatrix|Vmatrix)\}/g)].find((match) => (match.index ?? 0) <= parseOffset && !matchingEnd(source, match.index ?? 0, match[1]));
-  return unclosed ? failure(unclosed[1] === 'tabular' ? 'table' : 'matrix', unclosed.index ?? 0, source.length, 'This structure is not closed. Edit this structure directly in the source.') : null;
+  return unclosed ? failure(unclosed[1] === 'tabular' ? 'table' : 'matrix', unclosed.index ?? 0, source.length, wt('parser.structureNotClosed', 'This structure is not closed. Edit this structure directly in the source.')) : null;
 }
 
 /** Parses only a supported table or matrix containing the given UTF-16 offset. */

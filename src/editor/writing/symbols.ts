@@ -2,15 +2,15 @@ import { LATEX_COMMANDS } from '../latexData';
 import type { SymbolEntry, WritingCategory } from '../../types/writing';
 
 const CATEGORY_BY_COMMAND: Record<string, WritingCategory> = {};
-export const WRITING_CATEGORIES: WritingCategory[] = ['Greek letters', 'Operators', 'Relations', 'Arrows', 'Sets and logic', 'Miscellaneous'];
+export const WRITING_CATEGORIES: WritingCategory[] = ['greek', 'operators', 'relations', 'arrows', 'logic', 'misc'];
 const category = (names: string, value: WritingCategory) => names.split(/\s+/).forEach((name) => { CATEGORY_BY_COMMAND[`\\${name}`] = value; });
-category('alpha beta gamma Gamma delta Delta epsilon varepsilon zeta eta theta Theta lambda Lambda mu nu xi pi rho sigma Sigma tau phi varphi Phi psi Psi omega Omega', 'Greek letters');
-category('sum int iint iiint oint prod lim partial nabla', 'Operators');
-category('infty dots cdots vdots ddots', 'Miscellaneous');
-category('times cdot pm mp', 'Operators');
-category('leq geq neq approx equiv', 'Relations');
-category('rightarrow Leftarrow Rightarrow Leftrightarrow', 'Arrows');
-category('forall exists in notin subset subseteq cup cap', 'Sets and logic');
+category('alpha beta gamma Gamma delta Delta epsilon varepsilon zeta eta theta Theta lambda Lambda mu nu xi pi rho sigma Sigma tau phi varphi Phi psi Psi omega Omega', 'greek');
+category('sum int iint iiint oint prod lim partial nabla', 'operators');
+category('infty dots cdots vdots ddots', 'misc');
+category('times cdot pm mp', 'operators');
+category('leq geq neq approx equiv', 'relations');
+category('rightarrow Leftarrow Rightarrow Leftrightarrow', 'arrows');
+category('forall exists in notin subset subseteq cup cap', 'logic');
 
 const GLYPHS: Record<string, string> = {
   '\\alpha': 'α', '\\beta': 'β', '\\gamma': 'γ', '\\Gamma': 'Γ', '\\delta': 'δ', '\\Delta': 'Δ', '\\epsilon': 'ε', '\\varepsilon': 'ϵ', '\\theta': 'θ', '\\lambda': 'λ', '\\mu': 'μ', '\\pi': 'π', '\\sigma': 'σ', '\\Sigma': 'Σ', '\\phi': 'ϕ', '\\varphi': 'φ', '\\omega': 'ω', '\\Omega': 'Ω',

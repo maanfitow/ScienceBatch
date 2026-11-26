@@ -1,19 +1,26 @@
 import type { MathContext, MatrixOptions, TableOptions } from '../../types/writing';
 
+type WritingTranslator = (key: string, fallback: string, params?: Record<string, string | number>) => string;
+const wt = (key: string, fallback: string, params?: Record<string, string | number>): string => {
+  const fn = (globalThis as { __sciencebatchTranslate?: WritingTranslator }).__sciencebatchTranslate;
+  if (fn) return fn(`writing:${key}`, fallback, params);
+  return params ? fallback.replace(/\{\{(\w+)\}\}/g, (_m, k) => String(params[k] ?? '')) : fallback;
+};
+
 export class WritingGenerationError extends Error { }
 
 function checkDimensions(rows: number, columns: number, min: number, maxRows: number, maxColumns: number): void {
   if (!Number.isInteger(rows) || !Number.isInteger(columns) || rows < min || columns < min || rows > maxRows || columns > maxColumns) {
-    throw new WritingGenerationError(`Dimensions must be between ${min} and ${maxRows} rows and ${min} and ${maxColumns} columns.`);
+    throw new WritingGenerationError(wt('generate.dimensionsRange', 'Dimensions must be between {{min}} and {{maxRows}} rows and {{min}} and {{maxColumns}} columns.', { min, maxRows, maxColumns }));
   }
 }
 
 function normalizedCells(cells: string[][], rows: number, columns: number, allowRawSeparators = false, cellLatex?: boolean[][]): string[][] {
-  if (cells.length !== rows || cells.some((row) => row.length !== columns)) throw new WritingGenerationError('The cell content does not match the selected dimensions.');
+  if (cells.length !== rows || cells.some((row) => row.length !== columns)) throw new WritingGenerationError(wt('generate.cellDimensionsMismatch', 'The cell content does not match the selected dimensions.'));
   return cells.map((row, rowIndex) => row.map((cell, columnIndex) => {
     const rawLatex = cellLatex?.[rowIndex]?.[columnIndex] ?? allowRawSeparators;
-    if (/[\r\n]/.test(cell)) throw new WritingGenerationError('Line breaks inside cells are not supported.');
-    if (rawLatex && hasStructuralCellSyntax(cell)) throw new WritingGenerationError('Unescaped alignment separators, row terminators, comments, and nested writing structures are not allowed inside a LaTeX cell.');
+    if (/[\r\n]/.test(cell)) throw new WritingGenerationError(wt('generate.cellLineBreaksUnsupported', 'Line breaks inside cells are not supported.'));
+    if (rawLatex && hasStructuralCellSyntax(cell)) throw new WritingGenerationError(wt('generate.latexCellStructuralSyntax', 'Unescaped alignment separators, row terminators, comments, and nested writing structures are not allowed inside a LaTeX cell.'));
     if (rawLatex) validateGroups(cell);
     return cell;
   }));
@@ -38,9 +45,9 @@ export function validateGroups(source: string): void {
   for (let i = 0; i < source.length; i++) {
     if (source[i] === '\\') { i++; continue; }
     if (source[i] === '{') depth++;
-    if (source[i] === '}' && --depth < 0) throw new WritingGenerationError('Cell content contains an unmatched closing brace.');
+    if (source[i] === '}' && --depth < 0) throw new WritingGenerationError(wt('generate.cellUnmatchedClosingBrace', 'Cell content contains an unmatched closing brace.'));
   }
-  if (depth !== 0) throw new WritingGenerationError('Cell content contains an unclosed brace group.');
+  if (depth !== 0) throw new WritingGenerationError(wt('generate.cellUnclosedBraceGroup', 'Cell content contains an unclosed brace group.'));
 }
 
 function escapeTableText(value: string): string {
@@ -49,21 +56,21 @@ function escapeTableText(value: string): string {
 }
 
 export function generateTable(options: TableOptions, context: MathContext = 'text'): string {
-  if (context !== 'text') throw new WritingGenerationError('Tables can only be inserted in text mode.');
+  if (context !== 'text') throw new WritingGenerationError(wt('generate.tablesTextModeOnly', 'Tables can only be inserted in text mode.'));
   checkDimensions(options.rows, options.columns, 1, 20, 10);
   const cells = normalizedCells(options.cells, options.rows, options.columns, options.latexCells ?? false, options.cellLatex).map((row, rowIndex) => row.map((cell, columnIndex) => {
     const rawLatex = options.cellLatex?.[rowIndex]?.[columnIndex] ?? options.latexCells ?? false;
     return rawLatex ? cell : escapeTableText(cell);
   }));
-  if (options.label?.trim() && !options.caption?.trim()) throw new WritingGenerationError('A label requires a caption.');
+  if (options.label?.trim() && !options.caption?.trim()) throw new WritingGenerationError(wt('generate.labelRequiresCaption', 'A label requires a caption.'));
   if (options.caption?.trim()) {
-    if (/[\r\n]/.test(options.caption)) throw new WritingGenerationError('Line breaks inside captions are not supported.');
+    if (/[\r\n]/.test(options.caption)) throw new WritingGenerationError(wt('generate.captionLineBreaksUnsupported', 'Line breaks inside captions are not supported.'));
     if (options.captionLatex) {
       validateGroups(options.caption);
-      if (hasStructuralCellSyntax(options.caption)) throw new WritingGenerationError('Raw captions cannot contain comments, row terminators, or nested writing structures.');
+      if (hasStructuralCellSyntax(options.caption)) throw new WritingGenerationError(wt('generate.rawCaptionStructuralSyntax', 'Raw captions cannot contain comments, row terminators, or nested writing structures.'));
     }
   }
-  if (options.wrapInTable && options.label?.trim() && !/^[a-zA-Z0-9:._-]+$/.test(options.label.trim())) throw new WritingGenerationError('Labels may contain only letters, digits, colons, periods, underscores, and hyphens.');
+  if (options.wrapInTable && options.label?.trim() && !/^[a-zA-Z0-9:._-]+$/.test(options.label.trim())) throw new WritingGenerationError(wt('generate.labelCharacters', 'Labels may contain only letters, digits, colons, periods, underscores, and hyphens.'));
   const alignment = Array.from({ length: options.columns }, (_, i) => options.alignment?.[i] ?? 'l');
   const bodyRows = cells.map((row, rowIndex) => {
     const values = row.map((cell) => options.header && rowIndex === 0 ? `\\textbf{${cell}}` : cell);
@@ -102,10 +109,10 @@ export function generateTable(options: TableOptions, context: MathContext = 'tex
 
 const MATRIX_ENVS = new Set(['matrix', 'pmatrix', 'bmatrix', 'Bmatrix', 'vmatrix', 'Vmatrix']);
 export function generateMatrix(options: MatrixOptions, context: MathContext): string {
-  if (context === 'blocked') throw new WritingGenerationError('This LaTeX context does not support matrix insertion.');
+  if (context === 'blocked') throw new WritingGenerationError(wt('generate.matrixInsertionUnsupported', 'This LaTeX context does not support matrix insertion.'));
   checkDimensions(options.rows, options.columns, 1, 12, 12);
   const environment = options.environment ?? 'pmatrix';
-  if (!MATRIX_ENVS.has(environment)) throw new WritingGenerationError('Choose a supported matrix delimiter.');
+  if (!MATRIX_ENVS.has(environment)) throw new WritingGenerationError(wt('generate.matrixDelimiterRequired', 'Choose a supported matrix delimiter.'));
   const cells = normalizedCells(options.cells, options.rows, options.columns, true);
   const body = `${cells.map((row) => row.join('&')).join(' \\\\\n')} \\\\`;
   const matrix = `\\begin{${environment}}\n${body}\n\\end{${environment}}`;

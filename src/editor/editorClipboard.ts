@@ -33,20 +33,27 @@ function getActiveEditor(expectedModelUri?: string): monacoType.editor.IStandalo
   return null;
 }
 
-async function writeClipboardText(text: string): Promise<void> {
+async function writeClipboardText(
+  text: string,
+  getClipboardUnavailableMessage?: () => string,
+): Promise<void> {
   if (isTauri()) {
     await writeText(text);
     return;
   }
 
   if (!navigator.clipboard?.writeText) {
-    throw new Error('Clipboard access is unavailable in this browser context.');
+    throw new Error(getClipboardUnavailableMessage?.() ?? 'Clipboard access is unavailable in this browser context.');
   }
 
   await navigator.clipboard.writeText(text);
 }
 
-async function copyEditorSelection(editor: monacoType.editor.IStandaloneCodeEditor, monaco: Monaco): Promise<void> {
+async function copyEditorSelection(
+  editor: monacoType.editor.IStandaloneCodeEditor,
+  monaco: Monaco,
+  options?: EditorClipboardOptions,
+): Promise<void> {
   const model = editor.getModel();
   if (!model || model.isDisposed()) return;
 
@@ -68,10 +75,10 @@ async function copyEditorSelection(editor: monacoType.editor.IStandaloneCodeEdit
   }
 
   try {
-    await writeClipboardText(text);
+    await writeClipboardText(text, options?.getClipboardUnavailableMessage);
   } catch (error) {
     const details = error instanceof Error ? error.message : String(error);
-    toast.error('Copy failed', { description: details });
+    toast.error(options?.getCopyFailedTitle?.() ?? 'Copy failed', { description: details });
   }
 }
 
@@ -99,15 +106,21 @@ function getExpectedModelUri(args: unknown[], monaco: Monaco): string | undefine
   return undefined;
 }
 
+export interface EditorClipboardOptions {
+  getCopyFailedTitle?: () => string;
+  getClipboardUnavailableMessage?: () => string;
+}
+
 export function registerEditorClipboardCopy(
   monaco: Monaco,
   editor: monacoType.editor.IStandaloneCodeEditor,
+  options?: EditorClipboardOptions,
 ): monacoType.IDisposable {
   if (copyCommandRegistration === null) {
     copyCommandRegistration = monaco.editor.registerCommand('editor.action.clipboardCopyAction', (_accessor, ...args) => {
       const expectedModelUri = getExpectedModelUri(args, monaco);
       const activeEditor = getActiveEditor(expectedModelUri);
-      if (activeEditor) void copyEditorSelection(activeEditor, monaco);
+      if (activeEditor) void copyEditorSelection(activeEditor, monaco, options);
     });
   }
 

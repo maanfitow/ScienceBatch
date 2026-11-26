@@ -601,3 +601,217 @@ Cross-referencing ties the paper together: Section~\\ref{sec:math} formulates Eq
 
 \\end{document}
 `;
+
+export const DEFAULT_LATEX_SOURCE_ES = `\\documentclass[12pt,a4paper]{article}
+
+% Paquetes fundamentales de matemáticas y tipografía
+\\usepackage{amsmath,amssymb,amsfonts,amsthm}
+\\usepackage{geometry}
+\\usepackage{graphicx}
+\\usepackage{booktabs}
+\\usepackage{hyperref}
+
+\\geometry{margin=2.5cm}
+
+% Entornos de teoremas
+\\newtheorem{theorem}{Teorema}[section]
+\\newtheorem{lemma}[theorem]{Lema}
+\\newtheorem{definition}[theorem]{Definición}
+
+\\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+\\title{\\textbf{Guía de Demostración y Tutorial Técnico de ScienceBatch}}
+\\author{\\textbf{Grupo de Investigación de ScienceBatch} \\\\ Departamento de Ciencias de la Computación y Matemática Aplicada \\\\ \\small \\texttt{research@sciencebatch.internal}}
+\\date{\\today}
+
+\\begin{document}
+
+\\maketitle
+
+\\begin{abstract}
+Este documento funciona tanto como banco de pruebas interactivo como tutorial arquitectónico para \\textbf{ScienceBatch}. Impulsado por el motor en memoria \\textit{Tectonic} XeTeX y \\textit{Typst} nativo en Rust, ScienceBatch ejecuta la composición tipográfica 100\\% sin conexión directamente en un sistema de archivos virtual en RAM (VFS) sin ensuciar el disco. Esta demostración presenta jerarquías de secciones (H1--H3), ecuaciones simples y multilínea, álgebra matricial, teoremas formales, tablas de nivel editorial, gráficos, recursos dinámicos, bloques de código y citas automatizadas con BibTeX.
+\\end{abstract}
+
+\\section{Introducción y Arquitectura del Sistema}
+\\label{sec:intro}
+
+LaTeX sigue siendo el estándar de referencia para la publicación científica rigurosa y la tipografía matemática. En \\textbf{ScienceBatch}, la compilación es estrictamente bajo demanda y se activa mediante el atajo global de teclado \\texttt{Ctrl + S} (o \\texttt{Cmd + S} en macOS) o el botón \\textbf{Compilar} en la barra de herramientas principal.
+
+\\subsection{Flujo de Compilación}
+\\label{subsec:pipeline}
+
+A diferencia de las distribuciones TeX tradicionales que requieren instalaciones de varios gigabytes y escriben archivos auxiliares intermedios (\\texttt{.aux}, \\texttt{.log}, \\texttt{.toc}) en el disco, ScienceBatch procesa el código fuente LaTeX en RAM. Los bytes PDF generados se envían a la interfaz y se renderizan sobre elementos canvas acelerados por hardware sin parpadeos en pantalla.
+
+\\subsubsection{Subproceso Trabajador Aislado}
+\\label{subsubsec:isolated-worker}
+
+Para garantizar que macros TeX malformadas o fallos en bibliotecas C no puedan bloquear la aplicación de escritorio, el motor tipográfico se ejecuta en un proceso hijo aislado mediante tuberías IPC asíncronas.
+
+\\section{Física Matemática y Ecuaciones Avanzadas}
+\\label{sec:math}
+
+Las expresiones matemáticas pueden insertarse en línea, como la identidad de Euler $e^{i\\pi} + 1 = 0$, la integral gaussiana $\\int_{-\\infty}^{\\infty} e^{-x^2} \\, dx = \\sqrt{\\pi}$ o el límite fundamental $\\lim_{x \\to 0} \\frac{\\sin x}{x} = 1$.
+
+\\subsection{Ecuaciones Numeradas en Bloque}
+\\label{subsec:equations}
+
+Las ecuaciones de una sola línea se declaran con el entorno \\texttt{equation} y se referencian de forma cruzada mediante \\texttt{\\textbackslash eqref\\{...\\}}, como se muestra en la equivalencia masa-energía de Einstein en la Ec.~\\eqref{eq:einstein}:
+
+\\begin{equation}
+\\label{eq:einstein}
+E = m c^2
+\\end{equation}
+
+\\subsection{Ecuaciones de Campo Multilínea Alineadas}
+\\label{subsec:maxwell}
+
+Las ecuaciones diferenciales acopladas, como las ecuaciones de Maxwell en su forma diferencial microscópica, se componen usando el entorno \\texttt{align} en las Ec.~\\eqref{eq:maxwell-gauss}--\\eqref{eq:maxwell-ampere}:
+
+\\begin{align}
+\\label{eq:maxwell-gauss}
+\\nabla \\cdot \\mathbf{E} &= \\frac{\\rho}{\\varepsilon_0} \\\\[6pt]
+\\label{eq:maxwell-faraday}
+\\nabla \\times \\mathbf{E} &= -\\frac{\\partial \\mathbf{B}}{\\partial t} \\\\[6pt]
+\\label{eq:maxwell-mag}
+\\nabla \\cdot \\mathbf{B} &= 0 \\\\[6pt]
+\\label{eq:maxwell-ampere}
+\\nabla \\times \\mathbf{B} &= \\mu_0 \\mathbf{J} + \\mu_0 \\varepsilon_0 \\frac{\\partial \\mathbf{E}}{\\partial t}
+\\end{align}
+
+\\subsection{Álgebra Lineal y Rotaciones de Coordenadas}
+\\label{subsec:algebra}
+
+Las transformaciones de coordenadas planas y los operadores lineales se expresan con claridad mediante entornos matriciales como se observa en la Ec.~\\eqref{eq:rotation}:
+
+\\begin{equation}
+\\label{eq:rotation}
+\\begin{bmatrix}
+x' \\\\[3pt]
+y'
+\\end{bmatrix}
+=
+\\begin{bmatrix}
+\\cos\\theta & -\\sin\\theta \\\\[3pt]
+\\sin\\theta & \\cos\\theta
+\\end{bmatrix}
+\\begin{bmatrix}
+x \\\\[3pt]
+y
+\\end{bmatrix}
+\\end{equation}
+
+\\subsection{Teoremas Formales y Demostraciones}
+\\label{subsec:theorems}
+
+Los entornos académicos mantienen un estilo uniforme y se integran de forma natural en la estructura del documento:
+
+\\begin{theorem}[Teorema Fundamental del Cálculo]
+\\label{thm:ftc}
+Sea $f: [a, b] \\to \\mathbb{R}$ una función real continua y sea $F$ una antiderivada de $f$ en $[a, b]$. Entonces:
+\\begin{equation}
+\\label{eq:ftc}
+\\int_{a}^{b} f(x) \\, dx = F(b) - F(a)
+\\end{equation}
+\\end{theorem}
+
+\\begin{proof}
+Al particionar $[a, b]$ en $n$ subintervalos y aplicar el Teorema del Valor Medio a $F$ en cada subintervalo, la suma de Riemann converge uniformemente a $F(b) - F(a)$ cuando $n \\to \\infty$.
+\\end{proof}
+
+\\section{Datos Tabulares Estructurados y Comparativas}
+\\label{sec:tables}
+
+Las tablas se diseñan mediante el paquete profesional \\texttt{booktabs} con filetes diferenciados en cabecera, cuerpo y cierre. La Tabla~\\ref{tab:benchmarks} resume las métricas arquitectónicas clave:
+
+\\begin{table}[htbp]
+\\centering
+\\caption{Comparativa integral entre los motores tipográficos de ScienceBatch.}
+\\label{tab:benchmarks}
+\\begin{tabular}{lcccr}
+\\toprule
+\\textbf{Característica} & \\textbf{LaTeX (Tectonic)} & \\textbf{Typst (Rust)} & \\textbf{ScienceBatch VFS} & \\textbf{Aceleración} \\\\
+\\midrule
+Motor de Compilación & XeTeX en VFS RAM & Motor Rust Nativo & Cero E/S en Disco & $10\\times$ \\\\
+Latencia de Arranque & $< 1.2\\text{ s}$ & $< 0.05\\text{ s}$ & Paquete en Memoria & Instantánea \\\\
+Sintaxis Matemática & Sistema de Macros TeX & Declarativa Moderna & Vista Previa Unificada & Dinámica \\\\
+Soporte Gráfico & PNG, JPEG, PDF & PNG, SVG, GIF & Embebido Base64 & Fluido \\\\
+Resolución Multiarchivo & \\texttt{\\textbackslash input}, \\texttt{\\textbackslash include} & \\texttt{\\#include} & Resolutor Relativo & Automática \\\\
+\\bottomrule
+\\end{tabular}
+\\end{table}
+
+\\section{Gráficos, Figuras y Recursos Multimedia}
+\\label{sec:figures}
+
+Las figuras visuales se incrustan con el paquete \\texttt{graphicx} dentro de entornos \\texttt{figure}. La imagen de la Fig.~\\ref{fig:banner} ilustra la arquitectura de doble motor:
+
+\\begin{figure}[htbp]
+\\centering
+\\includegraphics[width=0.7\\textwidth]{assets/sample.png}
+\\caption{ScienceBatch Studio: arquitectura de composición tipográfica de alto rendimiento y flujo de doble motor.}
+\\label{fig:banner}
+\\end{figure}
+
+\\subsection{Multimedia Dinámica y Exportación Web}
+\\label{subsec:multimedia}
+
+En la publicación PDF tradicional, los motores TeX estándar incrustan gráficos vectoriales y rasterizados estáticos (PNG, JPEG, PDF) como se aprecia en la Fig.~\\ref{fig:banner}.
+Al exportar documentos HTML autónomos desde ScienceBatch, los recursos multimedia incluyendo GIFs animados (como \\texttt{assets/sample.gif}) se codifican automáticamente como URI de datos base64, ofreciendo publicaciones web animadas y listas para funcionar sin conexión.
+
+\\section{Listados de Código Fuente}
+\\label{sec:code}
+
+Los fragmentos de código fuente pueden incluirse directamente para documentación o reproducibilidad:
+
+\\begin{verbatim}
+// Emisión asíncrona de eventos IPC en Rust
+app_handle.emit("compilation-progress", ProgressPayload {
+    status: "compiling".into(),
+    message: "Procesando código fuente LaTeX en memoria...".into(),
+})?;
+\\end{verbatim}
+
+\\section{Listas y Enumeraciones}
+\\label{sec:lists}
+
+Las funcionalidades se estructuran mediante listas anidadas ordenadas y sin ordenar:
+
+\\begin{itemize}
+    \\item \\textbf{Configuración Sin Fricción:}
+    \\begin{enumerate}
+        \\item El paquete TeX embebido gestiona automáticamente las bibliotecas esenciales.
+        \\item Descubrimiento automático de BibTeX y tipografías.
+    \\end{enumerate}
+    \\item \\textbf{Exportación Multiformato:}
+    \\begin{itemize}
+        \\item HTML autónomo con KaTeX y tablas CSS adaptativas.
+        \\item GitHub Flavored Markdown (GFM) conservando matemáticas y encabezados limpios.
+    \\end{itemize}
+\\end{itemize}
+
+\\section{Citas y Referencias Bibliográficas}
+\\label{sec:citations}
+
+Las citas enlazan directamente con el archivo \\texttt{references.bib} del proyecto. Por ejemplo, la física relativista fue revolucionada en el célebre artículo de 1905 de Einstein~\\cite{einstein1905}.
+Las referencias cruzadas conectan todo el artículo: la Sección~\\ref{sec:math} formula la Ec.~\\eqref{eq:einstein}, la Sección~\\ref{sec:tables} detalla la Tabla~\\ref{tab:benchmarks} y la Sección~\\ref{sec:figures} presenta la Fig.~\\ref{fig:banner}.
+
+\\bibliographystyle{plain}
+\\bibliography{references}
+
+\\end{document}
+`;
+
+export function getDefaultLatexSource(language?: string): string {
+  return language?.toLowerCase().startsWith('es')
+    ? DEFAULT_LATEX_SOURCE_ES
+    : DEFAULT_LATEX_SOURCE;
+}
+
+export function isDefaultLatexSource(source: string): boolean {
+  return source === DEFAULT_LATEX_SOURCE || source === DEFAULT_LATEX_SOURCE_ES;
+}

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
+import i18n from '../i18n';
+import { translateBackendError } from '../i18n/backendMessages';
 
 const AUTO_CHECK_STORAGE_KEY = 'sciencebatch:auto-check-updates';
 
@@ -97,19 +99,19 @@ export function useUpdateNotifier(): UseUpdateNotifierReturn {
       setCheckError(null);
 
       if (silent && result.updateAvailable) {
-        toast.info(`Update available: v${result.latestVersion}`, {
-          description: result.releaseName || 'A new ScienceBatch release is ready.',
+        toast.info(i18n.t('editor:updates.availableTitle', { version: result.latestVersion }), {
+          description: result.releaseName || i18n.t('editor:updates.availableDescription'),
           action: {
-            label: 'View Details',
+            label: i18n.t('editor:updates.viewDetails'),
             onClick: () => setIsModalOpen(true),
           },
         });
       }
     } catch (err) {
       if (!mountedRef.current) return;
-      const message = err instanceof Error ? err.message : String(err);
+      const message = translateBackendError(err, null, i18n.t('errors:updates.checkFailed'));
       if (!silent) {
-        setCheckError(message || 'Unable to check for updates.');
+        setCheckError(message || i18n.t('errors:updates.checkFailed'));
       }
     } finally {
       inFlightRef.current = false;

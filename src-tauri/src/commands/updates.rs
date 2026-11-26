@@ -47,13 +47,13 @@ pub fn resolve_update_endpoint() -> Result<String, String> {
 pub fn validate_update_endpoint(raw: &str) -> Result<String, String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() || trimmed.chars().any(char::is_whitespace) {
-        return Err("Invalid update endpoint URL.".to_string());
+        return Err("updates.invalid_url: Invalid update endpoint URL.".to_string());
     }
 
     if let Some(rest) = trimmed.strip_prefix("https://") {
         let host = rest.split(['/', '?', '#']).next().unwrap_or("");
         if host.is_empty() {
-            return Err("Update endpoint HTTPS URL is missing a host.".to_string());
+            return Err("updates.missing_host: Update endpoint HTTPS URL is missing a host.".to_string());
         }
         return Ok(trimmed.to_string());
     }
@@ -71,7 +71,7 @@ pub fn validate_update_endpoint(raw: &str) -> Result<String, String> {
     }
 
     Err(format!(
-        "Unsupported update endpoint protocol or host: {trimmed}"
+        "updates.unsupported_host: Unsupported update endpoint protocol or host: {trimmed}"
     ))
 }
 
@@ -194,13 +194,13 @@ pub fn parse_github_release_payload(
     body: &str,
 ) -> Result<UpdateCheckResult, String> {
     let payload: GitHubReleasePayload = serde_json::from_str(body)
-        .map_err(|err| format!("Failed to parse GitHub release response: {err}"))?;
+        .map_err(|err| format!("updates.invalid_response: Failed to parse GitHub release response: {err}"))?;
 
     let normalized_current = normalize_version_label(current_version);
 
     let latest_tag = payload.tag_name.trim().to_string();
     if latest_tag.is_empty() {
-        return Err("GitHub release response is missing tag_name.".to_string());
+        return Err("updates.invalid_response: GitHub release response is missing tag_name.".to_string());
     }
 
     let latest_version = normalize_version_label(&latest_tag);
@@ -251,14 +251,14 @@ pub async fn check_update_against_url(
         .timeout(Duration::from_secs(REQUEST_TIMEOUT_SECS))
         .user_agent(format!("ScienceBatch/{current_version}"))
         .build()
-        .map_err(|err| format!("Failed to initialize update HTTP client: {err}"))?;
+        .map_err(|err| format!("updates.request_failed: Failed to initialize update HTTP client: {err}"))?;
 
     let mut response = client
         .get(&validated_url)
         .header("Accept", "application/vnd.github+json")
         .send()
         .await
-        .map_err(|err| format!("Failed to check for updates: {err}"))?;
+        .map_err(|err| format!("updates.request_failed: Failed to check for updates: {err}"))?;
 
     let status = response.status();
     if status == reqwest::StatusCode::NOT_FOUND {
@@ -277,7 +277,7 @@ pub async fn check_update_against_url(
     }
     if !status.is_success() {
         return Err(format!(
-            "Update server returned HTTP {} ({}).",
+            "updates.http_status: Update server returned HTTP {} ({}).",
             status.as_u16(),
             status.canonical_reason().unwrap_or("Error")
         ));
@@ -285,7 +285,7 @@ pub async fn check_update_against_url(
 
     if let Some(len) = response.content_length() {
         if len > MAX_UPDATE_RESPONSE_BYTES as u64 {
-            return Err("Update response exceeded the 512 KiB size limit.".to_string());
+            return Err("updates.too_large: Update response exceeded the 512 KiB size limit.".to_string());
         }
     }
 
@@ -293,16 +293,16 @@ pub async fn check_update_against_url(
     while let Some(chunk) = response
         .chunk()
         .await
-        .map_err(|err| format!("Failed to read update response body: {err}"))?
+        .map_err(|err| format!("updates.request_failed: Failed to read update response body: {err}"))?
     {
         if buffer.len() + chunk.len() > MAX_UPDATE_RESPONSE_BYTES {
-            return Err("Update response exceeded the 512 KiB size limit.".to_string());
+            return Err("updates.too_large: Update response exceeded the 512 KiB size limit.".to_string());
         }
         buffer.extend_from_slice(&chunk);
     }
 
     let body = String::from_utf8(buffer)
-        .map_err(|err| format!("Update response was not valid UTF-8: {err}"))?;
+        .map_err(|err| format!("updates.invalid_response: Update response was not valid UTF-8: {err}"))?;
 
     parse_github_release_payload(current_version, &body)
 }

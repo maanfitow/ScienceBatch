@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { FileItem } from '../../types';
 import { SidebarToolId } from '../../types/sidebar';
@@ -84,6 +85,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   onSplitRatioChange,
   resources,
 }) => {
+  const { t } = useTranslation(['sidebar', 'common']);
   const isSplit = Boolean(isOpen && activeTopTool && activeBottomTool);
   const hasActivePanel = Boolean(isOpen && (activeTopTool || activeBottomTool));
 
@@ -169,7 +171,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
               engine={engine}
             />
           )
-          : <div className="sidebar-tool-panel-content">Open a project to view dependencies.</div>;
+          : <div className="sidebar-tool-panel-content">{t('sidebar:workspace.openProjectDependencies')}</div>;
 
       default:
         return null;
