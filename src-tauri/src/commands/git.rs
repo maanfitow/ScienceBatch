@@ -20,6 +20,36 @@ const MAX_DIFF_FILE_BYTES: u64 = 8 * 1024 * 1024; // 8 MB
 const MAX_DIFF_LINES: usize = 2000;
 const GIT_OPERATION_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 
+/// Strip the Windows verbatim `\\?\` or `\\?\UNC\` prefix so Git CLI receives standard paths.
+fn strip_windows_verbatim_prefix(path: std::path::PathBuf) -> std::path::PathBuf {
+    #[cfg(windows)]
+    {
+        if let Some(raw) = path.to_str() {
+            if let Some(unc) = raw.strip_prefix(r"\\?\UNC\") {
+                return std::path::PathBuf::from(format!(r"\\{unc}"));
+            }
+            if let Some(drive) = raw.strip_prefix(r"\\?\") {
+                return std::path::PathBuf::from(drive);
+            }
+        }
+        path
+    }
+    #[cfg(not(windows))]
+    {
+        path
+    }
+}
+
+fn canonicalize_clean(path: &Path) -> io::Result<std::path::PathBuf> {
+    path.canonicalize().map(strip_windows_verbatim_prefix)
+}
+
+async fn canonicalize_clean_async(path: &Path) -> io::Result<std::path::PathBuf> {
+    tokio::fs::canonicalize(path)
+        .await
+        .map(strip_windows_verbatim_prefix)
+}
+
 /// Run a Git subprocess with a hard deadline, including inherited pipes held by hooks or helpers.
 async fn bounded_command_output(
     mut command: Command,
@@ -32,6 +62,7 @@ async fn bounded_command_output(
         .kill_on_drop(true);
     #[cfg(unix)]
     command.process_group(0);
+    crate::automation::configure_background_command(&mut command);
 
     let mut child = command.spawn()?;
     let process_id = child.id();
@@ -117,9 +148,10 @@ async fn repository_lock_key(
     if !root_output.status.success() {
         return Err("Project is not a Git repository.".to_string());
     }
-    let root = std::path::PathBuf::from(String::from_utf8_lossy(&root_output.stdout).trim())
-        .canonicalize()
-        .map_err(|error| format!("Failed to resolve the Git repository root: {error}"))?;
+    let root = canonicalize_clean(Path::new(
+        String::from_utf8_lossy(&root_output.stdout).trim(),
+    ))
+    .map_err(|error| format!("Failed to resolve the Git repository root: {error}"))?;
     let common_output = safe_git_output(
         project,
         &["rev-parse", "--path-format=absolute", "--git-common-dir"],
@@ -127,9 +159,10 @@ async fn repository_lock_key(
     .await
     .map_err(|error| format!("Failed to locate Git metadata: {error}"))?;
     let common = if common_output.status.success() {
-        std::path::PathBuf::from(String::from_utf8_lossy(&common_output.stdout).trim())
-            .canonicalize()
-            .unwrap_or(root.clone())
+        canonicalize_clean(Path::new(
+            String::from_utf8_lossy(&common_output.stdout).trim(),
+        ))
+        .unwrap_or_else(|_| root.clone())
     } else {
         root.clone()
     };
@@ -437,6 +470,7 @@ async fn run_git_diff_capped(
         .kill_on_drop(true);
     #[cfg(unix)]
     cmd.process_group(0);
+    crate::automation::configure_background_command(&mut cmd);
 
     clear_git_location_overrides(&mut cmd);
     let mut child = cmd
@@ -611,8 +645,7 @@ pub async fn initialize_git_repository(project_path: String) -> Result<GitStatus
             "The selected project folder does not exist or is not a directory.".to_string(),
         );
     }
-    let project_path = requested_path
-        .canonicalize()
+    let project_path = canonicalize_clean(requested_path)
         .map_err(|error| format!("Failed to resolve the selected project folder: {error}"))?;
 
     let status = get_git_status_internal(&project_path).await?;
@@ -679,8 +712,7 @@ fn canonical_project(project_path: &str) -> Result<std::path::PathBuf, String> {
     if !path.exists() || !path.is_dir() {
         return Err("Project directory does not exist or is not a directory.".to_string());
     }
-    path.canonicalize()
-        .map_err(|error| format!("Cannot resolve project directory: {error}"))
+    canonicalize_clean(path).map_err(|error| format!("Cannot resolve project directory: {error}"))
 }
 
 async fn require_git_project(project_path: &str) -> Result<std::path::PathBuf, String> {
@@ -727,7 +759,7 @@ fn validate_git_paths(project: &Path, paths: &[String]) -> Result<(), String> {
                 return Err("File path escapes the selected project directory.".to_string());
             }
         }
-        if let Ok(resolved) = probe.canonicalize() {
+        if let Ok(resolved) = canonicalize_clean(&probe) {
             if !resolved.starts_with(project) {
                 return Err(
                     "File path escapes the selected project directory through a symlink."
@@ -913,7 +945,8 @@ async fn run_git_operation_with_timeout(
     push_destination: Option<String>,
     timeout: Duration,
 ) -> Result<String, GitOperationError> {
-    let ssh_required = operation_uses_ssh(project, operation, args).await;
+    let target_urls = collect_operation_remote_urls(project, operation, args).await;
+    let ssh_required = urls_use_ssh(&target_urls);
     let configured_ssh = if !ssh_required {
         None
     } else if let Ok(command) = std::env::var("GIT_SSH_COMMAND") {
@@ -944,6 +977,21 @@ async fn run_git_operation_with_timeout(
     } else {
         String::new()
     };
+    let (prepared_credentials, helper_cli) = if !ssh_required {
+        match (
+            super::git_auth::prepare_git_credentials_for_urls(&target_urls).await,
+            crate::automation::worker_executable().ok(),
+        ) {
+            (Some(creds), Some(cli)) => (Some(creds), Some(cli)),
+            _ => (None, None),
+        }
+    } else {
+        (None, None)
+    };
+    let credential_secrets = prepared_credentials
+        .as_ref()
+        .map(|creds| creds.secrets().to_vec())
+        .unwrap_or_default();
     emit_git_progress(
         app.as_ref(),
         operation_id,
@@ -953,9 +1001,17 @@ async fn run_git_operation_with_timeout(
         "Starting Git operation.",
     );
     let mut command = Command::new("git");
+    command.arg("-c").arg("core.fsmonitor=false");
+    if let (Some(creds), Some(cli_path)) = (prepared_credentials.as_ref(), helper_cli.as_ref()) {
+        command
+            .arg("-c")
+            .arg("credential.helper=")
+            .arg("-c")
+            .arg(super::git_auth::format_git_credential_config_entry(cli_path))
+            .env("SCIENCEBATCH_GIT_CRED_ADDR", creds.addr())
+            .env("SCIENCEBATCH_GIT_CRED_NONCE", creds.nonce());
+    }
     command
-        .arg("-c")
-        .arg("core.fsmonitor=false")
         .args(args)
         .current_dir(project)
         .env("GIT_TERMINAL_PROMPT", "0")
@@ -971,6 +1027,7 @@ async fn run_git_operation_with_timeout(
         .kill_on_drop(true);
     #[cfg(unix)]
     command.process_group(0);
+    crate::automation::configure_background_command(&mut command);
     clear_git_location_overrides(&mut command);
     if !ssh_command.is_empty() {
         command.env("GIT_SSH_COMMAND", ssh_command);
@@ -995,6 +1052,7 @@ async fn run_git_operation_with_timeout(
     let op_id = operation_id.to_string();
     let operation_name = operation.to_string();
     let project_root = project.to_path_buf();
+    let secrets_for_stderr = credential_secrets.clone();
     let mut stderr_task = tokio::spawn(async move {
         let mut reader = stderr;
         let mut saved = String::new();
@@ -1013,7 +1071,10 @@ async fn run_git_operation_with_timeout(
                     if pending.is_empty() {
                         continue;
                     }
-                    let line = String::from_utf8_lossy(&pending).to_string();
+                    let line = super::git_auth::redact_secrets(
+                        &String::from_utf8_lossy(&pending),
+                        &secrets_for_stderr,
+                    );
                     if saved.len() < 64 * 1024 {
                         saved.push_str(&line);
                         saved.push('\n');
@@ -1033,7 +1094,10 @@ async fn run_git_operation_with_timeout(
             }
         }
         if !pending.is_empty() {
-            let line = String::from_utf8_lossy(&pending).to_string();
+            let line = super::git_auth::redact_secrets(
+                &String::from_utf8_lossy(&pending),
+                &secrets_for_stderr,
+            );
             if saved.len() < 64 * 1024 {
                 saved.push_str(&line);
             }
@@ -1054,6 +1118,7 @@ async fn run_git_operation_with_timeout(
         (status, stdout_bytes, stderr_text)
     })
     .await;
+    drop(prepared_credentials);
     let (status, stdout_bytes, stderr_text) = match joined {
         Ok((status, stdout_bytes, stderr_text)) => (
             status.map_err(|error| {
@@ -1128,7 +1193,10 @@ async fn run_git_operation_with_timeout(
             ));
         }
     };
-    let stdout = String::from_utf8_lossy(&stdout_bytes).to_string();
+    let stdout = super::git_auth::redact_secrets(
+        &String::from_utf8_lossy(&stdout_bytes),
+        &credential_secrets,
+    );
     if status.success() {
         emit_git_progress(
             app.as_ref(),
@@ -1140,7 +1208,10 @@ async fn run_git_operation_with_timeout(
         );
         return Ok(sanitize_git_output(&stdout));
     }
-    let details = sanitize_git_output(stderr_text.trim());
+    let details = sanitize_git_output(&super::git_auth::redact_secrets(
+        stderr_text.trim(),
+        &credential_secrets,
+    ));
     emit_git_progress(
         app.as_ref(),
         operation_id,
@@ -1179,11 +1250,14 @@ async fn run_git_operation_with_timeout(
             false,
         ));
     }
-    let message = if details.is_empty() {
-        format!("Git {operation} failed.")
-    } else {
-        format!("Git {operation} failed: {details}")
-    };
+    let message = super::git_auth::redact_secrets(
+        &if details.is_empty() {
+            format!("Git {operation} failed.")
+        } else {
+            format!("Git {operation} failed: {details}")
+        },
+        &credential_secrets,
+    );
     Err(operation_error(
         "GitFailed",
         message,
@@ -1193,7 +1267,11 @@ async fn run_git_operation_with_timeout(
     ))
 }
 
-async fn operation_uses_ssh(project: &Path, operation: &str, args: &[String]) -> bool {
+async fn collect_operation_remote_urls(
+    project: &Path,
+    operation: &str,
+    args: &[String],
+) -> Vec<String> {
     let mut urls = Vec::new();
     if operation == "clone" {
         if let Some(url) = args
@@ -1228,6 +1306,10 @@ async fn operation_uses_ssh(project: &Path, operation: &str, args: &[String]) ->
             }
         }
     }
+    urls
+}
+
+fn urls_use_ssh(urls: &[String]) -> bool {
     urls.iter()
         .any(|url| url.starts_with("ssh://") || (url.contains(':') && !url.contains("://")))
 }
@@ -1241,6 +1323,7 @@ async fn terminate_git_process_tree(pid: u32) {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .kill_on_drop(true);
+    crate::automation::configure_background_command(&mut command);
     let _ = tokio::time::timeout(Duration::from_secs(5), command.output()).await;
 }
 
@@ -2363,7 +2446,7 @@ async fn clone_git_repository_inner(
             false,
         ));
     }
-    let parent = parent.canonicalize().map_err(|error| {
+    let parent = canonicalize_clean(parent).map_err(|error| {
         operation_error(
             "InvalidDestination",
             format!("Could not resolve the selected parent folder: {error}"),
@@ -2449,7 +2532,7 @@ pub async fn get_git_diff(
         return Err("Project directory does not exist or is not a directory".to_string());
     }
 
-    let proj_canonical = tokio::fs::canonicalize(proj)
+    let proj_canonical = canonicalize_clean_async(proj)
         .await
         .map_err(|e| format!("Cannot resolve project directory: {e}"))?;
 
@@ -2457,14 +2540,14 @@ pub async fn get_git_diff(
     let target_path = proj_canonical.join(rel_path);
     if let Ok(symlink_meta) = tokio::fs::symlink_metadata(&target_path).await {
         if symlink_meta.file_type().is_symlink() {
-            let target_canonical = tokio::fs::canonicalize(&target_path)
+            let target_canonical = canonicalize_clean_async(&target_path)
                 .await
                 .map_err(|e| format!("Cannot resolve symlink target: {e}"))?;
             if !target_canonical.starts_with(&proj_canonical) {
                 return Err("Path escapes project directory via symlink".to_string());
             }
         } else if target_path.exists() {
-            let target_canonical = tokio::fs::canonicalize(&target_path)
+            let target_canonical = canonicalize_clean_async(&target_path)
                 .await
                 .map_err(|e| format!("Cannot resolve file path: {e}"))?;
             if !target_canonical.starts_with(&proj_canonical) {
@@ -3127,6 +3210,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&project_dir);
     }
 
+    // `:` is illegal in Windows NTFS filenames, so literal pathspec magic filenames cannot be created there.
+    #[cfg(not(windows))]
     #[tokio::test]
     async fn test_git_diff_literal_pathspec_magic() {
         let base_temp = std::env::temp_dir();
@@ -3529,7 +3614,7 @@ mod tests {
 
         assert_eq!(
             Path::new(&info.repository_root),
-            root.canonicalize().unwrap()
+            canonicalize_clean(&root).unwrap()
         );
         assert!(info.has_staged_changes);
         assert!(!info.worktree_clean);

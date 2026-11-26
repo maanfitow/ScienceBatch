@@ -2,8 +2,9 @@ import React, { FormEvent, useCallback, useEffect, useMemo, useRef, useState } f
 import { createPortal } from 'react-dom';
 import { invoke } from '@tauri-apps/api/core';
 import { ArrowDownToLine, ArrowUpFromLine, ExternalLink, GitCommitHorizontal, GitFork, LoaderCircle, Plus, RefreshCw, Settings2, X } from 'lucide-react';
-import { GitOperationResult, GitRepositoryInfo } from '../../types/git';
+import { GitAccountStatus, GitOperationResult, GitProvider, GitProviderRepo, GitRepositoryInfo } from '../../types/git';
 import { GitOperationKind, GitOperationFailure, useGitOperation } from '../../hooks/useGitOperation';
+import { GitAccountSection } from './GitAccountSection';
 import { GitProviderIcon } from './GitProviderIcon';
 import './gitWorkflows.css';
 
@@ -61,6 +62,14 @@ export const GitWorkflowControls: React.FC<GitWorkflowControlsProps> = ({ projec
   const [repositoryDialogOpen, setRepositoryDialogOpen] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
   const [modalValidation, setModalValidation] = useState<string | null>(null);
+  const [gitAccounts, setGitAccounts] = useState<GitAccountStatus[]>([]);
+  const [createRepoOpen, setCreateRepoOpen] = useState(false);
+  const [createRepoProvider, setCreateRepoProvider] = useState<GitProvider>('github');
+  const [createRepoName, setCreateRepoName] = useState('');
+  const [createRepoDescription, setCreateRepoDescription] = useState('');
+  const [createRepoPrivate, setCreateRepoPrivate] = useState(true);
+  const [creatingRepo, setCreatingRepo] = useState(false);
+  const [createdRepoNotice, setCreatedRepoNotice] = useState<string | null>(null);
   const rootRef = useRef(projectRoot);
   const mounted = useRef(true);
   const infoRequest = useRef(0);
@@ -113,6 +122,12 @@ export const GitWorkflowControls: React.FC<GitWorkflowControlsProps> = ({ projec
     setModalError(null);
     setModalValidation(null);
     setRemoteFormMode(null);
+    setCreateRepoOpen(false);
+    setCreateRepoName('');
+    setCreateRepoDescription('');
+    setCreateRepoPrivate(true);
+    setCreatingRepo(false);
+    setCreatedRepoNotice(null);
     setIdentityOpen(false);
     setPushBranch('');
     setSelectedRemoteName('');
@@ -139,10 +154,22 @@ export const GitWorkflowControls: React.FC<GitWorkflowControlsProps> = ({ projec
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    void invoke<GitAccountStatus[]>('get_git_accounts')
+      .then(accounts => {
+        if (active && mounted.current) setGitAccounts(accounts);
+      })
+      .catch(() => { /* Account status is optional in non-Tauri or unconfigured environments. */ });
+    return () => { active = false; };
+  }, []);
+
   const selectedRemote = useMemo(() => info?.remotes.find(remote => remote.name === selectedRemoteName), [info?.remotes, selectedRemoteName]);
   const selectedFetchUrl = selectedRemote?.fetchUrl || '';
-  const isBlocked = disabled || running || worktreeUpdateBusy;
+  const isBlocked = disabled || running || worktreeUpdateBusy || creatingRepo;
+  const dialogBusy = running || creatingRepo;
   const remoteOptions = info?.remotes || [];
+  const signedInProviders = useMemo(() => gitAccounts.filter(account => account.signedIn), [gitAccounts]);
   const resolvedUpstreamRemote = info?.upstream && info.upstreamRemote && info.upstreamBranch
     ? info.remotes.find(remote => remote.name === info.upstreamRemote && remote.fetchUrl.trim().length > 0)
     : undefined;
@@ -172,13 +199,16 @@ export const GitWorkflowControls: React.FC<GitWorkflowControlsProps> = ({ projec
   const openRepositoryDialog = () => {
     returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setModalValidation(null);
+    setCreatedRepoNotice(null);
     setRepositoryDialogOpen(true);
     void refreshInfo();
   };
   const closeRepositoryDialog = () => {
-    if (running) return;
+    if (dialogBusy) return;
     setRepositoryDialogOpen(false);
     setRemoteFormMode(null);
+    setCreateRepoOpen(false);
+    setCreatedRepoNotice(null);
     window.setTimeout(() => returnFocus.current?.focus(), 0);
   };
 
@@ -186,14 +216,14 @@ export const GitWorkflowControls: React.FC<GitWorkflowControlsProps> = ({ projec
     if (!repositoryDialogOpen) return;
     const dialog = dialogRef.current;
     if (!dialogWasOpen.current) {
-      if (running) dialog?.focus();
+      if (dialogBusy) dialog?.focus();
       else dialog?.querySelector<HTMLElement>('[data-dialog-autofocus]')?.focus();
-    } else if (running && (!dialog?.contains(document.activeElement) || (document.activeElement instanceof HTMLElement && document.activeElement.matches(':disabled')))) {
+    } else if (dialogBusy && (!dialog?.contains(document.activeElement) || (document.activeElement instanceof HTMLElement && document.activeElement.matches(':disabled')))) {
       dialog?.focus();
     }
     dialogWasOpen.current = true;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !running) { event.stopPropagation(); closeRepositoryDialog(); }
+      if (event.key === 'Escape' && !dialogBusy) { event.stopPropagation(); closeRepositoryDialog(); }
       if (event.key !== 'Tab' || !dialog) return;
       const focusable = [...dialog.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href]:not([aria-disabled="true"]), summary')].filter(el => el.tabIndex !== -1 && el.getClientRects().length > 0);
       if (!focusable.length) { event.preventDefault(); dialog.focus(); return; }
@@ -212,16 +242,98 @@ export const GitWorkflowControls: React.FC<GitWorkflowControlsProps> = ({ projec
       document.removeEventListener('keydown', onKeyDown);
       document.removeEventListener('focusin', onFocusIn);
     };
-  }, [repositoryDialogOpen, running]);
+  }, [repositoryDialogOpen, dialogBusy]);
 
   useEffect(() => { if (!repositoryDialogOpen) dialogWasOpen.current = false; }, [repositoryDialogOpen]);
 
+  const handleAccountsChange = useCallback((nextAccounts: GitAccountStatus[]) => {
+    setGitAccounts(nextAccounts);
+    const activeSignedIn = nextAccounts.filter(account => account.signedIn);
+    if (activeSignedIn.length === 0) {
+      setCreateRepoOpen(false);
+    } else if (!activeSignedIn.some(account => account.provider === createRepoProvider)) {
+      setCreateRepoProvider(activeSignedIn[0].provider);
+    }
+  }, [createRepoProvider]);
+
   const beginAddRemote = () => {
+    setCreateRepoOpen(false);
+    setCreatedRepoNotice(null);
     setRemoteFormMode('add'); setRemoteName(remoteOptions.some(remote => remote.name === 'origin') ? '' : 'origin'); setRemoteUrl(''); setModalValidation(null);
   };
   const beginEditRemote = () => {
     if (!selectedRemote) return;
+    setCreateRepoOpen(false);
+    setCreatedRepoNotice(null);
     setRemoteFormMode('edit'); setRemoteName(selectedRemote.name); setRemoteUrl(selectedRemote.fetchUrl); setModalValidation(null);
+  };
+
+  const beginCreateRepository = (preferredProvider?: GitProvider) => {
+    const chosenProvider = preferredProvider && signedInProviders.some(account => account.provider === preferredProvider)
+      ? preferredProvider
+      : signedInProviders[0]?.provider || 'github';
+    const rootSegment = (info?.repositoryRoot || projectRoot).split(/[/\\]/).filter(Boolean).pop() || '';
+    const defaultRepoName = rootSegment.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+    setRemoteFormMode(null);
+    setModalError(null);
+    setModalValidation(null);
+    setCreatedRepoNotice(null);
+    setCreateRepoProvider(chosenProvider);
+    setCreateRepoName(current => current.trim() ? current : defaultRepoName);
+    setCreateRepoOpen(true);
+  };
+
+  const submitCreateRepository = async (event: FormEvent) => {
+    event.preventDefault();
+    const trimmedName = createRepoName.trim();
+    if (!trimmedName || isBlocked) return;
+    const targetRoot = projectRoot;
+    setCreatingRepo(true);
+    setModalError(null);
+    setCreatedRepoNotice(null);
+    try {
+      const created = await invoke<GitProviderRepo>('create_git_provider_repository', {
+        provider: createRepoProvider,
+        name: trimmedName,
+        private: createRepoPrivate,
+        description: createRepoDescription.trim() || null,
+      });
+      if (!mounted.current || rootRef.current !== targetRoot) return;
+      setCreateRepoOpen(false);
+      setCreateRepoName('');
+      setCreateRepoDescription('');
+      const hasOrigin = remoteOptions.some(remote => remote.name === 'origin');
+      if (!hasOrigin) {
+        try {
+          await runOperation<unknown>('remote', 'set_git_remote', {
+            projectPath: projectRoot,
+            name: 'origin',
+            url: created.cloneUrl,
+          });
+          if (!mounted.current || rootRef.current !== targetRoot) return;
+          setSelectedRemoteName('origin');
+          setCreatedRepoNotice(`Created ${created.fullName} and linked remote origin.`);
+          await refreshAll();
+        } catch {
+          if (!mounted.current || rootRef.current !== targetRoot) return;
+          setRemoteFormMode('add');
+          setRemoteName('origin');
+          setRemoteUrl(created.cloneUrl);
+          setCreatedRepoNotice(`Created ${created.fullName}. Save the origin remote below to link it.`);
+        }
+      } else {
+        const fallbackName = remoteOptions.some(remote => remote.name === createRepoProvider) ? '' : createRepoProvider;
+        setRemoteFormMode('add');
+        setRemoteName(fallbackName);
+        setRemoteUrl(created.cloneUrl);
+        setCreatedRepoNotice(`Created ${created.fullName}. Remote origin already exists — save a new remote name below to link it.`);
+      }
+    } catch (reason) {
+      if (!mounted.current || rootRef.current !== targetRoot) return;
+      setModalError(asError(reason).message);
+    } finally {
+      if (mounted.current && rootRef.current === targetRoot) setCreatingRepo(false);
+    }
   };
 
   const submitRemote = async (event: FormEvent) => {
@@ -310,25 +422,72 @@ export const GitWorkflowControls: React.FC<GitWorkflowControlsProps> = ({ projec
   const pushReason = info?.pushRefreshRequired ? 'Fetch the remote before retrying; the previous push result may be uncertain.' : info?.detached ? 'Switch to a branch before pushing.' : !info?.hasCommits ? 'Create a commit before pushing.' : !canPushUpstream ? 'Choose a remote and branch in Repository settings.' : '';
   const existingRemoteName = remoteFormMode === 'add' && remoteOptions.some(remote => remote.name === remoteName.trim());
 
-  const repositoryDialog = repositoryDialogOpen ? createPortal(<div className="git-repository-backdrop" onMouseDown={event => { if (event.target === event.currentTarget && !running) closeRepositoryDialog(); }}>
+  const createButtonLabel = signedInProviders.length === 1
+    ? `Create on ${signedInProviders[0].provider === 'github' ? 'GitHub' : 'GitLab'}`
+    : 'Create on GitHub / GitLab';
+
+  const repositoryDialog = repositoryDialogOpen ? createPortal(<div className="git-repository-backdrop" onMouseDown={event => { if (event.target === event.currentTarget && !dialogBusy) closeRepositoryDialog(); }}>
     <section ref={dialogRef} className="git-repository-dialog" role="dialog" aria-modal="true" aria-labelledby="git-repository-dialog-title" tabIndex={-1}>
-      <header className="git-repository-dialog-header"><div><h2 id="git-repository-dialog-title">Repository</h2><p title={safeRemoteLabel(info?.repositoryRoot || projectRoot)}>{info?.repositoryRoot || projectRoot}</p></div><button type="button" className="git-workflow-icon-button" aria-label="Close Repository settings" onClick={closeRepositoryDialog} disabled={running}><X size={17} /></button></header>
+      <header className="git-repository-dialog-header"><div><h2 id="git-repository-dialog-title">Repository</h2><p title={safeRemoteLabel(info?.repositoryRoot || projectRoot)}>{info?.repositoryRoot || projectRoot}</p></div><button type="button" className="git-workflow-icon-button" aria-label="Close Repository settings" onClick={closeRepositoryDialog} disabled={dialogBusy}><X size={17} /></button></header>
       <div className="git-repository-dialog-body">
         {remoteOptions.length > 0 ? <>
           <div className="git-repository-remote-picker"><label htmlFor="git-repository-remote">Remote</label><select id="git-repository-remote" data-dialog-autofocus value={selectedRemoteName} onChange={event => { setSelectedRemoteName(event.target.value); setModalError(null); setModalValidation(null); }} disabled={isBlocked || remoteFormMode === 'edit'}>{remoteOptions.map(remote => <option key={remote.name} value={remote.name}>{remote.name}</option>)}</select>
             {selectedRemote && <div className="git-repository-remote-urls"><span title={safeRemoteLabel(selectedRemote.fetchUrl)}><GitProviderIcon provider={providerForRemoteUrl(selectedRemote.fetchUrl)} /> Fetch: {safeRemoteLabel(selectedRemote.fetchUrl)}</span>{selectedRemote.pushUrl !== selectedRemote.fetchUrl && <span title={safeRemoteLabel(selectedRemote.pushUrl)}><GitProviderIcon provider={providerForRemoteUrl(selectedRemote.pushUrl)} /> Push: {safeRemoteLabel(selectedRemote.pushUrl)}</span>}</div>}
-            <div className="git-repository-remote-actions"><button type="button" className="git-workflow-secondary" onClick={beginAddRemote} disabled={isBlocked}><Plus size={14} />Link Existing Repository</button><button type="button" className="git-workflow-secondary" onClick={beginEditRemote} disabled={isBlocked || !selectedRemote}>Edit fetch URL</button></div>
+            <div className="git-repository-remote-actions">
+              <button type="button" className="git-workflow-secondary" onClick={beginAddRemote} disabled={isBlocked}><Plus size={14} />Link Existing Repository</button>
+              <button type="button" className="git-workflow-secondary" onClick={beginEditRemote} disabled={isBlocked || !selectedRemote}>Edit fetch URL</button>
+              {signedInProviders.length > 0 && <button type="button" className="git-workflow-secondary" onClick={() => beginCreateRepository()} disabled={isBlocked}><Plus size={14} />{createButtonLabel}</button>}
+            </div>
           </div>
           {!canPushUpstream && <div className="git-repository-publish"><h3>Publish branch</h3><p>Choose the remote and destination branch. Publishing sets this local branch's upstream.</p><label htmlFor="git-publish-branch">Remote branch</label><input id="git-publish-branch" value={pushBranch} onChange={event => { branchTouched.current = true; setPushBranch(event.target.value); }} placeholder="Branch name" disabled={isBlocked} />
             <button type="button" className="git-workflow-primary" onClick={() => void runPush(selectedRemoteName, pushBranch.trim(), true)} disabled={isBlocked || !selectedRemoteName || !pushBranch.trim() || !info?.hasCommits || info?.pushRefreshRequired || info?.detached}><ArrowUpFromLine size={14} />Publish Branch</button>
             {!info?.hasCommits && <p className="git-workflow-disabled-reason">Create a commit before publishing.</p>}{info?.detached && <p className="git-workflow-disabled-reason">Switch to a branch before publishing.</p>}
           </div>}
           {canPushUpstream && <p className="git-repository-upstream-note">Current branch tracks <code>{info?.upstream}</code>. Push from the Source Control toolbar uses this configured destination.</p>}
-        </> : <div className="git-repository-empty"><h3>Create Repository</h3><p>For an existing local history, first create an empty repository without a README, license, or .gitignore. Then paste its URL here and link it.</p>
-          <div className="git-repository-provider-actions"><a className="git-provider-icon-link" aria-label="Create a repository on GitHub" title="Create a repository on GitHub" aria-disabled={running} tabIndex={running ? -1 : 0} href="https://github.com/new" onClick={event => { event.preventDefault(); if (!running) void openHelp('https://github.com/new'); }}><GitProviderIcon provider="github" /><ExternalLink size={13} /></a><a className="git-provider-icon-link" aria-label="Create a repository on GitLab" title="Create a repository on GitLab" aria-disabled={running} tabIndex={running ? -1 : 0} href="https://gitlab.com/projects/new" onClick={event => { event.preventDefault(); if (!running) void openHelp('https://gitlab.com/projects/new'); }}><GitProviderIcon provider="gitlab" /><ExternalLink size={13} /></a></div>
-          <p className="git-workflow-muted">Create an empty project, then return here and paste its clone URL. ScienceBatch opens the provider website; it does not create accounts or repositories.</p>
-          <button type="button" className="git-workflow-secondary" data-dialog-autofocus onClick={beginAddRemote} disabled={isBlocked}><Plus size={14} />Link Existing Repository</button>
+        </> : <div className="git-repository-empty"><h3>Create Repository</h3><p>For an existing local history, create an empty repository without a README, license, or .gitignore, then link it here.</p>
+          <div className="git-repository-provider-actions">
+            {signedInProviders.length > 0 && <button type="button" className="git-workflow-primary" data-dialog-autofocus onClick={() => beginCreateRepository()} disabled={isBlocked}><Plus size={14} />{createButtonLabel}</button>}
+            <button type="button" className="git-workflow-secondary" data-dialog-autofocus={signedInProviders.length === 0 ? true : undefined} onClick={beginAddRemote} disabled={isBlocked}><Plus size={14} />Link Existing Repository</button>
+            <a className="git-provider-icon-link" aria-label="Create a repository on GitHub" title="Create a repository on GitHub" aria-disabled={dialogBusy} tabIndex={dialogBusy ? -1 : 0} href="https://github.com/new" onClick={event => { event.preventDefault(); if (!dialogBusy) void openHelp('https://github.com/new'); }}><GitProviderIcon provider="github" /><ExternalLink size={13} /></a>
+            <a className="git-provider-icon-link" aria-label="Create a repository on GitLab" title="Create a repository on GitLab" aria-disabled={dialogBusy} tabIndex={dialogBusy ? -1 : 0} href="https://gitlab.com/projects/new" onClick={event => { event.preventDefault(); if (!dialogBusy) void openHelp('https://gitlab.com/projects/new'); }}><GitProviderIcon provider="gitlab" /><ExternalLink size={13} /></a>
+          </div>
+          <p className="git-workflow-muted">Sign in to create a repository directly from ScienceBatch, or open GitHub / GitLab in your browser and paste the clone URL.</p>
         </div>}
+
+        {createdRepoNotice && <div className="git-workflow-progress" role="status">{createdRepoNotice}</div>}
+
+        {createRepoOpen && signedInProviders.length > 0 && <form className="git-repository-form" onSubmit={event => void submitCreateRepository(event)}>
+          <h3>{createButtonLabel}</h3>
+          {signedInProviders.length > 1 ? <>
+            <label htmlFor="git-create-repo-provider">Provider</label>
+            <select id="git-create-repo-provider" value={createRepoProvider} onChange={event => setCreateRepoProvider(event.target.value as GitProvider)} disabled={isBlocked}>
+              {signedInProviders.map(account => (
+                <option key={account.provider} value={account.provider}>
+                  {account.provider === 'github' ? 'GitHub' : 'GitLab'}{account.username ? ` (@${account.username})` : ''}
+                </option>
+              ))}
+            </select>
+          </> : (
+            <div className="git-repository-fixed-name">
+              Account <GitProviderIcon provider={signedInProviders[0].provider} />{' '}
+              <code>{signedInProviders[0].username ? `@${signedInProviders[0].username}` : signedInProviders[0].host}</code>
+            </div>
+          )}
+          <label htmlFor="git-create-repo-name">Repository name</label>
+          <input id="git-create-repo-name" value={createRepoName} onChange={event => setCreateRepoName(event.target.value)} placeholder="manuscript-paper" required disabled={isBlocked} autoComplete="off" />
+          <label htmlFor="git-create-repo-description">Description (optional)</label>
+          <input id="git-create-repo-description" value={createRepoDescription} onChange={event => setCreateRepoDescription(event.target.value)} placeholder="Short description of this project" disabled={isBlocked} autoComplete="off" />
+          <label className="git-repository-checkbox">
+            <input type="checkbox" checked={createRepoPrivate} onChange={event => setCreateRepoPrivate(event.target.checked)} disabled={isBlocked} />
+            <span>Private repository</span>
+          </label>
+          <div className="git-repository-form-actions">
+            <button type="submit" className="git-workflow-primary" disabled={isBlocked || !createRepoName.trim()}>
+              {creatingRepo ? <><LoaderCircle size={13} className="animate-spin" />Creating…</> : 'Create Repository'}
+            </button>
+            <button type="button" className="git-workflow-quiet" onClick={() => setCreateRepoOpen(false)} disabled={dialogBusy}>Cancel</button>
+          </div>
+        </form>}
 
         {remoteFormMode && <form className="git-repository-form" onSubmit={event => void submitRemote(event)}>
           <h3>{remoteFormMode === 'edit' ? `Edit ${selectedRemote?.name || 'remote'}` : 'Link Existing Repository'}</h3>
@@ -337,25 +496,27 @@ export const GitWorkflowControls: React.FC<GitWorkflowControlsProps> = ({ projec
           <label htmlFor="git-remote-url">{remoteFormMode === 'edit' ? 'Fetch URL' : 'Repository URL'}</label><input id="git-remote-url" value={remoteUrl} onChange={event => setRemoteUrl(event.target.value)} placeholder="https://host/owner/repository.git or git@host:owner/repository.git" required disabled={isBlocked} autoComplete="url" />
           {remoteFormMode === 'edit' && <p className="git-workflow-muted">Saving changes the fetch URL. A separately configured push URL stays unchanged.</p>}
           {modalValidation && <p className="git-workflow-error" role="alert">{modalValidation}</p>}
-          <div className="git-repository-form-actions"><button type="submit" className="git-workflow-primary" disabled={isBlocked || !remoteUrl.trim() || (remoteFormMode === 'add' && (!remoteName.trim() || existingRemoteName))}>Save remote</button><button type="button" className="git-workflow-quiet" onClick={() => setRemoteFormMode(null)} disabled={running}>Cancel</button></div>
+          <div className="git-repository-form-actions"><button type="submit" className="git-workflow-primary" disabled={isBlocked || !remoteUrl.trim() || (remoteFormMode === 'add' && (!remoteName.trim() || existingRemoteName))}>Save remote</button><button type="button" className="git-workflow-quiet" onClick={() => setRemoteFormMode(null)} disabled={dialogBusy}>Cancel</button></div>
         </form>}
 
-        {info && <details className="git-repository-author" open={identityDetailsOpen || !info.identity.valid} onToggle={event => setIdentityDetailsOpen(event.currentTarget.open)}><summary tabIndex={running ? -1 : undefined}>Git author</summary><p>{info.identity.valid ? `${info.identity.name} <${info.identity.email}>` : 'A valid name and email are required to commit.'}</p><p className="git-workflow-muted">Author identity is separate from remote authentication. Changes here are saved to this repository only.</p>
+        <GitAccountSection disabled={isBlocked} onAccountsChange={handleAccountsChange} />
+
+        {info && <details className="git-repository-author" open={identityDetailsOpen || !info.identity.valid} onToggle={event => setIdentityDetailsOpen(event.currentTarget.open)}><summary tabIndex={dialogBusy ? -1 : undefined}>Git author</summary><p>{info.identity.valid ? `${info.identity.name} <${info.identity.email}>` : 'A valid name and email are required to commit.'}</p><p className="git-workflow-muted">Author identity is separate from remote authentication. Changes here are saved to this repository only.</p>
           {(!info.identity.valid || identityOpen) && <form className="git-repository-form" onSubmit={event => void submitIdentity(event)}>
             <label htmlFor="git-identity-name">Author name</label><input id="git-identity-name" value={identityName} onChange={event => setIdentityName(event.target.value)} autoComplete="name" required disabled={isBlocked} />
             <label htmlFor="git-identity-email">Author email</label><input id="git-identity-email" type="email" value={identityEmail} onChange={event => setIdentityEmail(event.target.value)} autoComplete="email" required disabled={isBlocked} />
-            <div className="git-repository-form-actions"><button type="submit" className="git-workflow-secondary" disabled={isBlocked || !identityName.trim() || !/^\S+@\S+\.\S+$/.test(identityEmail.trim())}>Save author</button>{info.identity.valid && <button type="button" className="git-workflow-quiet" onClick={() => setIdentityOpen(false)} disabled={running}>Cancel</button>}</div>
+            <div className="git-repository-form-actions"><button type="submit" className="git-workflow-secondary" disabled={isBlocked || !identityName.trim() || !/^\S+@\S+\.\S+$/.test(identityEmail.trim())}>Save author</button>{info.identity.valid && <button type="button" className="git-workflow-quiet" onClick={() => setIdentityOpen(false)} disabled={dialogBusy}>Cancel</button>}</div>
           </form>}{info.identity.valid && !identityOpen && <button type="button" className="git-workflow-quiet" onClick={() => setIdentityOpen(true)} disabled={isBlocked}>Edit author</button>}
         </details>}
-        <nav className="git-repository-help" aria-label="Git credential help"><span>Use your system Git credentials or SSH key.</span><a href="https://docs.github.com/en/get-started/git-basics/caching-your-github-credentials-in-git" title="GitHub credential setup" aria-label="Open GitHub credential setup guide" aria-disabled={running} tabIndex={running ? -1 : 0} onClick={event => { event.preventDefault(); if (!running) void openHelp('https://docs.github.com/en/get-started/git-basics/caching-your-github-credentials-in-git'); }}><GitProviderIcon provider="github" /></a><a href="https://docs.gitlab.com/topics/git/clone/" title="GitLab SSH and clone setup" aria-label="Open GitLab SSH and clone setup guide" aria-disabled={running} tabIndex={running ? -1 : 0} onClick={event => { event.preventDefault(); if (!running) void openHelp('https://docs.gitlab.com/topics/git/clone/'); }}><GitProviderIcon provider="gitlab" /></a></nav>
-        <p className="git-repository-muted">ScienceBatch does not store remote tokens. If Git requests credentials interactively, finish setup in your system Git credential manager or SSH configuration.</p>
+        <nav className="git-repository-help" aria-label="Git credential help"><span>System Git credentials or SSH key fallback:</span><a href="https://docs.github.com/en/get-started/git-basics/caching-your-github-credentials-in-git" title="GitHub credential setup" aria-label="Open GitHub credential setup guide" aria-disabled={dialogBusy} tabIndex={dialogBusy ? -1 : 0} onClick={event => { event.preventDefault(); if (!dialogBusy) void openHelp('https://docs.github.com/en/get-started/git-basics/caching-your-github-credentials-in-git'); }}><GitProviderIcon provider="github" /></a><a href="https://docs.gitlab.com/topics/git/clone/" title="GitLab SSH and clone setup" aria-label="Open GitLab SSH and clone setup guide" aria-disabled={dialogBusy} tabIndex={dialogBusy ? -1 : 0} onClick={event => { event.preventDefault(); if (!dialogBusy) void openHelp('https://docs.gitlab.com/topics/git/clone/'); }}><GitProviderIcon provider="gitlab" /></a></nav>
+        <p className="git-repository-muted">Signed-in GitHub and GitLab accounts use the OS credential store, while system Git Credential Manager and SSH remain available as fallback.</p>
         <div className="git-repository-modal-actions"><button type="button" className="git-workflow-secondary" onClick={() => void runFetch(selectedRemoteName)} disabled={isBlocked || !selectedRemoteName}><RefreshCw size={13} />Fetch selected remote</button></div>
         {modalError && <div className="git-workflow-error" role="alert">{modalError}</div>}
         {infoError && <div className="git-workflow-error" role="alert">{infoError}</div>}
         {(running || progress) && <div className="git-workflow-progress" role="status" aria-live="polite"><LoaderCircle size={14} className="animate-spin" /><span>{progress?.message || 'Starting Git operation…'}</span></div>}
         {error && <div className="git-workflow-error" role="alert"><strong>{error.message}</strong>{error.outcomeUnknown && <p>The remote may have received the push. Fetch from its push destination before retrying.</p>}{error.recovery && <p>{error.recovery}</p>}{error.partialPath && <p>Partial repository remains at: <code>{error.partialPath}</code></p>}</div>}
       </div>
-      <footer className="git-repository-dialog-footer"><button type="button" className="git-workflow-quiet" onClick={() => void refreshInfo()} disabled={running}><RefreshCw size={13} />Refresh status</button><button type="button" className="git-workflow-secondary" onClick={closeRepositoryDialog} disabled={running}>Done</button></footer>
+      <footer className="git-repository-dialog-footer"><button type="button" className="git-workflow-quiet" onClick={() => void refreshInfo()} disabled={dialogBusy}><RefreshCw size={13} />Refresh status</button><button type="button" className="git-workflow-secondary" onClick={closeRepositoryDialog} disabled={dialogBusy}>Done</button></footer>
     </section>
   </div>, document.body) : null;
 

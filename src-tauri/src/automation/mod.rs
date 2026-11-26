@@ -3,7 +3,7 @@
 
 pub mod bridge;
 pub mod bridge_client;
-mod compiler;
+pub(crate) mod compiler;
 pub mod mcp;
 mod project;
 mod resource_cache;
@@ -26,6 +26,18 @@ use tokio::sync::Semaphore;
 
 pub use compiler::export_pdf_atomic;
 pub use compiler::worker_executable;
+
+/// Configure a background child process so Windows GUI builds never flash a console window.
+pub(crate) fn configure_background_command(command: &mut tokio::process::Command) {
+    #[cfg(windows)]
+    {
+        command.creation_flags(windows_sys::Win32::System::Threading::CREATE_NO_WINDOW);
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = command;
+    }
+}
 pub use project::{
     capture_snapshot, capture_virtual_snapshot, normalize_project_path, ProjectInfo,
 };

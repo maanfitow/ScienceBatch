@@ -228,12 +228,18 @@ async fn remote_add_edit_and_multiple_remotes_are_reflected_in_repository_info()
         .iter()
         .find(|remote| remote.name == "backup")
         .unwrap();
-    assert_eq!(Path::new(&origin.fetch_url), first.canonicalize().unwrap());
+    assert_eq!(
+        Path::new(&origin.fetch_url),
+        canonicalize_clean(&first).unwrap()
+    );
     assert_eq!(
         Path::new(&origin.push_url),
-        push_only.canonicalize().unwrap()
+        canonicalize_clean(&push_only).unwrap()
     );
-    assert_eq!(Path::new(&backup.fetch_url), first.canonicalize().unwrap());
+    assert_eq!(
+        Path::new(&backup.fetch_url),
+        canonicalize_clean(&first).unwrap()
+    );
 }
 
 #[tokio::test]
@@ -306,10 +312,12 @@ async fn clone_creates_a_new_repository_and_refuses_existing_destinations() {
     .expect("clone should succeed for a local fixture");
     assert_eq!(
         Path::new(&cloned.project_path),
-        destination.canonicalize().unwrap()
+        canonicalize_clean(&destination).unwrap()
     );
     assert_eq!(
-        std::fs::read_to_string(destination.join("paper.tex")).unwrap(),
+        std::fs::read_to_string(destination.join("paper.tex"))
+            .unwrap()
+            .replace("\r\n", "\n"),
         "\\documentclass{article}\n"
     );
     assert_eq!(
@@ -449,7 +457,9 @@ async fn pull_fast_forwards_despite_user_rebase_and_autostash_preferences() {
 
     assert_ne!(head(&repo), previous_head);
     assert_eq!(
-        std::fs::read_to_string(repo.join("remote.txt")).unwrap(),
+        std::fs::read_to_string(repo.join("remote.txt"))
+            .unwrap()
+            .replace("\r\n", "\n"),
         "remote update\n"
     );
     assert!(repository_info(&repo).await.worktree_clean);

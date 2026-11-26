@@ -1,19 +1,25 @@
 //! Explicit inventory and removal for the pinned, shared Tectonic cache.
+#[cfg(unix)]
+use super::resource_prepare;
 use super::{
-    as_error, resource_prepare, resource_project, resources, AutomationError, OperationContext,
-    ProjectSnapshot,
+    as_error, resource_project, resources, AutomationError, OperationContext, ProjectSnapshot,
 };
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine as _;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
-use std::fs::{self, File};
+use std::fs;
+#[cfg(unix)]
+use std::fs::File;
 use std::path::{Component, Path, PathBuf};
-use std::time::{Duration, Instant, UNIX_EPOCH};
+#[cfg(unix)]
+use std::time::{Duration, Instant};
+use std::time::UNIX_EPOCH;
 
 const PAGE_MAX: usize = 200;
 const REMOVE_MAX: usize = 200;
+#[cfg(unix)]
 const LOCK_WAIT: Duration = Duration::from_secs(3);
 const SCAN_MAX: usize = 200_000;
 
@@ -23,10 +29,12 @@ struct Entry {
     bytes: u64,
     required: bool,
     removable: bool,
+    #[cfg_attr(not(unix), allow(dead_code))]
     signature: String,
 }
 
 struct Inventory {
+    #[cfg_attr(not(unix), allow(dead_code))]
     cache: PathBuf,
     bundle_digest: String,
     digest: String,
@@ -263,99 +271,104 @@ fn remove_with_cache(
     }
     #[cfg(not(unix))]
     {
-        return Err(as_error(
+        let _ = (&context, expected_cache, &paths);
+        Err(as_error(
             "resources.cache_read_only",
             "Cache removal is unavailable on this platform because safe directory-relative unlinking is not supported.",
             2,
-        ));
+        ))
     }
-    let required = required_paths(&plan);
-    let pinned = resource_project::pinned_catalog()?;
+    #[cfg(unix)]
+    {
+        let required = required_paths(&plan);
+        let pinned = resource_project::pinned_catalog()?;
 
-    // This exclusive lease shares the established writer lock with preparation and
-    // the compiler's shared reader lease. The bounded wait happens on spawn_blocking.
-    let _lease = resource_prepare::acquire_bundle_lock_for_url(
-        &cache,
-        &pinned.url,
-        Instant::now() + LOCK_WAIT,
-    )?;
-    if context.cancelled() {
-        return Err(as_error(
-            "operation.interrupted",
-            "Cache removal was cancelled while waiting for the cache lock.",
-            130,
-        ));
-    }
-    let inventory = build_inventory_at(&cache, &required, &plan.input_digest, &pinned)?;
-    ensure_expected_cache_digest(expected_cache, &inventory.digest)?;
-    let by_path = inventory
-        .entries
-        .iter()
-        .map(|entry| (entry.path.as_str(), entry))
-        .collect::<std::collections::BTreeMap<_, _>>();
-    let mut selected = Vec::with_capacity(paths.len());
-    for path in &paths {
-        let entry = by_path.get(path.as_str()).ok_or_else(|| {
-            as_error(
-                "resources.cache_path_unknown",
-                "A selected path is not an installed pinned bundle file.",
-                2,
-            )
-        })?;
-        if validate_entry_removable(
-            entry,
-            &required,
-            resource_project::is_starter_resource(path)?,
-        )
-        .is_err()
-        {
+        // This exclusive lease shares the established writer lock with preparation and
+        // the compiler's shared reader lease. The bounded wait happens on spawn_blocking.
+        let _lease = resource_prepare::acquire_bundle_lock_for_url(
+            &cache,
+            &pinned.url,
+            Instant::now() + LOCK_WAIT,
+        )?;
+        if context.cancelled() {
             return Err(as_error(
-                "resources.cache_path_protected",
-                "A selected cache file is required by the current project or is embedded.",
-                2,
+                "operation.interrupted",
+                "Cache removal was cancelled while waiting for the cache lock.",
+                130,
             ));
         }
-        validate_removal_target(
-            &inventory.cache,
-            &inventory.bundle_digest,
-            path,
-            &entry.signature,
-        )?;
-        selected.push((path.clone(), entry.bytes, entry.signature.clone()));
-    }
-    let mut removed_files = 0usize;
-    let mut removed_bytes = 0u64;
-    for (path, bytes, signature) in selected {
-        if context.cancelled() {
-            return Err(AutomationError::new(
-                "operation.interrupted",
-                "Cache removal was cancelled.",
-                130,
+        let inventory = build_inventory_at(&cache, &required, &plan.input_digest, &pinned)?;
+        ensure_expected_cache_digest(expected_cache, &inventory.digest)?;
+        let by_path = inventory
+            .entries
+            .iter()
+            .map(|entry| (entry.path.as_str(), entry))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let mut selected = Vec::with_capacity(paths.len());
+        for path in &paths {
+            let entry = by_path.get(path.as_str()).ok_or_else(|| {
+                as_error(
+                    "resources.cache_path_unknown",
+                    "A selected path is not an installed pinned bundle file.",
+                    2,
+                )
+            })?;
+            if validate_entry_removable(
+                entry,
+                &required,
+                resource_project::is_starter_resource(path)?,
             )
-            .with_details(json!({"removedFiles":removed_files,"removedBytes":removed_bytes})));
+            .is_err()
+            {
+                return Err(as_error(
+                    "resources.cache_path_protected",
+                    "A selected cache file is required by the current project or is embedded.",
+                    2,
+                ));
+            }
+            validate_removal_target(
+                &inventory.cache,
+                &inventory.bundle_digest,
+                path,
+                &entry.signature,
+            )?;
+            selected.push((path.clone(), entry.bytes, entry.signature.clone()));
         }
-        safe_unlink(
-            &inventory.cache,
-            &inventory.bundle_digest,
-            &path,
-            &signature,
-        )
-        .map_err(|error| {
-            AutomationError::new(
-                "cache.unavailable_offline",
-                format!("Cannot remove selected cache file: {error}"),
-                3,
+        let mut removed_files = 0usize;
+        let mut removed_bytes = 0u64;
+        for (path, bytes, signature) in selected {
+            if context.cancelled() {
+                return Err(AutomationError::new(
+                    "operation.interrupted",
+                    "Cache removal was cancelled.",
+                    130,
+                )
+                .with_details(json!({"removedFiles":removed_files,"removedBytes":removed_bytes})));
+            }
+            safe_unlink(
+                &inventory.cache,
+                &inventory.bundle_digest,
+                &path,
+                &signature,
             )
-            .with_details(
-                json!({"removedFiles":removed_files,"removedBytes":removed_bytes,"path":path}),
-            )
-        })?;
-        removed_files += 1;
-        removed_bytes = removed_bytes.saturating_add(bytes);
+            .map_err(|error| {
+                AutomationError::new(
+                    "cache.unavailable_offline",
+                    format!("Cannot remove selected cache file: {error}"),
+                    3,
+                )
+                .with_details(
+                    json!({"removedFiles":removed_files,"removedBytes":removed_bytes,"path":path}),
+                )
+            })?;
+            removed_files += 1;
+            removed_bytes = removed_bytes.saturating_add(bytes);
+        }
+        Ok(json!({"removedFiles":removed_files,"removedBytes":removed_bytes}))
     }
-    Ok(json!({"removedFiles":removed_files,"removedBytes":removed_bytes}))
 }
 
+#[cfg_attr(not(unix), allow(dead_code))]
 fn ensure_expected_cache_digest(expected: &str, actual: &str) -> Result<(), AutomationError> {
     if expected != actual {
         return Err(as_error(
@@ -367,6 +380,7 @@ fn ensure_expected_cache_digest(expected: &str, actual: &str) -> Result<(), Auto
     Ok(())
 }
 
+#[cfg_attr(not(unix), allow(dead_code))]
 fn validate_entry_removable(
     entry: &Entry,
     required: &BTreeSet<String>,
@@ -440,9 +454,8 @@ fn build_inventory_at(
         digest_field(&mut digest, &[u8::from(is_required), u8::from(embedded)]);
         let bytes = metadata.len();
         installed_bytes = installed_bytes.saturating_add(bytes);
-        let owned = validate_owner(&root, &path).is_ok();
         #[cfg(unix)]
-        let safe_to_remove = owned;
+        let safe_to_remove = validate_owner(&root, &path).is_ok();
         #[cfg(not(unix))]
         let safe_to_remove = false;
         entries.push(Entry {
@@ -580,6 +593,7 @@ fn validate_no_symlink_ancestors(path: &Path) -> Result<(), AutomationError> {
     Ok(())
 }
 
+#[cfg_attr(not(unix), allow(dead_code))]
 fn validate_removal_target(
     cache: &Path,
     digest: &str,
@@ -606,6 +620,7 @@ fn validate_removal_target(
     Ok(())
 }
 
+#[cfg_attr(not(unix), allow(dead_code))]
 fn validate_owner(root: &Path, relative: &str) -> Result<(), AutomationError> {
     let mut current = root.to_path_buf();
     for component in relative.split('/') {
@@ -770,6 +785,7 @@ fn safe_unlink(
 }
 
 #[cfg(not(unix))]
+#[allow(dead_code)]
 fn safe_unlink(
     _cache: &Path,
     _digest: &str,
@@ -795,6 +811,7 @@ fn ensure_current_owner(metadata: &fs::Metadata) -> Result<(), AutomationError> 
     Ok(())
 }
 #[cfg(not(unix))]
+#[allow(dead_code)]
 fn ensure_current_owner(_metadata: &fs::Metadata) -> Result<(), AutomationError> {
     Ok(())
 }
@@ -977,7 +994,9 @@ fn decode_cursor(cursor: &str, digest: &str) -> Result<usize, AutomationError> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::resource_prepare;
     use super::*;
+    use std::time::{Duration, Instant};
 
     #[test]
     fn cursor_is_bound_to_inventory_digest() {
@@ -1048,6 +1067,7 @@ mod tests {
         assert!(ensure_expected_cache_digest(&"a".repeat(64), &"a".repeat(64)).is_ok());
     }
 
+    #[cfg(unix)]
     #[test]
     fn removes_an_unrequired_pinned_file_only_from_an_isolated_cache() {
         let temporary = tempfile::tempdir().unwrap();
@@ -1075,6 +1095,7 @@ mod tests {
         assert!(!target.exists());
     }
 
+    #[cfg(unix)]
     #[test]
     fn full_removal_flow_checks_digests_permissions_protection_and_cancellation() {
         use crate::automation::{ProjectSnapshot, SnapshotFile, SnapshotFileKind};
@@ -1332,5 +1353,62 @@ mod tests {
                 || error.kind() == std::io::ErrorKind::InvalidInput
         );
         assert_eq!(fs::read(outside).unwrap(), b"preserve");
+    }
+
+    #[cfg(not(unix))]
+    #[test]
+    fn non_unix_cache_inventory_is_read_only_and_rejects_removal() {
+        use crate::automation::{ProjectSnapshot, SnapshotFile, SnapshotFileKind};
+        use std::collections::BTreeMap;
+
+        let temporary = tempfile::tempdir().unwrap();
+        let cache = temporary.path().join("bundles");
+        let pinned = resource_project::pinned_catalog().unwrap();
+        let path = resource_project::pinned_resource_paths()
+            .unwrap()
+            .into_iter()
+            .find(|path| !resource_project::is_starter_resource(path).unwrap())
+            .unwrap();
+        let target = cache.join("data").join(&pinned.digest).join(&path);
+        fs::create_dir_all(target.parent().unwrap()).unwrap();
+        fs::write(&target, b"windows readonly fixture").unwrap();
+
+        let inventory =
+            build_inventory_at(&cache, &BTreeSet::new(), &"3".repeat(64), &pinned).unwrap();
+        assert_eq!(inventory.entries.len(), 1);
+        assert!(!inventory.entries[0].removable);
+
+        let source = b"#let value = 1\n";
+        let snapshot = ProjectSnapshot {
+            engine: "typst".into(),
+            root: PathBuf::new(),
+            main_file: "main.typ".into(),
+            files: BTreeMap::from([(
+                "main.typ".into(),
+                SnapshotFile {
+                    bytes: source.to_vec(),
+                    kind: SnapshotFileKind::Text,
+                },
+            )]),
+            total_bytes: source.len(),
+        };
+        let plan = resource_project::resolved_plan_with_cache_root(
+            &snapshot,
+            &json!({}),
+            Some(cache.clone()),
+        )
+        .unwrap();
+        let context = OperationContext {
+            allow_write: true,
+            ..OperationContext::default()
+        };
+        let args = json!({
+            "expectedInputDigest": plan.input_digest,
+            "expectedCacheDigest": inventory.digest,
+            "removePaths": [path],
+        });
+        let err = remove_with_cache(&snapshot, &args, &context, cache).unwrap_err();
+        assert_eq!(err.code, "resources.cache_read_only");
+        assert!(target.exists());
     }
 }

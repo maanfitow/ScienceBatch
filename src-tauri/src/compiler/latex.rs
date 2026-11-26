@@ -1,175 +1,86 @@
+use std::collections::BTreeMap;
 use std::path::Path;
-use tectonic::driver::ProcessingSessionBuilder;
-use tectonic::status::NoopStatusBackend;
-use tectonic_bundles::Bundle;
 
-use super::embedded::EmbeddedPackageBundle;
-use super::synctex::parse_synctex_gz;
-use crate::diagnostics::latex_parser::{
-    parse_latex_log, prepare_latex_source, source_lines_before_t1_insertion,
-};
+use crate::automation::{capture_snapshot, capture_virtual_snapshot, AutomationError};
 use crate::types::{CompileResponse, DiagnosticItem};
 
-/// Executes in-memory compilation using Tectonic's ProcessingSessionBuilder for LaTeX.
-pub fn compile_latex_to_pdf(
-    latex: &str,
-    project_dir: Option<&str>,
-    main_file: Option<&str>,
-) -> CompileResponse {
-    let (processed_latex, prepended_lines, inserted_lines) = prepare_latex_source(latex);
-    let insertion_after_lines =
-        (inserted_lines > 0).then(|| source_lines_before_t1_insertion(latex));
-    let total_injected = prepended_lines + inserted_lines;
-    let mut status = NoopStatusBackend::default();
-
-    let config = match tectonic::config::PersistentConfig::open(false) {
-        Ok(c) => c,
-        Err(e) => {
-            return CompileResponse {
-                pdf_bytes: Vec::new(),
-                success: false,
-                errors: vec![DiagnosticItem {
-                    severity: "error".into(),
-                    message: format!("Failed to open Tectonic configuration: {e}"),
-                    line: None,
-                    file: None,
-                    suggestion: None,
-                }],
-                warnings: Vec::new(),
-                raw_log: format!("Config error: {e}"),
-                source_map: None,
-            };
-        }
-    };
-
-    let bundle: Box<dyn Bundle> = match config.default_bundle(true) {
-        Ok(b) => Box::new(EmbeddedPackageBundle { inner: b }),
-        Err(e) => {
-            return CompileResponse {
-                pdf_bytes: Vec::new(),
-                success: false,
-                errors: vec![DiagnosticItem {
-                    severity: "error".into(),
-                    message: format!("Failed to load resource bundle: {e}"),
-                    line: None,
-                    file: None,
-                    suggestion: None,
-                }],
-                warnings: Vec::new(),
-                raw_log: format!("Bundle error: {e}"),
-                source_map: None,
-            };
-        }
-    };
-
-    let format_cache_path = match config.format_cache_path() {
-        Ok(p) => p,
-        Err(e) => {
-            return CompileResponse {
-                pdf_bytes: Vec::new(),
-                success: false,
-                errors: vec![DiagnosticItem {
-                    severity: "error".into(),
-                    message: format!("Failed to set up format cache: {e}"),
-                    line: None,
-                    file: None,
-                    suggestion: None,
-                }],
-                warnings: Vec::new(),
-                raw_log: format!("Format cache error: {e}"),
-                source_map: None,
-            };
-        }
-    };
-
-    let mut sb = ProcessingSessionBuilder::default();
-    sb.bundle(bundle)
-        .primary_input_buffer(processed_latex.as_bytes())
-        .tex_input_name("texput.tex")
-        .format_name("latex")
-        .format_cache_path(format_cache_path)
-        .keep_logs(true)
-        .keep_intermediates(false)
-        .print_stdout(false)
-        .synctex(true)
-        .output_format(tectonic::driver::OutputFormat::Pdf)
-        .do_not_write_output_files();
+fn normalize_main_file(project_dir: Option<&Path>, main_file: Option<&str>) -> String {
+    let raw = main_file
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("main.tex");
+    let raw_path = Path::new(raw);
+    let is_abs_like = raw_path.is_absolute()
+        || raw.starts_with('/')
+        || raw.starts_with('\\')
+        || raw.as_bytes().get(1) == Some(&b':');
 
     if let Some(dir) = project_dir {
-        let p = Path::new(dir);
-        if p.is_dir() {
-            sb.filesystem_root(p);
+        if is_abs_like {
+            if let Ok(rel) = raw_path.strip_prefix(dir) {
+                return rel.to_string_lossy().replace('\\', "/");
+            }
+            if let Ok(canon_dir) = std::fs::canonicalize(dir) {
+                let canon_main = if raw_path.exists() {
+                    std::fs::canonicalize(raw_path).ok()
+                } else if let (Some(parent), Some(name)) =
+                    (raw_path.parent(), raw_path.file_name())
+                {
+                    std::fs::canonicalize(parent).ok().map(|p| p.join(name))
+                } else {
+                    None
+                };
+                if let Some(rel) = canon_main
+                    .as_ref()
+                    .and_then(|p| p.strip_prefix(&canon_dir).ok())
+                {
+                    return rel.to_string_lossy().replace('\\', "/");
+                }
+            }
         }
+        return raw.replace('\\', "/");
     }
 
-    let mut sess = match sb.create(&mut status) {
-        Ok(s) => s,
-        Err(e) => {
-            return CompileResponse {
-                pdf_bytes: Vec::new(),
-                success: false,
-                errors: vec![DiagnosticItem {
-                    severity: "error".into(),
-                    message: format!("Failed to initialize LaTeX processing session: {e}"),
-                    line: None,
-                    file: None,
-                    suggestion: None,
-                }],
-                warnings: Vec::new(),
-                raw_log: format!("Session init error: {e}"),
-                source_map: None,
-            };
-        }
-    };
+    if is_abs_like {
+        return raw_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("main.tex")
+            .to_owned();
+    }
+    raw.replace('\\', "/")
+}
 
-    let result = sess.run(&mut status);
-    let mut files = sess.into_file_data();
-
-    let raw_log = if let Some(log_file) = files.remove("texput.log") {
-        String::from_utf8_lossy(&log_file.data).to_string()
-    } else {
-        String::new()
-    };
-
-    let root_file = main_file.unwrap_or("main.tex");
-    let (mut errors, warnings) =
-        parse_latex_log(&raw_log, total_injected, root_file, project_dir, main_file);
-
-    if result.is_ok() {
-        if let Some(pdf) = files.remove("texput.pdf") {
-            let source_map = files.remove("texput.synctex.gz").and_then(|synctex_file| {
-                parse_synctex_gz(
-                    &synctex_file.data,
-                    root_file,
-                    "texput.tex",
-                    project_dir,
-                    None,
-                    prepended_lines,
-                    inserted_lines,
-                    insertion_after_lines,
-                )
-            });
-            return CompileResponse {
-                pdf_bytes: pdf.data,
-                success: true,
-                errors,
-                warnings,
-                raw_log,
-                source_map,
-            };
+fn automation_error_to_compile_response(err: AutomationError, main_name: &str) -> CompileResponse {
+    let mut errors = Vec::new();
+    let mut warnings = Vec::new();
+    for diag in err.diagnostics {
+        let item = DiagnosticItem {
+            severity: diag.severity.clone(),
+            message: diag.message,
+            line: diag.line,
+            file: diag.file,
+            suggestion: diag.suggestion,
+        };
+        if diag.severity == "warning" {
+            warnings.push(item);
+        } else {
+            errors.push(item);
         }
     }
-
     if errors.is_empty() {
         errors.push(DiagnosticItem {
             severity: "error".into(),
-            message: "LaTeX engine finished with error (no PDF output created).".into(),
+            message: format!("{}: {}", err.code, err.message),
             line: None,
-            file: main_file.map(|s| s.to_string()),
-            suggestion: Some("Review document syntax or inspect the raw log below.".into()),
+            file: Some(main_name.to_owned()),
+            suggestion: None,
         });
     }
-
+    let raw_log = match err.details {
+        Some(details) => format!("{}: {}\n{}", err.code, err.message, details),
+        None => format!("{}: {}", err.code, err.message),
+    };
     CompileResponse {
         pdf_bytes: Vec::new(),
         success: false,
@@ -177,5 +88,32 @@ pub fn compile_latex_to_pdf(
         warnings,
         raw_log,
         source_map: None,
+    }
+}
+
+/// Executes in-memory LaTeX compilation via the pinned offline starter/cache bundle pipeline.
+pub fn compile_latex_to_pdf(
+    latex: &str,
+    project_dir: Option<&str>,
+    main_file: Option<&str>,
+) -> CompileResponse {
+    let dir_path = project_dir.map(Path::new).filter(|p| p.is_dir());
+    let main_name = normalize_main_file(dir_path, main_file);
+    let overlays = BTreeMap::from([(main_name.clone(), latex.as_bytes().to_vec())]);
+
+    let snapshot_res = if let Some(dir) = dir_path {
+        capture_snapshot(dir, &main_name, &overlays)
+    } else {
+        capture_virtual_snapshot("latex", &main_name, &overlays)
+    };
+
+    let snapshot = match snapshot_res {
+        Ok(snapshot) => snapshot,
+        Err(err) => return automation_error_to_compile_response(err, &main_name),
+    };
+
+    match crate::automation::compiler::compile_in_memory(&snapshot) {
+        Ok(response) => response,
+        Err(err) => automation_error_to_compile_response(err, &main_name),
     }
 }

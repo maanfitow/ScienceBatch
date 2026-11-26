@@ -199,6 +199,7 @@ async fn run_worker_process_with_limits(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
+    super::configure_background_command(&mut command);
     let mut child = command.spawn().map_err(|e| {
         AutomationError::new(
             "worker.crashed",

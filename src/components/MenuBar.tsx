@@ -37,6 +37,7 @@ import {
   ListTree,
   WrapText,
   Terminal,
+  RefreshCw,
 } from 'lucide-react';
 import { useTheme, THEME_OPTIONS } from '../themes/ThemeContext';
 import { RecentProject } from '../types';
@@ -83,6 +84,10 @@ interface MenuBarProps {
   onRedo?: () => void;
   onFindReplace?: () => void;
   onEditorAction?: (action: EditorMenuAction) => void;
+  onCheckForUpdates?: () => void;
+  autoCheckUpdates?: boolean;
+  onToggleAutoCheckUpdates?: () => void;
+  isCheckingForUpdates?: boolean;
 }
 
 const DARK_THEME_OPTIONS = THEME_OPTIONS.filter((option) => option.id !== 'light');
@@ -128,6 +133,10 @@ export const MenuBar: React.FC<MenuBarProps> = ({
   onRedo,
   onFindReplace,
   onEditorAction,
+  onCheckForUpdates,
+  autoCheckUpdates = false,
+  onToggleAutoCheckUpdates,
+  isCheckingForUpdates = false,
 }) => {
   const resolvedHasProjectFolder = hasProjectFolder ?? hasOpenProject;
   const resolvedHasPdf = hasPdf ?? true;
@@ -1014,6 +1023,32 @@ export const MenuBar: React.FC<MenuBarProps> = ({
                 </span>
                 <span>Typst Documentation</span>
               </div>
+            </button>
+            <div className="menu-divider" />
+            <button
+              type="button"
+              className="menu-dropdown-item"
+              disabled={!onCheckForUpdates}
+              onClick={() => { onCheckForUpdates?.(); closeMenu(); }}
+            >
+              <div className="menu-item-left">
+                <span className="menu-item-icon" aria-hidden="true">
+                  <RefreshCw size={14} className={isCheckingForUpdates ? 'spin' : undefined} />
+                </span>
+                <span>Check for Updates...</span>
+              </div>
+            </button>
+            <button
+              type="button"
+              className={`menu-dropdown-item ${autoCheckUpdates ? 'menu-dropdown-item-checked' : ''}`}
+              disabled={!onToggleAutoCheckUpdates}
+              onClick={() => { onToggleAutoCheckUpdates?.(); closeMenu(); }}
+            >
+              <div className="menu-item-left">
+                <span className="menu-item-icon" aria-hidden="true" />
+                <span>Check for Updates on Startup</span>
+              </div>
+              {autoCheckUpdates && <Check size={14} className="menu-check-icon" />}
             </button>
             <div className="menu-divider" />
             <div className="menu-dropdown-item menu-item-disabled">

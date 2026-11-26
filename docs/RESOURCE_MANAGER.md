@@ -86,4 +86,4 @@ Only explicit selection and confirmation remove cache files. The current capture
 
 Removal shares cache writer coordination with preparation. Explicit LaTeX compiler workers hold a shared cache reader lease until their subprocess is collected, including cancellation or a dropped caller. An occupied lease causes bounded waiting or a retryable error. Closing an inventory window never starts cleanup, and analysis, preparation, and deletion never compile.
 
-On non-Unix platforms, inventory is read-only and every row is non-removable until deletion has equivalent handle-based path validation. Cache management can be opened from either LaTeX or Typst projects; current snapshot and inventory guards apply in both cases.
+For `v0.1.0`, Windows shared-cache inventory remains read-only: every row is non-removable, the desktop dialog labels non-project rows `Read-only` with a platform read-only notice, and `resources.cache_remove` returns `resources.cache_read_only` until deletion has equivalent handle-based path validation on non-Unix platforms. Cache management can be opened from either LaTeX or Typst projects; current snapshot and inventory guards apply in both cases.

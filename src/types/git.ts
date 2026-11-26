@@ -92,3 +92,42 @@ export interface GitOperationResult {
   message: string;
   commitId: string | null;
 }
+
+export type GitProvider = 'github' | 'gitlab';
+
+export interface GitAccountStatus {
+  provider: GitProvider;
+  signedIn: boolean;
+  username: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+  host: string;
+  expiresAt: number | null;
+  clientIdConfigured: boolean;
+}
+
+export interface GitHubDeviceFlowStart {
+  deviceCode: string;
+  userCode: string;
+  verificationUri: string;
+  expiresIn: number;
+  interval: number;
+}
+
+export interface GitHubDevicePollResult {
+  status: 'pending' | 'slow_down' | 'authorized' | 'expired' | 'denied';
+  account: GitAccountStatus | null;
+  interval: number | null;
+  error: string | null;
+}
+
+export interface GitProviderRepo {
+  id: number;
+  name: string;
+  fullName: string;
+  cloneUrl: string;
+  htmlUrl: string;
+  private: boolean;
+  defaultBranch: string | null;
+  updatedAt: string | null;
+}

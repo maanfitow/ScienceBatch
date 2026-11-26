@@ -359,12 +359,15 @@ async fn run_worker_process_with_timeout(
     permit: tokio::sync::OwnedSemaphorePermit,
     timeout: Duration,
 ) -> Result<Value, AutomationError> {
-    let mut child = Command::new(executable)
+    let mut command = Command::new(executable);
+    command
         .arg("--resource-project-worker")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .kill_on_drop(true)
+        .kill_on_drop(true);
+    super::configure_background_command(&mut command);
+    let mut child = command
         .spawn()
         .map_err(|error| {
             AutomationError::new(
@@ -1114,6 +1117,22 @@ pub(super) struct CacheReadLock {
     _bundle: File,
 }
 
+fn is_lock_contended(error: &std::io::Error) -> bool {
+    if error.kind() == std::io::ErrorKind::WouldBlock {
+        return true;
+    }
+    if let Some(code) = error.raw_os_error() {
+        if fs2::lock_contended_error().raw_os_error() == Some(code) {
+            return true;
+        }
+        #[cfg(windows)]
+        if code == 33 {
+            return true;
+        }
+    }
+    false
+}
+
 fn acquire_lock_file_shared(path: &Path, deadline: Instant) -> Result<File, AutomationError> {
     if let Ok(metadata) = fs::symlink_metadata(path) {
         if metadata.file_type().is_symlink() || !metadata.is_file() {
@@ -1137,7 +1156,7 @@ fn acquire_lock_file_shared(path: &Path, deadline: Instant) -> Result<File, Auto
     loop {
         match FileExt::try_lock_shared(&file) {
             Ok(()) => return Ok(file),
-            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+            Err(error) if is_lock_contended(&error) => {
                 if Instant::now() >= deadline {
                     return Err(as_error(
                         "worker.busy",
@@ -1218,7 +1237,7 @@ fn acquire_lock_file(path: &Path, deadline: Instant) -> Result<File, AutomationE
     loop {
         match file.try_lock_exclusive() {
             Ok(()) => return Ok(file),
-            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+            Err(error) if is_lock_contended(&error) => {
                 if Instant::now() >= deadline {
                     return Err(as_error(
                         "operation.timeout",

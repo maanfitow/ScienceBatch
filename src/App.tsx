@@ -13,10 +13,11 @@ import { NewProjectModal } from './components/NewProjectModal';
 import { CloneRepositoryModal } from './components/CloneRepositoryModal';
 import { WorkspaceTabs } from './components/WorkspaceTabs';
 import { ProjectResourcesDialog } from './components/ProjectResourcesDialog';
+import { UpdateModal } from './components/UpdateModal';
 import { SidebarActivityBar, SidebarContentPanels } from './components/sidebar';
 import { WritingRibbon } from './components/writing/WritingRibbon';
 
-import { useRecentProjects, useCompiler, useExport, useProject, useProjectResources, useSidebar } from './hooks';
+import { useRecentProjects, useCompiler, useExport, useProject, useProjectResources, useSidebar, useUpdateNotifier } from './hooks';
 import { useGitOperation } from './hooks/useGitOperation';
 import { useWorkspaceAutomation } from './hooks/useWorkspaceAutomation';
 import { useTheme } from './themes/ThemeContext';
@@ -113,6 +114,7 @@ export const App: React.FC = () => {
 
   const compiler = useCompiler();
   const exportService = useExport();
+  const updateNotifier = useUpdateNotifier();
   const compileWorkspaceDelegateRef = React.useRef<() => Promise<void>>(async () => undefined);
   const compileForProject = useCallback(async () => {
     await compileWorkspaceDelegateRef.current();
@@ -910,6 +912,10 @@ export const App: React.FC = () => {
         onEditorAction={(action: EditorMenuAction) => {
           window.dispatchEvent(new CustomEvent('sciencebatch:editor-action', { detail: { action } }));
         }}
+        onCheckForUpdates={() => { void updateNotifier.checkForUpdates({ silent: false }); }}
+        autoCheckUpdates={updateNotifier.autoCheckOnStartup}
+        onToggleAutoCheckUpdates={() => updateNotifier.setAutoCheckOnStartup(!updateNotifier.autoCheckOnStartup)}
+        isCheckingForUpdates={updateNotifier.isChecking}
       />
 
       {/* Main Workspace Toolbar (Shown only in editor mode) */}
@@ -1120,6 +1126,17 @@ export const App: React.FC = () => {
         onClose={() => projectResources.setIsOpen(false)}
         onRecompile={handleCompileCurrent}
         onSelectLine={handleSelectLine}
+      />
+
+      <UpdateModal
+        isOpen={updateNotifier.isModalOpen}
+        isChecking={updateNotifier.isChecking}
+        updateResult={updateNotifier.updateResult}
+        checkError={updateNotifier.checkError}
+        autoCheckOnStartup={updateNotifier.autoCheckOnStartup}
+        onToggleAutoCheckOnStartup={updateNotifier.setAutoCheckOnStartup}
+        onCheckAgain={() => { void updateNotifier.checkForUpdates({ silent: false }); }}
+        onClose={updateNotifier.closeModal}
       />
 
       <Toaster position="bottom-center" closeButton theme={theme === 'light' ? 'light' : 'dark'} />
